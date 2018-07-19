@@ -1,50 +1,50 @@
 #### S3 lifecycle Requirements and Feature Set
 
-A requirement is to be able to mention either a single bucket, or if no single bucket is mentioned to do all buckets in the AWS_PROFILE’s account.
+* A requirement is to be able to mention either a single bucket, or if no single bucket is mentioned to do all buckets in the AWS_PROFILE’s account.
 
-If no bucket is mentioned do not set expiration for deletion across all buckets. In other words you must specify a bucket on an individual basis in order to set a lifecycle policy with deletion. The program will exit with an Error, explanation and code 2 if expiration is mentioned without a bucket name.
+* If no bucket is mentioned do not set expiration for deletion across all buckets. In other words you must specify a bucket on an individual basis in order to set a lifecycle policy with deletion. The program will exit with an Error, explanation and code 2 if expiration is mentioned without a bucket name.
 
-If you just type in the program name, lifecycleModule.py, without any arguments you will be presented with a help screen from argparse. The program will exit with code 1.
+* If you just type in the program name, lifecycleModule.py, without any arguments you will be presented with a help screen from argparse. The program will exit with code 1.
 
-The program requires AWS CLI access, meaning an AWS_PROFILE value must be set for a user id with proper access to s3 in the account of interest. If no AWS_PROFILE is set the program will exit with an Error, explanation and code 3.
+* The program requires AWS CLI access, meaning an AWS_PROFILE value must be set for a user id with proper access to s3 in the account of interest. If no AWS_PROFILE is set the program will exit with an Error, explanation and code 3.
 
-There is a force-flag which permits the overwriting of extant lifecycle policies. Valid values are True or False. Other values will cause the program to end with an Error, explanation and code 4. The program defaults to False if no value is given.
+* There is a force-flag which permits the overwriting of extant lifecycle policies. Valid values are True or False. Other values will cause the program to end with an Error, explanation and code 4. The program defaults to False if no value is given.
 
-Amazon states that they expect items to be kept in glacier for a period of at least 90 days if financial penalties are not to be imposed. If the difference between the glacier start days and the time to expire do not differ by at least 90 days the program will exit with an Error, explanation and code 5.
+* Amazon states that they expect items to be kept in glacier for a period of at least 90 days if financial penalties are not to be imposed. If the difference between the glacier start days and the time to expire do not differ by at least 90 days the program will exit with an Error, explanation and code 5.
 
-As a note, you can specify a policy for days to glacier migration for any bucket or set without regard to versioning status. In order to specify expiration or glacier and expiration, versioning must be set on the bucket.
+* As a note, you can specify a policy for days to glacier migration for any bucket or set without regard to versioning status. In order to specify expiration or glacier and expiration, versioning must be set on the bucket.
 
-The program operates at two levels in the bucket/folder realm. DevOps consensus is that level-one is the bucket itself, level-two is the first folder(s) within the bucket. Level is a required parameter and valid values are “one” or “two”.
+* The program operates at two levels in the bucket/folder realm. DevOps consensus is that level-one is the bucket itself, level-two is the first folder(s) within the bucket. Level is a required parameter and valid values are “one” or “two”.
 
-Some considerations are that by this definition a bucket of only objects without any folders basically has no level-two. The objects themselves are not considered a level, only buckets or folders contained within are levels. If you specify level two the program will identify all level-two folders and create a separate rule for each one of them. AWS limits the number of rules to 100 per bucket. If there is a bucket  with more than 100 level-2 folders the program will print a warning and not apply any policies.
+* Some considerations are that by this definition a bucket of only objects without any folders basically has no level-two. The objects themselves are not considered a level, only buckets or folders contained within are levels. If you specify level two the program will identify all level-two folders and create a separate rule for each one of them. AWS limits the number of rules to 100 per bucket. If there is a bucket  with more than 100 level-2 folders the program will print a warning and not apply any policies.
 
-If level-two is specified and during the sweep of buckets in an account a bucket is encountered with no folders, the program will apply the policy to the bucket itself.
+* If level-two is specified and during the sweep of buckets in an account a bucket is encountered with no folders, the program will apply the policy to the bucket itself.
 
-The program expects glacier and/or expiration to be specified. If  neither is specified the program will end with an Error, explanation and code 7.
+* The program expects glacier and/or expiration to be specified. If  neither is specified the program will end with an Error, explanation and code 7.
 
-Assuming a properly configured AWS_PROFILE with s3 access, the program can discover what buckets are out there. If you elect to specify a bucket name that doesn’t exist, either by misspelling or mistake, the program will end with an Error, explanation and code 8.
+* Assuming a properly configured AWS_PROFILE with s3 access, the program can discover what buckets are out there. If you elect to specify a bucket name that doesn’t exist, either by misspelling or mistake, the program will end with an Error, explanation and code 8.
 
-The program checks the lifecycle policy status of each bucket before applying the new policy. If a bucket is encountered that already has a policy and you did not specify force then the bucket is skipped over and the new policy is not applied. You will receive an explanation on how to correct the situation.
+* The program checks the lifecycle policy status of each bucket before applying the new policy. If a bucket is encountered that already has a policy and you did not specify force then the bucket is skipped over and the new policy is not applied. You will receive an explanation on how to correct the situation.
 
-Those buckets with extant lifecycle policies will be flagged in the output. Also those buckets with versioning enabled will also be flagged in the program’s output.
+* Those buckets with extant lifecycle policies will be flagged in the output. Also those buckets with versioning enabled will also be flagged in the program’s output.
 
-Finally the program outputs the policy and implemented for each bucket or an explanation why no policy was applied.
+* Finally the program outputs the policy and implemented for each bucket or an explanation why no policy was applied.
 
-At this time there was a requirement to only handle glacier and expiration. There is no coverage for non-current/previous versions. This can easily be added.
+* At this time there was a requirement to only handle glacier and expiration. There is no coverage for non-current/previous versions. This can easily be added.
 
-The is also a testRun-flag, you can run the command with whatever other parameters you intend, see what would be done and if that meets your needs, rerun the program without testRun flag  and have those changes be applied. The default is false for testRun.
+* The is also a testRun-flag, you can run the command with whatever other parameters you intend, see what would be done and if that meets your needs, rerun the program without testRun flag  and have those changes be applied. The default is false for testRun.
 
-The program is implemented in Python using boto3. In order get a listing of all level-two objects the programs calls ‘aws s3api list-objects’ and spools the output out to a temporary file in order to overcome boto’s list_object 1000 result limitation.
+* The program is implemented in Python using boto3. In order get a listing of all level-two objects the programs calls ‘aws s3api list-objects’ and spools the output out to a temporary file in order to overcome boto’s list_object 1000 result limitation.
 
-The caveat is as follows: in order to find the level-two folders all objects metadata are spooled into a file, for those buckets with millions of objects this process can take some time. We may want to consider a database, refreshed periodically to give us a listing of all objects on a bucket-by-bucket basis.
+* The caveat is as follows: in order to find the level-two folders all objects metadata are spooled into a file, for those buckets with millions of objects this process can take some time. We may want to consider a database, refreshed periodically to give us a listing of all objects on a bucket-by-bucket basis.
 
-In the meantime, you might consider setting an expiration policy that gets rid of the older-ancient objects that no longer need be kept, then rerunning the program to set all the level-two folders to your satisfaction.
+* In the meantime, you might consider setting an expiration policy that gets rid of the older-ancient objects that no longer need be kept, then rerunning the program to set all the level-two folders to your satisfaction.
 
 #### Testing
 
 The program uses argparse to provide it’s interface, unfortunately this means that the nose test harness will not work. Hence the program has been refactored into a module that can be driven by a test program.
 
-The requirements for handling tooMany, hasLifecycle, hasVersion and force we used to generate a matrix; the fifth column being the intended outcome and the other four columns are input.
+The requirements for handling tooMany, hasLifecycle, hasVersion and force were used to generate a matrix; the fifth column being the intended outcome and the other four columns are input.
 
 TooMany | hasLifecycle | Versioning | ForceOverwrite | Fire Rule       |
 --------|--------------|------------|----------------|-----------------|
@@ -445,7 +445,7 @@ No lifecycle policy was applied: make sure bucket, level, forceOverwrite, expire
 Remember you can not set expiration for a bucket without versioning: also expiration must be set for individual buckets
 ```
 
-#### There is a testRun flag; if set to true you can see what will happen w WITHOUT actually applying the policies:
+#### There is a testRun flag; if set to true you can see what will happen WITHOUT actually applying the policies:
 
 ``` Bash
 Yosemite-2:version5 mvensky$ lifecycleModule.py -e 365 -g 30  -l two  -f True -b mvenskybucketoregon -t True
