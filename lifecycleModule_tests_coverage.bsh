@@ -1,0 +1,47 @@
+echo "CASE 1"
+coverage run lifecycleModule.py -e 365 -g 30  -l two   -b mvenskybucketoregon -f True
+coverage report -m
+
+echo "CASE 2"
+coverage run lifecycleModule.py -e 365 -g 30  -l two   -b mvenskybucketoregon -f False
+coverage report -m
+
+echo "CASE 3"
+coverage run lifecycleModule.py -g 30  -l two   -b mvensky-second -f False
+coverage report -m
+
+echo "CASE 4"
+aws s3api delete-bucket-lifecycle --bucket mvensky-single-level
+coverage run lifecycleModule.py -g 30  -l two   -b mvensky-single-level -f False
+coverage report -m
+
+echo "CASE 5"
+aws s3api delete-bucket-lifecycle --bucket mvensky-single-level
+coverage run lifecycleModule.py -g 30  -l two   -b mvensky-single-level -f True
+coverage report -m
+
+echo "CASE 6"
+aws s3api delete-bucket-lifecycle --bucket mvenskybucketoregon
+coverage run lifecycleModule.py -e 365 -g 30  -l two   -b mvenskybucketoregon -f True
+coverage report -m
+
+echo "CASE 7"
+coverage run lifecycleModule.py  -g 30  -l two   -b mvensky-second -f True
+coverage report -m
+
+echo "CASE 8"
+aws s3api delete-bucket-lifecycle --bucket mvenskybucketoregon
+coverage run lifecycleModule.py -e 365 -g 30  -l two   -b mvenskybucketoregon -f False
+coverage report -m
+
+echo "CASE 9"
+coverage run lifecycleModule.py -g 30  -l two   -f True
+coverage report -m
+
+echo $CASE 10"
+coverage run lifecycleModule.py -e 365   -l one -f True  -b mvensky-single-level
+coverage report -m
+
+echo $CASE 11"
+coverage run lifecycleModule.py -e 365   -l one -f True  -b mvenskybucketoregon
+coverage report -m

@@ -1,0 +1,4 @@
+#!/bin/bash
+# spools off test case coverage to a file a greps out proper lines
+lifecycleModule_tests_coverage.py | tee coverage.log
+more coverage.log | egrep 'CASE|Name|lifecycleModule.py'
