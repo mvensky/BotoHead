@@ -556,3 +556,15 @@ optional arguments:
                         can be run without committing policies to view output
                         only (True/False)
 ```
+
+#### A coverage report is available
+
+* To run full report run lifecycleModule_tests_coverage.bsh
+
+* After running the above command a summary can be obtained by running coverage_report.bsh.
+
+* [For an enlightened discussion of code coverage](https://stackoverflow.com/questions/90002/what-is-a-reasonable-code-coverage-for-unit-tests-and-why)
+
+* The "code coverage" is near 100% due to the TDD style of development which can be used when developing in Python. You basically write a few lines of functionality, add some prints and run. Each modification gets exercised in this manner.
+
+* Thus the summary statistics from the above reports do not really reflect what is going on the with the code. All functionality a requested and then some have been fully implemented. An 80 element truth table, cannot be easily automated, rather all functions need be exercised to assure they perform as expected.
