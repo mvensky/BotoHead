@@ -1,4 +1,18 @@
 #!/usr/bin/env python
+"""
+This module applies expiration and glacier migration policies to buckets within a given AWS account
+
+Programmer := Michael Vensky; Big Data - DevOps Engineer
+Date := July 2018
+Version = 6
+Version 6 feature(s) := adds to what was in version 5 and now has -s or --specficFolders flag 
+                        to allow for the specification of prefixes within a bucket to accompamy
+                        whatever rules are specified
+			
+                        This version also adds a much more effecient folderFinder; by relaxing
+                        the flexibility of version 5 being able find any level and concentrating
+                        one level-two folders the algorithm is much faster.
+"""
 import argparse
 import sys
 from os import environ
@@ -7,23 +21,16 @@ import boto3
 from subprocess import call
 import json
 
+# get the 2-level folders: at this point the folders immediately contained within the bucket are level-2
+# the buckets themselves have become level-1
 def folderFinder(aBucket):
-    # get the 2-level folders
 
     file = open("bucketObjects", "r")
     sortedLevels = []
     justFolders = []
     for line in file:
-        levelList = line.split()
-        if levelList[1].find('/') > -1:
-            #print levelList[1]
-            justFolders = levelList[1].split('/')
-            #print justFolders
-            sortedLevels.append(justFolders[0] + '/')
-            justFolders = []
+        sortedLevels.append(line[:-1])
 
-    sortedLevels = list(set(sortedLevels) )
-    #print sortedLevels
     return(sortedLevels)
 
 # to get around tzinfo in datatime.datetime type
@@ -40,6 +47,7 @@ def notSerial(time):
     la_datetime = str(zuluGone.astimezone(to_zone) )
     return la_datetime
 
+# construct the requisite json for a glacier transformation only lifecycle policy
 def buildTransitionOnly(policy, transformDays,bucketName,index, prefix):
     policy['Rules'].append(
          {
@@ -66,6 +74,7 @@ def buildTransitionOnly(policy, transformDays,bucketName,index, prefix):
 
     return(policy)
 
+# construct the requisite json for a expiration (ie. deletion) only lifecycle policy
 def buildExpirationOnly(policy, expireDays,bucketName,index, prefix):
     policy['Rules'].append(
          {
@@ -87,6 +96,7 @@ def buildExpirationOnly(policy, expireDays,bucketName,index, prefix):
     return(policy)
 
 
+# construct the requisite json for a expiration (ie. deletion) and glacier tranformation lifecycle policy
 def buildTransAndExpire(policy, transformDays,expireDays,bucketName,index, prefix):
     policy['Rules'].append(
          {
@@ -119,6 +129,8 @@ def buildTransAndExpire(policy, transformDays,expireDays,bucketName,index, prefi
 
     return(policy)
 
+# this function drives the 3 builder functions above; it decides to either build a rule vector of length = 1 or drive thru
+# the entire vector; index feeds the naming of the actual rules in the builder functions
 def buildLifecyclePolicy(theBucket,sortedLevels, transitionAnswer, daysToTransition, expirationAnswer, daysToExpiration):
     lifecyclePolicy = {'Rules' : [] }
     index = 1
@@ -150,7 +162,10 @@ def buildLifecyclePolicy(theBucket,sortedLevels, transitionAnswer, daysToTransit
         exit(1)
     return(newLifecyclePolicy)
 
-
+# This function is the gatekeeper for the other functions; it takes in the user input, checks it against a variety of criteria
+# and utimately fires off the buildLifecyclePolicy function to build the lifecycle policies
+#
+# In addition it applies the actual policy against the bucket or objects depending on input choices
 def main(callBucket, levelParam, glacierDays, expireDays, forceParam):
     # get all arguments lined up
     parser = argparse.ArgumentParser()
@@ -160,6 +175,8 @@ def main(callBucket, levelParam, glacierDays, expireDays, forceParam):
     parser.add_argument('--expire', '-e', help="number of days before expiration of affected object(s)", type= int)
     parser.add_argument('--force', '-f', help="if there is a pre-existing policy: force overwrite (True/False)", type= str)
     parser.add_argument('--testRun', '-t', help="can be run without committing policies to view output only (True/False)", type= str)
+    parser.add_argument('--specificFolders', '-s', help="enter a list of folders you want rules against add a / to terminate each folder",\
+        nargs='+', type= str)
     args =  parser.parse_args()
 
 
@@ -223,6 +240,15 @@ def main(callBucket, levelParam, glacierDays, expireDays, forceParam):
         print "Error have not specified either an expiration interval or a glacier-migration interval"
         print "Please specify expiration and/or glacier and try again"
         exit(7)
+
+    # check if specificFolders are specified for presence of /
+    if args.specificFolders is not None:
+        for folder in args.specificFolders:
+            if folder.find('/') == -1:
+                print "Please specify an ending '/' when specifying specific folders"
+                print "The folders do not have to exist for the lifecycle rule to be created"
+                exit(9)
+       
     
     
     # if no bucket is specified do all the buckets; exception occurs above; can't do all buckets and expire
@@ -255,10 +281,16 @@ def main(callBucket, levelParam, glacierDays, expireDays, forceParam):
     for bucket in bucketList:
         print "**************** ", bucket, " ****************"
         returnedDict['bucketName'] = bucket
-        status = call(["./pythonHelper-v2.bsh", bucket ])
+        status = call(["./pythonHelper-v3.bsh", bucket ])
     
+        #print args.specificFolders
+        #stopHere = raw_input("Paused here")
         if args.level == 'two':
-            sortedList = folderFinder(bucket)
+            # if specificFolders are called for use them;otherwise go find them
+            if args.specificFolders is not None:
+                sortedList = args.specificFolders
+            else:
+                sortedList = folderFinder(bucket)
         else:
             sortedList = []
     

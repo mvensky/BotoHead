@@ -1,0 +1,47 @@
+echo "CASE 1"
+figleaf lifecycleModule.py -e 365 -g 30  -l two   -b mvenskybucketoregon -f True
+figleaf2html -d  html_case1
+
+echo "CASE 2"
+figleaf lifecycleModule.py -e 365 -g 30  -l two   -b mvenskybucketoregon -f False
+figleaf2html -d html_case2
+
+echo "CASE 3"
+figleaf lifecycleModule.py -g 30  -l two   -b mvensky-second -f False
+figleaf2html -d html_case3
+
+echo "CASE 4"
+aws s3api delete-bucket-lifecycle --bucket mvensky-single-level
+figleaf lifecycleModule.py -g 30  -l two   -b mvensky-single-level -f False
+figleaf2html -d html_case4
+
+echo "CASE 5"
+aws s3api delete-bucket-lifecycle --bucket mvensky-single-level
+figleaf lifecycleModule.py -g 30  -l two   -b mvensky-single-level -f True
+figleaf2html -d html_case5
+
+echo "CASE 6"
+aws s3api delete-bucket-lifecycle --bucket mvenskybucketoregon
+figleaf lifecycleModule.py -e 365 -g 30  -l two   -b mvenskybucketoregon -f True
+figleaf2html -d html_case6
+
+echo "CASE 7"
+figleaf lifecycleModule.py  -g 30  -l two   -b mvensky-second -f True
+figleaf2html -d html_case7
+
+echo "CASE 8"
+aws s3api delete-bucket-lifecycle --bucket mvenskybucketoregon
+figleaf lifecycleModule.py -e 365 -g 30  -l two   -b mvenskybucketoregon -f False
+figleaf2html -d  html_case8
+
+echo "CASE 9"
+figleaf lifecycleModule.py -g 30  -l two   -f True
+figleaf2html -d html_case9
+
+echo $CASE 10"
+figleaf lifecycleModule.py -e 365   -l one -f True  -b mvensky-single-level
+figleaf2html -d html_case10
+
+echo $CASE 11"
+figleaf lifecycleModule.py -e 365   -l one -f True  -b mvenskybucketoregon
+figleaf2html -d html_case11

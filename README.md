@@ -1,4 +1,4 @@
-#### S3 lifecycle Requirements and Feature Set
+#### S3 lifecycle Requirements and Feature Set - Version 6
 
 * A requirement is to be able to mention either a single bucket, or if no single bucket is mentioned to do all buckets in the AWS_PROFILE’s account.
 
@@ -40,6 +40,8 @@
 
 * In the meantime, you might consider setting an expiration policy that gets rid of the older-ancient objects that no longer need be kept, then rerunning the program to set all the level-two folders to your satisfaction.
 
+* This is version 6 of the lifecycleModule. For this version we have added the ability to specify specific folders within a single bucket or all buckets. Note, there is no need for the folder to exist in order for you to apply the rule. You must however place a '/' at the end of the folder name otherwise the program will exit an Error, explanation and code 9.
+
 #### Testing
 
 The program uses argparse to provide it’s interface, unfortunately this means that the nose test harness will not work. Hence the program has been refactored into a module that can be driven by a test program.
@@ -72,7 +74,11 @@ As can be seen from the matrix, tooMany cancels out half the rows. So, only one 
 
 What remains are 8 rows, all without tooMany, and all permutations of the remaining 3 flags.
 
-A test program, lifecycleModule_tests.py, is included to drive through the various options in the above table.
+A test program, lifecycleModule_figleaf_tests_coverage.bsh, is included to drive through the various options in the above table.
+
+To get a coverage report, first run lifecycleModule_figleaf_tests_coverage.bsh. Then browse to any of the resultant html_caseX directories where X is a number from 1 to 11. Locate the index.html file within one of the above directories.
+
+Next locate the lifecycleModule.py entry within the html page and click on it. You will be presented with a summary banner for line coverage as well as a color-coded report showing accessible and inaccessible lines.
 
 #### Example Runs:
 
@@ -534,10 +540,11 @@ For bucket  mvenskybucketoregon  versioning is enabled
 #### Here’s what the help screen looks like:
 
 ``` Bash
-Yosemite-2:version5 mvensky$ lifecycleModule.py
+Yosemite-2:git_repo mvensky$ ./lifecycleModule.py
 usage: lifecycleModule.py [-h] [--bucket BUCKET] [--level LEVEL]
                           [--glacier GLACIER] [--expire EXPIRE]
                           [--force FORCE] [--testRun TESTRUN]
+                          [--specificFolders SPECIFICFOLDERS [SPECIFICFOLDERS ...]]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -555,6 +562,9 @@ optional arguments:
   --testRun TESTRUN, -t TESTRUN
                         can be run without committing policies to view output
                         only (True/False)
+  --specificFolders SPECIFICFOLDERS [SPECIFICFOLDERS ...], -s SPECIFICFOLDERS [SPECIFICFOLDERS ...]
+                        enter a list of folders you want rules against add a /
+                        to terminate each folder
 ```
 
 #### A coverage report is available
@@ -568,3 +578,39 @@ optional arguments:
 * The "code coverage" is near 100% due to the TDD style of development which can be used when developing in Python. You basically write a few lines of functionality, add some prints and run. Each modification gets exercised in this manner.
 
 * Thus the summary statistics from the above reports do not really reflect what is going on the with the code. All functionality a requested and then some have been fully implemented. An 80 element truth table, cannot be easily automated, rather all functions need be exercised to assure they perform as expected.
+
+#### Here's what it looks like if you specify specific folders, the folders do not have to exist in order to create the rule
+``` Bash
+Yosemite-2:git_repo mvensky$ lifecycleModule.py -g 15  -l two -t True -f True -b mvenskybucketoregon -s bozo/ pennywise/
+****************  mvenskybucketoregon  ****************
+mvenskybucketoregon  has a lifecycle policy
+For bucket  mvenskybucketoregon  versioning is enabled
+
+********* THIS WAS ONLY A TEST RUN; NO POLICIES WERE APPLIED AT THIS TIME  *********
+{
+    "Rules": [
+        {
+            "Status": "Enabled",
+            "Prefix": "bozo/",
+            "Transitions": [
+                {
+                    "Days": 15,
+                    "StorageClass": "GLACIER"
+                }
+            ],
+            "ID": "mvenskybucketoregonRule1"
+        },
+        {
+            "Status": "Enabled",
+            "Prefix": "pennywise/",
+            "Transitions": [
+                {
+                    "Days": 15,
+                    "StorageClass": "GLACIER"
+                }
+            ],
+            "ID": "mvenskybucketoregonRule2"
+        }
+    ]
+}
+```
