@@ -38,10 +38,10 @@ echo "CASE 9"
 figleaf lifecycleModule.py -g 30  -l two   -f True
 figleaf2html -d html_case9
 
-echo $CASE 10"
+echo "CASE 10"
 figleaf lifecycleModule.py -e 365   -l one -f True  -b mvensky-single-level
 figleaf2html -d html_case10
 
-echo $CASE 11"
+echo "CASE 11"
 figleaf lifecycleModule.py -e 365   -l one -f True  -b mvenskybucketoregon
 figleaf2html -d html_case11
