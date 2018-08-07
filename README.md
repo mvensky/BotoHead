@@ -40,7 +40,25 @@
 
 * In the meantime, you might consider setting an expiration policy that gets rid of the older-ancient objects that no longer need be kept, then rerunning the program to set all the level-two folders to your satisfaction.
 
-* This is version 6 of the lifecycleModule. For this version we have added the ability to specify specific folders within a single bucket or all buckets. Note, there is no need for the folder to exist in order for you to apply the rule. You must however place a '/' at the end of the folder name otherwise the program will exit an Error, explanation and code 9.
+* This is version 8 of the lifecycleModule. For this version we have added the ability to specify specific folders within a single bucket or all buckets. Note, there is no need for the folder to exist in order for you to apply the rule. You must however place a '/' at the end of the folder name otherwise the program will exit an Error, explanation and code 9.
+
+* This version 8 has a new flag, the interactive or -i flag. This is effectively the "expert" mode, with it you have complete control of how you build the life-cycle rule. There is no check for versioning, if you decide to set expiration policy for a non-versioned bucket then you can. There will be series of 5 questions that must be answered:
+<ol>
+    <li>How many days to transform to glacier?</li>
+    <li>How many days to expire?</li>
+    <li>How many days to transform non-current objects to glacier?</li>
+    <li>How many days to expire non-current objects?</li>
+    <li>How many days to expire failed multi-part uploads?</li>
+</ol>
+
+
+* The interactive mode has an implicit force = True, meaning that if you chose interactive you must want to overwrite extant policies.
+
+* The interactive mode gives you a before and after view of the policies. You can see them as they existed before you started and after your changes.
+
+* All other flags also work with the interactive flag. You can limit the session to level one or two, to a named bucket and/or prefix.
+
+* Lastly you can always set the testRun flag to true to preview the changes and not actually apply them.
 
 #### Testing
 
@@ -613,4 +631,103 @@ For bucket  mvenskybucketoregon  versioning is enabled
         }
     ]
 }
+```
+#### Version 8 : interactive flag Example; this is a suggested use case where both the individual bucket and  folder are specified
+
+``` Bash
+Yosemite-2:version8 mvensky$ lifecycleModule.py -l two  -g 30 -i True -b mvensky-second -s root-folder/
+****************  mvensky-second  ****************
+mvensky-second  has a lifecycle policy
+['root-folder/']
+OLD Policy looks like:
+[
+    {
+        "Status": "Enabled",
+        "Prefix": "root-folder/",
+        "Transitions": [
+            {
+                "Days": 30,
+                "StorageClass": "GLACIER"
+            }
+        ],
+        "ID": "mvensky-secondRule1"
+    }
+]
+************* For bucket  mvensky-second  and prefix  root-folder/  **************
+Enter an integer number of days to transition to GLACIER: 30
+
+Expire days should exceed tranformation by 90 days in order to avoid excess charges
+Enter an integer number of days to expire: 120
+
+Enter an integer number of days to transition to GLACIER for non-Current versions: 125
+
+NOTE: for non-Current expire days, they must exceed the number of days to transition
+Enter an integer number of days to expire for non-Current versions: 130
+
+Enter an integer number of days to expire failed multi-part upload attempts: 10
+
+NEW Policy looks like:
+{
+    "Rules": [
+        {
+            "Status": "Enabled",
+            "Prefix": "root-folder/",
+            "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 132
+            },
+            "Expiration": {
+                "Days": 120
+            },
+            "AbortIncompleteMultipartUpload": {
+                "DaysAfterInitiation": 10
+            },
+            "Transitions": [
+                {
+                    "Days": 30,
+                    "StorageClass": "GLACIER"
+                }
+            ],
+            "NoncurrentVersionTransitions": [
+                {
+                    "NoncurrentDays": 125,
+                    "StorageClass": "GLACIER"
+                }
+            ],
+            "ID": "mvensky-secondRule1"
+        }
+    ]
+}
+
+********* Here's the new lifecycle that was applied *********
+{
+    "Rules": [
+        {
+            "Status": "Enabled",
+            "Prefix": "root-folder/",
+            "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 132
+            },
+            "Expiration": {
+                "Days": 120
+            },
+            "AbortIncompleteMultipartUpload": {
+                "DaysAfterInitiation": 10
+            },
+            "Transitions": [
+                {
+                    "Days": 30,
+                    "StorageClass": "GLACIER"
+                }
+            ],
+            "NoncurrentVersionTransitions": [
+                {
+                    "NoncurrentDays": 125,
+                    "StorageClass": "GLACIER"
+                }
+            ],
+            "ID": "mvensky-secondRule1"
+        }
+    ]
+}
+
 ```

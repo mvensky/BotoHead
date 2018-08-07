@@ -45,3 +45,7 @@ figleaf2html -d html_case10
 echo "CASE 11"
 figleaf lifecycleModule.py -e 365   -l one -f True  -b mvenskybucketoregon
 figleaf2html -d html_case11
+
+echo "CASE 12"
+figleaf lifecycleModule.py -l two  -g 30 -i True -b mvensky-second -s root-folder/
+figleaf2html -d html_case12

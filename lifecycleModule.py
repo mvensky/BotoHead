@@ -12,6 +12,9 @@ Version 6 feature(s) := adds to what was in version 5 and now has -s or --specfi
                         This version also adds a much more effecient folderFinder; by relaxing
                         the flexibility of version 5 being able find any level and concentrating
                         one level-two folders the algorithm is much faster.
+Version = 8
+Version 7 was to have somehow munged together new and old policies. Instead it was decided to provide
+an interactive flag to allow for user input and customization of lifecycle policies
 """
 import argparse
 import sys
@@ -129,6 +132,73 @@ def buildTransAndExpire(policy, transformDays,expireDays,bucketName,index, prefi
 
     return(policy)
 
+# brand new fuction for version 8 to respond to -i interactive flag
+def buildEverythingInteractive(s3, bucketName, sortedList):
+    policy = {'Rules' : [] }
+    print sortedList
+    #raw_input("Stopped here")
+    if sortedList == []:
+        sortedList.append("")
+    index = 0
+    response =  s3.get_bucket_lifecycle_configuration(Bucket=bucketName)
+    print "OLD Policy looks like: "
+    print json.dumps(response['Rules'], indent=4)
+
+    for singlePrefix in sortedList:
+        index = index + 1
+        
+        print "************* For bucket ", bucketName, " and prefix ", singlePrefix, " **************"
+        # get the user input
+        transformDays = int(raw_input("Enter an integer number of days to transition to GLACIER: ") )
+        print
+        print "Expire days should exceed tranformation by 90 days in order to avoid excess charges"
+        expireDays = int(raw_input("Enter an integer number of days to expire: ") )
+        print
+        NCtransformDays = int(raw_input("Enter an integer number of days to transition to GLACIER for non-Current versions: ") )
+        print
+        print "NOTE: for non-Current expire days, they must exceed the number of days to transition" 
+        NCexpireDays = int(raw_input("Enter an integer number of days to expire for non-Current versions: ") )
+        print
+        abortMultipartUploadAttempt = int(raw_input("Enter an integer number of days to expire failed multi-part upload attempts: ") )
+        print
+    
+        policy['Rules'].append(
+             {
+                 'Expiration': {
+                     'Days': expireDays,
+                 },
+                 'ID': bucketName + 'Rule' + str(index),
+                 'Prefix': singlePrefix,
+                 'Status': 'Enabled',
+                 'Transitions': [
+                     {
+                         'Days': transformDays,
+                         'StorageClass': 'GLACIER'
+                     },
+                 ],
+                 'NoncurrentVersionTransitions': [
+                     {
+                         'NoncurrentDays': NCtransformDays,
+                         'StorageClass': 'GLACIER'
+                     },
+                 ],
+                 'NoncurrentVersionExpiration': {
+                     # if user enters the same number of days for transition non-current version as here we error
+                     'NoncurrentDays': NCexpireDays + 2
+                     #'NoncurrentDays': int(transformDays)*2
+                 },
+                 'AbortIncompleteMultipartUpload': {
+                     'DaysAfterInitiation': abortMultipartUploadAttempt 
+                 }
+             }
+        )
+
+
+    print "NEW Policy looks like: "
+    print json.dumps(policy, indent=4)
+
+    return(policy)
+
 # this function drives the 3 builder functions above; it decides to either build a rule vector of length = 1 or drive thru
 # the entire vector; index feeds the naming of the actual rules in the builder functions
 def buildLifecyclePolicy(theBucket,sortedLevels, transitionAnswer, daysToTransition, expirationAnswer, daysToExpiration):
@@ -175,6 +245,7 @@ def main(callBucket, levelParam, glacierDays, expireDays, forceParam):
     parser.add_argument('--expire', '-e', help="number of days before expiration of affected object(s)", type= int)
     parser.add_argument('--force', '-f', help="if there is a pre-existing policy: force overwrite (True/False)", type= str)
     parser.add_argument('--testRun', '-t', help="can be run without committing policies to view output only (True/False)", type= str)
+    parser.add_argument('--interactive', '-i', help="to be able to custom build policies (True/False)", type= str)
     parser.add_argument('--specificFolders', '-s', help="enter a list of folders you want rules against add a / to terminate each folder",\
         nargs='+', type= str)
     args =  parser.parse_args()
@@ -251,6 +322,7 @@ def main(callBucket, levelParam, glacierDays, expireDays, forceParam):
        
     
     
+
     # if no bucket is specified do all the buckets; exception occurs above; can't do all buckets and expire
     # otherwise do only the named bucket
     s3 = boto3.client('s3')
@@ -345,56 +417,61 @@ def main(callBucket, levelParam, glacierDays, expireDays, forceParam):
         #print type(args.force)
         newLifecyclePolicy = {}
     
-        if (hasLifecycle and versionEnabled and force) or (not(hasLifecycle) and versionEnabled and force) or\
-            (not(hasLifecycle) and versionEnabled and not(force) ):
-            #print "fire policy unrestricted"
-            if args.glacier != None and args.expire != None:
-                newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'Y', args.glacier, 'Y', args.expire)
-                returnedDict['glacierAndExpire'] = True
-            elif args.glacier == None and args.expire != None:
-                newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'N', args.glacier, 'Y', args.expire)
-                returnedDict['expireOnly'] = True
-            elif args.glacier != None and args.expire == None:
-                newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'Y', args.glacier, 'N', args.expire)
-                returnedDict['glacierOnly'] = True
+        if args.interactive != 'True':
+            if (hasLifecycle and versionEnabled and force) or (not(hasLifecycle) and versionEnabled and force) or\
+                (not(hasLifecycle) and versionEnabled and not(force) ):
+                #print "fire policy unrestricted"
+                if args.glacier != None and args.expire != None:
+                    newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'Y', args.glacier, 'Y', args.expire)
+                    returnedDict['glacierAndExpire'] = True
+                elif args.glacier == None and args.expire != None:
+                    newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'N', args.glacier, 'Y', args.expire)
+                    returnedDict['expireOnly'] = True
+                elif args.glacier != None and args.expire == None:
+                    newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'Y', args.glacier, 'N', args.expire)
+                    returnedDict['glacierOnly'] = True
+        
+                returnedDict['forceOverwrite'] = force
+                #if args.testRun != 'True':
+                #    s3.put_bucket_lifecycle_configuration(Bucket=bucket,LifecycleConfiguration=newLifecyclePolicy)
+        
+            if (not(hasLifecycle) and not(versionEnabled) and not(force) ) or (not(hasLifecycle) and not(versionEnabled) and force ) or\
+               (hasLifecycle and not(versionEnabled) and force ):
+                #print "fire policy NO delete"
+                # will not fire expiration 365 used as a safe "default value"
+                # the 365 is a dummy place holder
+                #newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'Y', args.glacier, 'N', 365)
+                if args.glacier != None and args.expire != None:
+                    #newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'Y', args.glacier, 'Y', args.expire)
+                    returnedDict['glacierAndExpire'] = False
+                    returnedDict['nothing'] = True
+                elif args.glacier == None and args.expire != None:
+                    #newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'N', args.glacier, 'Y', args.expire)
+                    returnedDict['expireOnly'] = False
+                    returnedDict['nothing'] = True
+                elif args.glacier != None and args.expire == None:
+                    newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'Y', args.glacier, 'N', 365)
+                    returnedDict['glacierOnly'] = True
+                elif args.glacier == None and args.expire == None:
+                    newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'N', args.glacier, 'N', args.expire)
+                    returnedDict['nothing'] = True
     
-            returnedDict['forceOverwrite'] = force
-            if args.testRun != 'True':
-                s3.put_bucket_lifecycle_configuration(Bucket=bucket,LifecycleConfiguration=newLifecyclePolicy)
     
-        if (not(hasLifecycle) and not(versionEnabled) and not(force) ) or (not(hasLifecycle) and not(versionEnabled) and force ) or\
-           (hasLifecycle and not(versionEnabled) and force ):
-            #print "fire policy NO delete"
-            # will not fire expiration 365 used as a safe "default value"
-            # the 365 is a dummy place holder
-            #newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'Y', args.glacier, 'N', 365)
-            if args.glacier != None and args.expire != None:
-                #newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'Y', args.glacier, 'Y', args.expire)
-                returnedDict['glacierAndExpire'] = False
-                returnedDict['nothing'] = True
-            elif args.glacier == None and args.expire != None:
-                #newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'N', args.glacier, 'Y', args.expire)
-                returnedDict['expireOnly'] = False
-                returnedDict['nothing'] = True
-            elif args.glacier != None and args.expire == None:
-                newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'Y', args.glacier, 'N', 365)
                 returnedDict['glacierOnly'] = True
-            elif args.glacier == None and args.expire == None:
-                newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'N', args.glacier, 'N', args.expire)
-                returnedDict['nothing'] = True
+                returnedDict['forceOverwrite'] = force
+    
+                #if newLifecyclePolicy != {}:
+                #    if args.testRun != 'True':
+                #        s3.put_bucket_lifecycle_configuration(Bucket=bucket,LifecycleConfiguration=newLifecyclePolicy)
+        elif args.interactive == 'True':
+            newLifecyclePolicy = buildEverythingInteractive(s3, bucket, sortedList)
 
-
-            returnedDict['glacierOnly'] = True
-            returnedDict['forceOverwrite'] = force
-
-            if newLifecyclePolicy != {}:
-                if args.testRun != 'True':
-                    s3.put_bucket_lifecycle_configuration(Bucket=bucket,LifecycleConfiguration=newLifecyclePolicy)
    
     
         if newLifecyclePolicy != {}:
             print ""
             if args.testRun != 'True':
+                s3.put_bucket_lifecycle_configuration(Bucket=bucket,LifecycleConfiguration=newLifecyclePolicy)
                 print "********* Here's the new lifecycle that was applied *********"
             elif args.testRun == 'True':
                 print "********* THIS WAS ONLY A TEST RUN; NO POLICIES WERE APPLIED AT THIS TIME  *********"
