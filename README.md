@@ -1,4 +1,4 @@
-#### S3 lifecycle Requirements and Feature Set - Version 6
+#### S3 lifecycle Requirements and Feature Set - Version 8 - new interactive flag
 
 * A requirement is to be able to mention either a single bucket, or if no single bucket is mentioned to do all buckets in the AWS_PROFILE’s account.
 
