@@ -1,0 +1,760 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/ConfigParser.py</b><br>
+
+
+file stats: <b>429 lines, 160 executed: 37.3% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Configuration file parser.</font>
+<font color="black">   2. </font>
+<font color="black">   3. A setup file consists of sections, lead by a &quot;[section]&quot; header,</font>
+<font color="black">   4. and followed by &quot;name: value&quot; entries, with continuations and such in</font>
+<font color="black">   5. the style of RFC 822.</font>
+<font color="black">   6. </font>
+<font color="black">   7. The option values can contain format strings which refer to other values in</font>
+<font color="black">   8. the same section, or values in a special [DEFAULT] section.</font>
+<font color="black">   9. </font>
+<font color="black">  10. For example:</font>
+<font color="black">  11. </font>
+<font color="black">  12.     something: %(dir)s/whatever</font>
+<font color="black">  13. </font>
+<font color="black">  14. would resolve the &quot;%(dir)s&quot; to the value of dir.  All reference</font>
+<font color="black">  15. expansions are done late, on demand.</font>
+<font color="black">  16. </font>
+<font color="black">  17. Intrinsic defaults can be specified by passing them into the</font>
+<font color="black">  18. ConfigParser constructor as a dictionary.</font>
+<font color="black">  19. </font>
+<font color="black">  20. class:</font>
+<font color="black">  21. </font>
+<font color="black">  22. ConfigParser -- responsible for parsing a list of</font>
+<font color="black">  23.                 configuration files, and managing the parsed database.</font>
+<font color="black">  24. </font>
+<font color="black">  25.     methods:</font>
+<font color="black">  26. </font>
+<font color="black">  27.     __init__(defaults=None)</font>
+<font color="black">  28.         create the parser and specify a dictionary of intrinsic defaults.  The</font>
+<font color="black">  29.         keys must be strings, the values must be appropriate for %()s string</font>
+<font color="black">  30.         interpolation.  Note that `__name__' is always an intrinsic default;</font>
+<font color="black">  31.         its value is the section's name.</font>
+<font color="black">  32. </font>
+<font color="black">  33.     sections()</font>
+<font color="black">  34.         return all the configuration section names, sans DEFAULT</font>
+<font color="black">  35. </font>
+<font color="black">  36.     has_section(section)</font>
+<font color="black">  37.         return whether the given section exists</font>
+<font color="black">  38. </font>
+<font color="black">  39.     has_option(section, option)</font>
+<font color="black">  40.         return whether the given option exists in the given section</font>
+<font color="black">  41. </font>
+<font color="black">  42.     options(section)</font>
+<font color="black">  43.         return list of configuration options for the named section</font>
+<font color="black">  44. </font>
+<font color="black">  45.     read(filenames)</font>
+<font color="black">  46.         read and parse the list of named configuration files, given by</font>
+<font color="black">  47.         name.  A single filename is also allowed.  Non-existing files</font>
+<font color="black">  48.         are ignored.  Return list of successfully read files.</font>
+<font color="black">  49. </font>
+<font color="black">  50.     readfp(fp, filename=None)</font>
+<font color="black">  51.         read and parse one configuration file, given as a file object.</font>
+<font color="black">  52.         The filename defaults to fp.name; it is only used in error</font>
+<font color="black">  53.         messages (if fp has no `name' attribute, the string `&lt;???&gt;' is used).</font>
+<font color="black">  54. </font>
+<font color="black">  55.     get(section, option, raw=False, vars=None)</font>
+<font color="black">  56.         return a string value for the named option.  All % interpolations are</font>
+<font color="black">  57.         expanded in the return values, based on the defaults passed into the</font>
+<font color="black">  58.         constructor and the DEFAULT section.  Additional substitutions may be</font>
+<font color="black">  59.         provided using the `vars' argument, which must be a dictionary whose</font>
+<font color="black">  60.         contents override any pre-existing defaults.</font>
+<font color="black">  61. </font>
+<font color="black">  62.     getint(section, options)</font>
+<font color="black">  63.         like get(), but convert value to an integer</font>
+<font color="black">  64. </font>
+<font color="black">  65.     getfloat(section, options)</font>
+<font color="black">  66.         like get(), but convert value to a float</font>
+<font color="black">  67. </font>
+<font color="black">  68.     getboolean(section, options)</font>
+<font color="black">  69.         like get(), but convert value to a boolean (currently case</font>
+<font color="black">  70.         insensitively defined as 0, false, no, off for False, and 1, true,</font>
+<font color="black">  71.         yes, on for True).  Returns False or True.</font>
+<font color="black">  72. </font>
+<font color="black">  73.     items(section, raw=False, vars=None)</font>
+<font color="black">  74.         return a list of tuples with (name, value) for each option</font>
+<font color="black">  75.         in the section.</font>
+<font color="black">  76. </font>
+<font color="black">  77.     remove_section(section)</font>
+<font color="black">  78.         remove the given file section and all its options</font>
+<font color="black">  79. </font>
+<font color="black">  80.     remove_option(section, option)</font>
+<font color="black">  81.         remove the given option from the given section</font>
+<font color="black">  82. </font>
+<font color="black">  83.     set(section, option, value)</font>
+<font color="black">  84.         set the given option</font>
+<font color="black">  85. </font>
+<font color="black">  86.     write(fp)</font>
+<font color="black">  87.         write the configuration state in .ini format</font>
+<font color="green">  88. &quot;&quot;&quot;</font>
+<font color="black">  89. </font>
+<font color="green">  90. try:</font>
+<font color="green">  91.     from collections import OrderedDict as _default_dict</font>
+<font color="red">  92. except ImportError:</font>
+<font color="black">  93.     # fallback for setup.py which hasn't yet built _collections</font>
+<font color="red">  94.     _default_dict = dict</font>
+<font color="black">  95. </font>
+<font color="green">  96. import re</font>
+<font color="black">  97. </font>
+<font color="green">  98. __all__ = [&quot;NoSectionError&quot;, &quot;DuplicateSectionError&quot;, &quot;NoOptionError&quot;,</font>
+<font color="green">  99.            &quot;InterpolationError&quot;, &quot;InterpolationDepthError&quot;,</font>
+<font color="green"> 100.            &quot;InterpolationSyntaxError&quot;, &quot;ParsingError&quot;,</font>
+<font color="green"> 101.            &quot;MissingSectionHeaderError&quot;,</font>
+<font color="green"> 102.            &quot;ConfigParser&quot;, &quot;SafeConfigParser&quot;, &quot;RawConfigParser&quot;,</font>
+<font color="green"> 103.            &quot;DEFAULTSECT&quot;, &quot;MAX_INTERPOLATION_DEPTH&quot;]</font>
+<font color="black"> 104. </font>
+<font color="green"> 105. DEFAULTSECT = &quot;DEFAULT&quot;</font>
+<font color="black"> 106. </font>
+<font color="green"> 107. MAX_INTERPOLATION_DEPTH = 10</font>
+<font color="black"> 108. </font>
+<font color="black"> 109. </font>
+<font color="black"> 110. </font>
+<font color="black"> 111. # exception classes</font>
+<font color="green"> 112. class Error(Exception):</font>
+<font color="green"> 113.     &quot;&quot;&quot;Base class for ConfigParser exceptions.&quot;&quot;&quot;</font>
+<font color="black"> 114. </font>
+<font color="green"> 115.     def _get_message(self):</font>
+<font color="black"> 116.         &quot;&quot;&quot;Getter for 'message'; needed only to override deprecation in</font>
+<font color="black"> 117.         BaseException.&quot;&quot;&quot;</font>
+<font color="red"> 118.         return self.__message</font>
+<font color="black"> 119. </font>
+<font color="green"> 120.     def _set_message(self, value):</font>
+<font color="black"> 121.         &quot;&quot;&quot;Setter for 'message'; needed only to override deprecation in</font>
+<font color="black"> 122.         BaseException.&quot;&quot;&quot;</font>
+<font color="red"> 123.         self.__message = value</font>
+<font color="black"> 124. </font>
+<font color="black"> 125.     # BaseException.message has been deprecated since Python 2.6.  To prevent</font>
+<font color="black"> 126.     # DeprecationWarning from popping up over this pre-existing attribute, use</font>
+<font color="black"> 127.     # a new property that takes lookup precedence.</font>
+<font color="green"> 128.     message = property(_get_message, _set_message)</font>
+<font color="black"> 129. </font>
+<font color="green"> 130.     def __init__(self, msg=''):</font>
+<font color="red"> 131.         self.message = msg</font>
+<font color="red"> 132.         Exception.__init__(self, msg)</font>
+<font color="black"> 133. </font>
+<font color="green"> 134.     def __repr__(self):</font>
+<font color="red"> 135.         return self.message</font>
+<font color="black"> 136. </font>
+<font color="green"> 137.     __str__ = __repr__</font>
+<font color="black"> 138. </font>
+<font color="green"> 139. class NoSectionError(Error):</font>
+<font color="green"> 140.     &quot;&quot;&quot;Raised when no section matches a requested option.&quot;&quot;&quot;</font>
+<font color="black"> 141. </font>
+<font color="green"> 142.     def __init__(self, section):</font>
+<font color="red"> 143.         Error.__init__(self, 'No section: %r' % (section,))</font>
+<font color="red"> 144.         self.section = section</font>
+<font color="red"> 145.         self.args = (section, )</font>
+<font color="black"> 146. </font>
+<font color="green"> 147. class DuplicateSectionError(Error):</font>
+<font color="green"> 148.     &quot;&quot;&quot;Raised when a section is multiply-created.&quot;&quot;&quot;</font>
+<font color="black"> 149. </font>
+<font color="green"> 150.     def __init__(self, section):</font>
+<font color="red"> 151.         Error.__init__(self, &quot;Section %r already exists&quot; % section)</font>
+<font color="red"> 152.         self.section = section</font>
+<font color="red"> 153.         self.args = (section, )</font>
+<font color="black"> 154. </font>
+<font color="green"> 155. class NoOptionError(Error):</font>
+<font color="green"> 156.     &quot;&quot;&quot;A requested option was not found.&quot;&quot;&quot;</font>
+<font color="black"> 157. </font>
+<font color="green"> 158.     def __init__(self, option, section):</font>
+<font color="red"> 159.         Error.__init__(self, &quot;No option %r in section: %r&quot; %</font>
+<font color="red"> 160.                        (option, section))</font>
+<font color="red"> 161.         self.option = option</font>
+<font color="red"> 162.         self.section = section</font>
+<font color="red"> 163.         self.args = (option, section)</font>
+<font color="black"> 164. </font>
+<font color="green"> 165. class InterpolationError(Error):</font>
+<font color="green"> 166.     &quot;&quot;&quot;Base class for interpolation-related exceptions.&quot;&quot;&quot;</font>
+<font color="black"> 167. </font>
+<font color="green"> 168.     def __init__(self, option, section, msg):</font>
+<font color="red"> 169.         Error.__init__(self, msg)</font>
+<font color="red"> 170.         self.option = option</font>
+<font color="red"> 171.         self.section = section</font>
+<font color="red"> 172.         self.args = (option, section, msg)</font>
+<font color="black"> 173. </font>
+<font color="green"> 174. class InterpolationMissingOptionError(InterpolationError):</font>
+<font color="green"> 175.     &quot;&quot;&quot;A string substitution required a setting which was not available.&quot;&quot;&quot;</font>
+<font color="black"> 176. </font>
+<font color="green"> 177.     def __init__(self, option, section, rawval, reference):</font>
+<font color="red"> 178.         msg = (&quot;Bad value substitution:\n&quot;</font>
+<font color="black"> 179.                &quot;\tsection: [%s]\n&quot;</font>
+<font color="black"> 180.                &quot;\toption : %s\n&quot;</font>
+<font color="black"> 181.                &quot;\tkey    : %s\n&quot;</font>
+<font color="black"> 182.                &quot;\trawval : %s\n&quot;</font>
+<font color="red"> 183.                % (section, option, reference, rawval))</font>
+<font color="red"> 184.         InterpolationError.__init__(self, option, section, msg)</font>
+<font color="red"> 185.         self.reference = reference</font>
+<font color="red"> 186.         self.args = (option, section, rawval, reference)</font>
+<font color="black"> 187. </font>
+<font color="green"> 188. class InterpolationSyntaxError(InterpolationError):</font>
+<font color="black"> 189.     &quot;&quot;&quot;Raised when the source text into which substitutions are made</font>
+<font color="green"> 190.     does not conform to the required syntax.&quot;&quot;&quot;</font>
+<font color="black"> 191. </font>
+<font color="green"> 192. class InterpolationDepthError(InterpolationError):</font>
+<font color="green"> 193.     &quot;&quot;&quot;Raised when substitutions are nested too deeply.&quot;&quot;&quot;</font>
+<font color="black"> 194. </font>
+<font color="green"> 195.     def __init__(self, option, section, rawval):</font>
+<font color="red"> 196.         msg = (&quot;Value interpolation too deeply recursive:\n&quot;</font>
+<font color="black"> 197.                &quot;\tsection: [%s]\n&quot;</font>
+<font color="black"> 198.                &quot;\toption : %s\n&quot;</font>
+<font color="black"> 199.                &quot;\trawval : %s\n&quot;</font>
+<font color="red"> 200.                % (section, option, rawval))</font>
+<font color="red"> 201.         InterpolationError.__init__(self, option, section, msg)</font>
+<font color="red"> 202.         self.args = (option, section, rawval)</font>
+<font color="black"> 203. </font>
+<font color="green"> 204. class ParsingError(Error):</font>
+<font color="green"> 205.     &quot;&quot;&quot;Raised when a configuration file does not follow legal syntax.&quot;&quot;&quot;</font>
+<font color="black"> 206. </font>
+<font color="green"> 207.     def __init__(self, filename):</font>
+<font color="red"> 208.         Error.__init__(self, 'File contains parsing errors: %s' % filename)</font>
+<font color="red"> 209.         self.filename = filename</font>
+<font color="red"> 210.         self.errors = []</font>
+<font color="red"> 211.         self.args = (filename, )</font>
+<font color="black"> 212. </font>
+<font color="green"> 213.     def append(self, lineno, line):</font>
+<font color="red"> 214.         self.errors.append((lineno, line))</font>
+<font color="red"> 215.         self.message += '\n\t[line %2d]: %s' % (lineno, line)</font>
+<font color="black"> 216. </font>
+<font color="green"> 217. class MissingSectionHeaderError(ParsingError):</font>
+<font color="green"> 218.     &quot;&quot;&quot;Raised when a key-value pair is found before any section header.&quot;&quot;&quot;</font>
+<font color="black"> 219. </font>
+<font color="green"> 220.     def __init__(self, filename, lineno, line):</font>
+<font color="red"> 221.         Error.__init__(</font>
+<font color="red"> 222.             self,</font>
+<font color="red"> 223.             'File contains no section headers.\nfile: %s, line: %d\n%r' %</font>
+<font color="red"> 224.             (filename, lineno, line))</font>
+<font color="red"> 225.         self.filename = filename</font>
+<font color="red"> 226.         self.lineno = lineno</font>
+<font color="red"> 227.         self.line = line</font>
+<font color="red"> 228.         self.args = (filename, lineno, line)</font>
+<font color="black"> 229. </font>
+<font color="black"> 230. </font>
+<font color="green"> 231. class RawConfigParser:</font>
+<font color="green"> 232.     def __init__(self, defaults=None, dict_type=_default_dict,</font>
+<font color="green"> 233.                  allow_no_value=False):</font>
+<font color="green"> 234.         self._dict = dict_type</font>
+<font color="green"> 235.         self._sections = self._dict()</font>
+<font color="green"> 236.         self._defaults = self._dict()</font>
+<font color="green"> 237.         if allow_no_value:</font>
+<font color="red"> 238.             self._optcre = self.OPTCRE_NV</font>
+<font color="black"> 239.         else:</font>
+<font color="green"> 240.             self._optcre = self.OPTCRE</font>
+<font color="green"> 241.         if defaults:</font>
+<font color="red"> 242.             for key, value in defaults.items():</font>
+<font color="red"> 243.                 self._defaults[self.optionxform(key)] = value</font>
+<font color="black"> 244. </font>
+<font color="green"> 245.     def defaults(self):</font>
+<font color="red"> 246.         return self._defaults</font>
+<font color="black"> 247. </font>
+<font color="green"> 248.     def sections(self):</font>
+<font color="black"> 249.         &quot;&quot;&quot;Return a list of section names, excluding [DEFAULT]&quot;&quot;&quot;</font>
+<font color="black"> 250.         # self._sections will never have [DEFAULT] in it</font>
+<font color="green"> 251.         return self._sections.keys()</font>
+<font color="black"> 252. </font>
+<font color="green"> 253.     def add_section(self, section):</font>
+<font color="black"> 254.         &quot;&quot;&quot;Create a new section in the configuration.</font>
+<font color="black"> 255. </font>
+<font color="black"> 256.         Raise DuplicateSectionError if a section by the specified name</font>
+<font color="black"> 257.         already exists. Raise ValueError if name is DEFAULT or any of it's</font>
+<font color="black"> 258.         case-insensitive variants.</font>
+<font color="black"> 259.         &quot;&quot;&quot;</font>
+<font color="red"> 260.         if section.lower() == &quot;default&quot;:</font>
+<font color="red"> 261.             raise ValueError, 'Invalid section name: %s' % section</font>
+<font color="black"> 262. </font>
+<font color="red"> 263.         if section in self._sections:</font>
+<font color="red"> 264.             raise DuplicateSectionError(section)</font>
+<font color="red"> 265.         self._sections[section] = self._dict()</font>
+<font color="black"> 266. </font>
+<font color="green"> 267.     def has_section(self, section):</font>
+<font color="black"> 268.         &quot;&quot;&quot;Indicate whether the named section is present in the configuration.</font>
+<font color="black"> 269. </font>
+<font color="black"> 270.         The DEFAULT section is not acknowledged.</font>
+<font color="black"> 271.         &quot;&quot;&quot;</font>
+<font color="red"> 272.         return section in self._sections</font>
+<font color="black"> 273. </font>
+<font color="green"> 274.     def options(self, section):</font>
+<font color="black"> 275.         &quot;&quot;&quot;Return a list of option names for the given section name.&quot;&quot;&quot;</font>
+<font color="green"> 276.         try:</font>
+<font color="green"> 277.             opts = self._sections[section].copy()</font>
+<font color="red"> 278.         except KeyError:</font>
+<font color="red"> 279.             raise NoSectionError(section)</font>
+<font color="green"> 280.         opts.update(self._defaults)</font>
+<font color="green"> 281.         if '__name__' in opts:</font>
+<font color="green"> 282.             del opts['__name__']</font>
+<font color="green"> 283.         return opts.keys()</font>
+<font color="black"> 284. </font>
+<font color="green"> 285.     def read(self, filenames):</font>
+<font color="black"> 286.         &quot;&quot;&quot;Read and parse a filename or a list of filenames.</font>
+<font color="black"> 287. </font>
+<font color="black"> 288.         Files that cannot be opened are silently ignored; this is</font>
+<font color="black"> 289.         designed so that you can specify a list of potential</font>
+<font color="black"> 290.         configuration file locations (e.g. current directory, user's</font>
+<font color="black"> 291.         home directory, systemwide directory), and all existing</font>
+<font color="black"> 292.         configuration files in the list will be read.  A single</font>
+<font color="black"> 293.         filename may also be given.</font>
+<font color="black"> 294. </font>
+<font color="black"> 295.         Return list of successfully read files.</font>
+<font color="black"> 296.         &quot;&quot;&quot;</font>
+<font color="green"> 297.         if isinstance(filenames, basestring):</font>
+<font color="red"> 298.             filenames = [filenames]</font>
+<font color="green"> 299.         read_ok = []</font>
+<font color="green"> 300.         for filename in filenames:</font>
+<font color="green"> 301.             try:</font>
+<font color="green"> 302.                 fp = open(filename)</font>
+<font color="red"> 303.             except IOError:</font>
+<font color="red"> 304.                 continue</font>
+<font color="green"> 305.             self._read(fp, filename)</font>
+<font color="green"> 306.             fp.close()</font>
+<font color="green"> 307.             read_ok.append(filename)</font>
+<font color="green"> 308.         return read_ok</font>
+<font color="black"> 309. </font>
+<font color="green"> 310.     def readfp(self, fp, filename=None):</font>
+<font color="black"> 311.         &quot;&quot;&quot;Like read() but the argument must be a file-like object.</font>
+<font color="black"> 312. </font>
+<font color="black"> 313.         The `fp' argument must have a `readline' method.  Optional</font>
+<font color="black"> 314.         second argument is the `filename', which if not given, is</font>
+<font color="black"> 315.         taken from fp.name.  If fp has no `name' attribute, `&lt;???&gt;' is</font>
+<font color="black"> 316.         used.</font>
+<font color="black"> 317. </font>
+<font color="black"> 318.         &quot;&quot;&quot;</font>
+<font color="red"> 319.         if filename is None:</font>
+<font color="red"> 320.             try:</font>
+<font color="red"> 321.                 filename = fp.name</font>
+<font color="red"> 322.             except AttributeError:</font>
+<font color="red"> 323.                 filename = '&lt;???&gt;'</font>
+<font color="red"> 324.         self._read(fp, filename)</font>
+<font color="black"> 325. </font>
+<font color="green"> 326.     def get(self, section, option):</font>
+<font color="green"> 327.         opt = self.optionxform(option)</font>
+<font color="green"> 328.         if section not in self._sections:</font>
+<font color="red"> 329.             if section != DEFAULTSECT:</font>
+<font color="red"> 330.                 raise NoSectionError(section)</font>
+<font color="red"> 331.             if opt in self._defaults:</font>
+<font color="red"> 332.                 return self._defaults[opt]</font>
+<font color="black"> 333.             else:</font>
+<font color="red"> 334.                 raise NoOptionError(option, section)</font>
+<font color="green"> 335.         elif opt in self._sections[section]:</font>
+<font color="green"> 336.             return self._sections[section][opt]</font>
+<font color="red"> 337.         elif opt in self._defaults:</font>
+<font color="red"> 338.             return self._defaults[opt]</font>
+<font color="black"> 339.         else:</font>
+<font color="red"> 340.             raise NoOptionError(option, section)</font>
+<font color="black"> 341. </font>
+<font color="green"> 342.     def items(self, section):</font>
+<font color="red"> 343.         try:</font>
+<font color="red"> 344.             d2 = self._sections[section]</font>
+<font color="red"> 345.         except KeyError:</font>
+<font color="red"> 346.             if section != DEFAULTSECT:</font>
+<font color="red"> 347.                 raise NoSectionError(section)</font>
+<font color="red"> 348.             d2 = self._dict()</font>
+<font color="red"> 349.         d = self._defaults.copy()</font>
+<font color="red"> 350.         d.update(d2)</font>
+<font color="red"> 351.         if &quot;__name__&quot; in d:</font>
+<font color="red"> 352.             del d[&quot;__name__&quot;]</font>
+<font color="red"> 353.         return d.items()</font>
+<font color="black"> 354. </font>
+<font color="green"> 355.     def _get(self, section, conv, option):</font>
+<font color="red"> 356.         return conv(self.get(section, option))</font>
+<font color="black"> 357. </font>
+<font color="green"> 358.     def getint(self, section, option):</font>
+<font color="red"> 359.         return self._get(section, int, option)</font>
+<font color="black"> 360. </font>
+<font color="green"> 361.     def getfloat(self, section, option):</font>
+<font color="red"> 362.         return self._get(section, float, option)</font>
+<font color="black"> 363. </font>
+<font color="green"> 364.     _boolean_states = {'1': True, 'yes': True, 'true': True, 'on': True,</font>
+<font color="green"> 365.                        '0': False, 'no': False, 'false': False, 'off': False}</font>
+<font color="black"> 366. </font>
+<font color="green"> 367.     def getboolean(self, section, option):</font>
+<font color="red"> 368.         v = self.get(section, option)</font>
+<font color="red"> 369.         if v.lower() not in self._boolean_states:</font>
+<font color="red"> 370.             raise ValueError, 'Not a boolean: %s' % v</font>
+<font color="red"> 371.         return self._boolean_states[v.lower()]</font>
+<font color="black"> 372. </font>
+<font color="green"> 373.     def optionxform(self, optionstr):</font>
+<font color="green"> 374.         return optionstr.lower()</font>
+<font color="black"> 375. </font>
+<font color="green"> 376.     def has_option(self, section, option):</font>
+<font color="black"> 377.         &quot;&quot;&quot;Check for the existence of a given option in a given section.&quot;&quot;&quot;</font>
+<font color="red"> 378.         if not section or section == DEFAULTSECT:</font>
+<font color="red"> 379.             option = self.optionxform(option)</font>
+<font color="red"> 380.             return option in self._defaults</font>
+<font color="red"> 381.         elif section not in self._sections:</font>
+<font color="red"> 382.             return False</font>
+<font color="black"> 383.         else:</font>
+<font color="red"> 384.             option = self.optionxform(option)</font>
+<font color="red"> 385.             return (option in self._sections[section]</font>
+<font color="red"> 386.                     or option in self._defaults)</font>
+<font color="black"> 387. </font>
+<font color="green"> 388.     def set(self, section, option, value=None):</font>
+<font color="black"> 389.         &quot;&quot;&quot;Set an option.&quot;&quot;&quot;</font>
+<font color="red"> 390.         if not section or section == DEFAULTSECT:</font>
+<font color="red"> 391.             sectdict = self._defaults</font>
+<font color="black"> 392.         else:</font>
+<font color="red"> 393.             try:</font>
+<font color="red"> 394.                 sectdict = self._sections[section]</font>
+<font color="red"> 395.             except KeyError:</font>
+<font color="red"> 396.                 raise NoSectionError(section)</font>
+<font color="red"> 397.         sectdict[self.optionxform(option)] = value</font>
+<font color="black"> 398. </font>
+<font color="green"> 399.     def write(self, fp):</font>
+<font color="black"> 400.         &quot;&quot;&quot;Write an .ini-format representation of the configuration state.&quot;&quot;&quot;</font>
+<font color="red"> 401.         if self._defaults:</font>
+<font color="red"> 402.             fp.write(&quot;[%s]\n&quot; % DEFAULTSECT)</font>
+<font color="red"> 403.             for (key, value) in self._defaults.items():</font>
+<font color="red"> 404.                 fp.write(&quot;%s = %s\n&quot; % (key, str(value).replace('\n', '\n\t')))</font>
+<font color="red"> 405.             fp.write(&quot;\n&quot;)</font>
+<font color="red"> 406.         for section in self._sections:</font>
+<font color="red"> 407.             fp.write(&quot;[%s]\n&quot; % section)</font>
+<font color="red"> 408.             for (key, value) in self._sections[section].items():</font>
+<font color="red"> 409.                 if key == &quot;__name__&quot;:</font>
+<font color="red"> 410.                     continue</font>
+<font color="red"> 411.                 if (value is not None) or (self._optcre == self.OPTCRE):</font>
+<font color="red"> 412.                     key = &quot; = &quot;.join((key, str(value).replace('\n', '\n\t')))</font>
+<font color="red"> 413.                 fp.write(&quot;%s\n&quot; % (key))</font>
+<font color="red"> 414.             fp.write(&quot;\n&quot;)</font>
+<font color="black"> 415. </font>
+<font color="green"> 416.     def remove_option(self, section, option):</font>
+<font color="black"> 417.         &quot;&quot;&quot;Remove an option.&quot;&quot;&quot;</font>
+<font color="red"> 418.         if not section or section == DEFAULTSECT:</font>
+<font color="red"> 419.             sectdict = self._defaults</font>
+<font color="black"> 420.         else:</font>
+<font color="red"> 421.             try:</font>
+<font color="red"> 422.                 sectdict = self._sections[section]</font>
+<font color="red"> 423.             except KeyError:</font>
+<font color="red"> 424.                 raise NoSectionError(section)</font>
+<font color="red"> 425.         option = self.optionxform(option)</font>
+<font color="red"> 426.         existed = option in sectdict</font>
+<font color="red"> 427.         if existed:</font>
+<font color="red"> 428.             del sectdict[option]</font>
+<font color="red"> 429.         return existed</font>
+<font color="black"> 430. </font>
+<font color="green"> 431.     def remove_section(self, section):</font>
+<font color="black"> 432.         &quot;&quot;&quot;Remove a file section.&quot;&quot;&quot;</font>
+<font color="red"> 433.         existed = section in self._sections</font>
+<font color="red"> 434.         if existed:</font>
+<font color="red"> 435.             del self._sections[section]</font>
+<font color="red"> 436.         return existed</font>
+<font color="black"> 437. </font>
+<font color="black"> 438.     #</font>
+<font color="black"> 439.     # Regular expressions for parsing section headers and options.</font>
+<font color="black"> 440.     #</font>
+<font color="green"> 441.     SECTCRE = re.compile(</font>
+<font color="green"> 442.         r'\['                                 # [</font>
+<font color="black"> 443.         r'(?P&lt;header&gt;[^]]+)'                  # very permissive!</font>
+<font color="black"> 444.         r'\]'                                 # ]</font>
+<font color="black"> 445.         )</font>
+<font color="green"> 446.     OPTCRE = re.compile(</font>
+<font color="green"> 447.         r'(?P&lt;option&gt;[^:=\s][^:=]*)'          # very permissive!</font>
+<font color="black"> 448.         r'\s*(?P&lt;vi&gt;[:=])\s*'                 # any number of space/tab,</font>
+<font color="black"> 449.                                               # followed by separator</font>
+<font color="black"> 450.                                               # (either : or =), followed</font>
+<font color="black"> 451.                                               # by any # space/tab</font>
+<font color="black"> 452.         r'(?P&lt;value&gt;.*)$'                     # everything up to eol</font>
+<font color="black"> 453.         )</font>
+<font color="green"> 454.     OPTCRE_NV = re.compile(</font>
+<font color="green"> 455.         r'(?P&lt;option&gt;[^:=\s][^:=]*)'          # very permissive!</font>
+<font color="black"> 456.         r'\s*(?:'                             # any number of space/tab,</font>
+<font color="black"> 457.         r'(?P&lt;vi&gt;[:=])\s*'                    # optionally followed by</font>
+<font color="black"> 458.                                               # separator (either : or</font>
+<font color="black"> 459.                                               # =), followed by any #</font>
+<font color="black"> 460.                                               # space/tab</font>
+<font color="black"> 461.         r'(?P&lt;value&gt;.*))?$'                   # everything up to eol</font>
+<font color="black"> 462.         )</font>
+<font color="black"> 463. </font>
+<font color="green"> 464.     def _read(self, fp, fpname):</font>
+<font color="black"> 465.         &quot;&quot;&quot;Parse a sectioned setup file.</font>
+<font color="black"> 466. </font>
+<font color="black"> 467.         The sections in setup file contains a title line at the top,</font>
+<font color="black"> 468.         indicated by a name in square brackets (`[]'), plus key/value</font>
+<font color="black"> 469.         options lines, indicated by `name: value' format lines.</font>
+<font color="black"> 470.         Continuations are represented by an embedded newline then</font>
+<font color="black"> 471.         leading whitespace.  Blank lines, lines beginning with a '#',</font>
+<font color="black"> 472.         and just about everything else are ignored.</font>
+<font color="black"> 473.         &quot;&quot;&quot;</font>
+<font color="green"> 474.         cursect = None                        # None, or a dictionary</font>
+<font color="green"> 475.         optname = None</font>
+<font color="green"> 476.         lineno = 0</font>
+<font color="green"> 477.         e = None                              # None, or an exception</font>
+<font color="green"> 478.         while True:</font>
+<font color="green"> 479.             line = fp.readline()</font>
+<font color="green"> 480.             if not line:</font>
+<font color="green"> 481.                 break</font>
+<font color="green"> 482.             lineno = lineno + 1</font>
+<font color="black"> 483.             # comment or blank line?</font>
+<font color="green"> 484.             if line.strip() == '' or line[0] in '#;':</font>
+<font color="red"> 485.                 continue</font>
+<font color="green"> 486.             if line.split(None, 1)[0].lower() == 'rem' and line[0] in &quot;rR&quot;:</font>
+<font color="black"> 487.                 # no leading whitespace</font>
+<font color="red"> 488.                 continue</font>
+<font color="black"> 489.             # continuation line?</font>
+<font color="green"> 490.             if line[0].isspace() and cursect is not None and optname:</font>
+<font color="red"> 491.                 value = line.strip()</font>
+<font color="red"> 492.                 if value:</font>
+<font color="red"> 493.                     cursect[optname].append(value)</font>
+<font color="black"> 494.             # a section header or option header?</font>
+<font color="black"> 495.             else:</font>
+<font color="black"> 496.                 # is it a section header?</font>
+<font color="green"> 497.                 mo = self.SECTCRE.match(line)</font>
+<font color="green"> 498.                 if mo:</font>
+<font color="green"> 499.                     sectname = mo.group('header')</font>
+<font color="green"> 500.                     if sectname in self._sections:</font>
+<font color="red"> 501.                         cursect = self._sections[sectname]</font>
+<font color="green"> 502.                     elif sectname == DEFAULTSECT:</font>
+<font color="red"> 503.                         cursect = self._defaults</font>
+<font color="black"> 504.                     else:</font>
+<font color="green"> 505.                         cursect = self._dict()</font>
+<font color="green"> 506.                         cursect['__name__'] = sectname</font>
+<font color="green"> 507.                         self._sections[sectname] = cursect</font>
+<font color="black"> 508.                     # So sections can't start with a continuation line</font>
+<font color="green"> 509.                     optname = None</font>
+<font color="black"> 510.                 # no section header in the file?</font>
+<font color="green"> 511.                 elif cursect is None:</font>
+<font color="red"> 512.                     raise MissingSectionHeaderError(fpname, lineno, line)</font>
+<font color="black"> 513.                 # an option line?</font>
+<font color="black"> 514.                 else:</font>
+<font color="green"> 515.                     mo = self._optcre.match(line)</font>
+<font color="green"> 516.                     if mo:</font>
+<font color="green"> 517.                         optname, vi, optval = mo.group('option', 'vi', 'value')</font>
+<font color="green"> 518.                         optname = self.optionxform(optname.rstrip())</font>
+<font color="black"> 519.                         # This check is fine because the OPTCRE cannot</font>
+<font color="black"> 520.                         # match if it would set optval to None</font>
+<font color="green"> 521.                         if optval is not None:</font>
+<font color="green"> 522.                             if vi in ('=', ':') and ';' in optval:</font>
+<font color="black"> 523.                                 # ';' is a comment delimiter only if it follows</font>
+<font color="black"> 524.                                 # a spacing character</font>
+<font color="red"> 525.                                 pos = optval.find(';')</font>
+<font color="red"> 526.                                 if pos != -1 and optval[pos-1].isspace():</font>
+<font color="red"> 527.                                     optval = optval[:pos]</font>
+<font color="green"> 528.                             optval = optval.strip()</font>
+<font color="black"> 529.                             # allow empty values</font>
+<font color="green"> 530.                             if optval == '&quot;&quot;':</font>
+<font color="red"> 531.                                 optval = ''</font>
+<font color="green"> 532.                             cursect[optname] = [optval]</font>
+<font color="black"> 533.                         else:</font>
+<font color="black"> 534.                             # valueless option handling</font>
+<font color="red"> 535.                             cursect[optname] = optval</font>
+<font color="black"> 536.                     else:</font>
+<font color="black"> 537.                         # a non-fatal parsing error occurred.  set up the</font>
+<font color="black"> 538.                         # exception but keep going. the exception will be</font>
+<font color="black"> 539.                         # raised at the end of the file and will contain a</font>
+<font color="black"> 540.                         # list of all bogus lines</font>
+<font color="red"> 541.                         if not e:</font>
+<font color="red"> 542.                             e = ParsingError(fpname)</font>
+<font color="red"> 543.                         e.append(lineno, repr(line))</font>
+<font color="black"> 544.         # if any parsing errors occurred, raise an exception</font>
+<font color="green"> 545.         if e:</font>
+<font color="red"> 546.             raise e</font>
+<font color="black"> 547. </font>
+<font color="black"> 548.         # join the multi-line values collected while reading</font>
+<font color="green"> 549.         all_sections = [self._defaults]</font>
+<font color="green"> 550.         all_sections.extend(self._sections.values())</font>
+<font color="green"> 551.         for options in all_sections:</font>
+<font color="green"> 552.             for name, val in options.items():</font>
+<font color="green"> 553.                 if isinstance(val, list):</font>
+<font color="green"> 554.                     options[name] = '\n'.join(val)</font>
+<font color="black"> 555. </font>
+<font color="green"> 556. import UserDict as _UserDict</font>
+<font color="black"> 557. </font>
+<font color="green"> 558. class _Chainmap(_UserDict.DictMixin):</font>
+<font color="black"> 559.     &quot;&quot;&quot;Combine multiple mappings for successive lookups.</font>
+<font color="black"> 560. </font>
+<font color="black"> 561.     For example, to emulate Python's normal lookup sequence:</font>
+<font color="black"> 562. </font>
+<font color="black"> 563.         import __builtin__</font>
+<font color="black"> 564.         pylookup = _Chainmap(locals(), globals(), vars(__builtin__))</font>
+<font color="green"> 565.     &quot;&quot;&quot;</font>
+<font color="black"> 566. </font>
+<font color="green"> 567.     def __init__(self, *maps):</font>
+<font color="red"> 568.         self._maps = maps</font>
+<font color="black"> 569. </font>
+<font color="green"> 570.     def __getitem__(self, key):</font>
+<font color="red"> 571.         for mapping in self._maps:</font>
+<font color="red"> 572.             try:</font>
+<font color="red"> 573.                 return mapping[key]</font>
+<font color="red"> 574.             except KeyError:</font>
+<font color="red"> 575.                 pass</font>
+<font color="red"> 576.         raise KeyError(key)</font>
+<font color="black"> 577. </font>
+<font color="green"> 578.     def keys(self):</font>
+<font color="red"> 579.         result = []</font>
+<font color="red"> 580.         seen = set()</font>
+<font color="red"> 581.         for mapping in self._maps:</font>
+<font color="red"> 582.             for key in mapping:</font>
+<font color="red"> 583.                 if key not in seen:</font>
+<font color="red"> 584.                     result.append(key)</font>
+<font color="red"> 585.                     seen.add(key)</font>
+<font color="red"> 586.         return result</font>
+<font color="black"> 587. </font>
+<font color="green"> 588. class ConfigParser(RawConfigParser):</font>
+<font color="black"> 589. </font>
+<font color="green"> 590.     def get(self, section, option, raw=False, vars=None):</font>
+<font color="black"> 591.         &quot;&quot;&quot;Get an option value for a given section.</font>
+<font color="black"> 592. </font>
+<font color="black"> 593.         If `vars' is provided, it must be a dictionary. The option is looked up</font>
+<font color="black"> 594.         in `vars' (if provided), `section', and in `defaults' in that order.</font>
+<font color="black"> 595. </font>
+<font color="black"> 596.         All % interpolations are expanded in the return values, unless the</font>
+<font color="black"> 597.         optional argument `raw' is true. Values for interpolation keys are</font>
+<font color="black"> 598.         looked up in the same manner as the option.</font>
+<font color="black"> 599. </font>
+<font color="black"> 600.         The section DEFAULT is special.</font>
+<font color="black"> 601.         &quot;&quot;&quot;</font>
+<font color="red"> 602.         sectiondict = {}</font>
+<font color="red"> 603.         try:</font>
+<font color="red"> 604.             sectiondict = self._sections[section]</font>
+<font color="red"> 605.         except KeyError:</font>
+<font color="red"> 606.             if section != DEFAULTSECT:</font>
+<font color="red"> 607.                 raise NoSectionError(section)</font>
+<font color="black"> 608.         # Update with the entry specific variables</font>
+<font color="red"> 609.         vardict = {}</font>
+<font color="red"> 610.         if vars:</font>
+<font color="red"> 611.             for key, value in vars.items():</font>
+<font color="red"> 612.                 vardict[self.optionxform(key)] = value</font>
+<font color="red"> 613.         d = _Chainmap(vardict, sectiondict, self._defaults)</font>
+<font color="red"> 614.         option = self.optionxform(option)</font>
+<font color="red"> 615.         try:</font>
+<font color="red"> 616.             value = d[option]</font>
+<font color="red"> 617.         except KeyError:</font>
+<font color="red"> 618.             raise NoOptionError(option, section)</font>
+<font color="black"> 619. </font>
+<font color="red"> 620.         if raw or value is None:</font>
+<font color="red"> 621.             return value</font>
+<font color="black"> 622.         else:</font>
+<font color="red"> 623.             return self._interpolate(section, option, value, d)</font>
+<font color="black"> 624. </font>
+<font color="green"> 625.     def items(self, section, raw=False, vars=None):</font>
+<font color="black"> 626.         &quot;&quot;&quot;Return a list of tuples with (name, value) for each option</font>
+<font color="black"> 627.         in the section.</font>
+<font color="black"> 628. </font>
+<font color="black"> 629.         All % interpolations are expanded in the return values, based on the</font>
+<font color="black"> 630.         defaults passed into the constructor, unless the optional argument</font>
+<font color="black"> 631.         `raw' is true.  Additional substitutions may be provided using the</font>
+<font color="black"> 632.         `vars' argument, which must be a dictionary whose contents overrides</font>
+<font color="black"> 633.         any pre-existing defaults.</font>
+<font color="black"> 634. </font>
+<font color="black"> 635.         The section DEFAULT is special.</font>
+<font color="black"> 636.         &quot;&quot;&quot;</font>
+<font color="red"> 637.         d = self._defaults.copy()</font>
+<font color="red"> 638.         try:</font>
+<font color="red"> 639.             d.update(self._sections[section])</font>
+<font color="red"> 640.         except KeyError:</font>
+<font color="red"> 641.             if section != DEFAULTSECT:</font>
+<font color="red"> 642.                 raise NoSectionError(section)</font>
+<font color="black"> 643.         # Update with the entry specific variables</font>
+<font color="red"> 644.         if vars:</font>
+<font color="red"> 645.             for key, value in vars.items():</font>
+<font color="red"> 646.                 d[self.optionxform(key)] = value</font>
+<font color="red"> 647.         options = d.keys()</font>
+<font color="red"> 648.         if &quot;__name__&quot; in options:</font>
+<font color="red"> 649.             options.remove(&quot;__name__&quot;)</font>
+<font color="red"> 650.         if raw:</font>
+<font color="red"> 651.             return [(option, d[option])</font>
+<font color="red"> 652.                     for option in options]</font>
+<font color="black"> 653.         else:</font>
+<font color="red"> 654.             return [(option, self._interpolate(section, option, d[option], d))</font>
+<font color="red"> 655.                     for option in options]</font>
+<font color="black"> 656. </font>
+<font color="green"> 657.     def _interpolate(self, section, option, rawval, vars):</font>
+<font color="black"> 658.         # do the string interpolation</font>
+<font color="red"> 659.         value = rawval</font>
+<font color="red"> 660.         depth = MAX_INTERPOLATION_DEPTH</font>
+<font color="red"> 661.         while depth:                    # Loop through this until it's done</font>
+<font color="red"> 662.             depth -= 1</font>
+<font color="red"> 663.             if value and &quot;%(&quot; in value:</font>
+<font color="red"> 664.                 value = self._KEYCRE.sub(self._interpolation_replace, value)</font>
+<font color="red"> 665.                 try:</font>
+<font color="red"> 666.                     value = value % vars</font>
+<font color="red"> 667.                 except KeyError, e:</font>
+<font color="red"> 668.                     raise InterpolationMissingOptionError(</font>
+<font color="red"> 669.                         option, section, rawval, e.args[0])</font>
+<font color="black"> 670.             else:</font>
+<font color="red"> 671.                 break</font>
+<font color="red"> 672.         if value and &quot;%(&quot; in value:</font>
+<font color="red"> 673.             raise InterpolationDepthError(option, section, rawval)</font>
+<font color="red"> 674.         return value</font>
+<font color="black"> 675. </font>
+<font color="green"> 676.     _KEYCRE = re.compile(r&quot;%\(([^)]*)\)s|.&quot;)</font>
+<font color="black"> 677. </font>
+<font color="green"> 678.     def _interpolation_replace(self, match):</font>
+<font color="red"> 679.         s = match.group(1)</font>
+<font color="red"> 680.         if s is None:</font>
+<font color="red"> 681.             return match.group()</font>
+<font color="black"> 682.         else:</font>
+<font color="red"> 683.             return &quot;%%(%s)s&quot; % self.optionxform(s)</font>
+<font color="black"> 684. </font>
+<font color="black"> 685. </font>
+<font color="green"> 686. class SafeConfigParser(ConfigParser):</font>
+<font color="black"> 687. </font>
+<font color="green"> 688.     def _interpolate(self, section, option, rawval, vars):</font>
+<font color="black"> 689.         # do the string interpolation</font>
+<font color="red"> 690.         L = []</font>
+<font color="red"> 691.         self._interpolate_some(option, L, rawval, section, vars, 1)</font>
+<font color="red"> 692.         return ''.join(L)</font>
+<font color="black"> 693. </font>
+<font color="green"> 694.     _interpvar_re = re.compile(r&quot;%\(([^)]+)\)s&quot;)</font>
+<font color="black"> 695. </font>
+<font color="green"> 696.     def _interpolate_some(self, option, accum, rest, section, map, depth):</font>
+<font color="red"> 697.         if depth &gt; MAX_INTERPOLATION_DEPTH:</font>
+<font color="red"> 698.             raise InterpolationDepthError(option, section, rest)</font>
+<font color="red"> 699.         while rest:</font>
+<font color="red"> 700.             p = rest.find(&quot;%&quot;)</font>
+<font color="red"> 701.             if p &lt; 0:</font>
+<font color="red"> 702.                 accum.append(rest)</font>
+<font color="red"> 703.                 return</font>
+<font color="red"> 704.             if p &gt; 0:</font>
+<font color="red"> 705.                 accum.append(rest[:p])</font>
+<font color="red"> 706.                 rest = rest[p:]</font>
+<font color="black"> 707.             # p is no longer used</font>
+<font color="red"> 708.             c = rest[1:2]</font>
+<font color="red"> 709.             if c == &quot;%&quot;:</font>
+<font color="red"> 710.                 accum.append(&quot;%&quot;)</font>
+<font color="red"> 711.                 rest = rest[2:]</font>
+<font color="red"> 712.             elif c == &quot;(&quot;:</font>
+<font color="red"> 713.                 m = self._interpvar_re.match(rest)</font>
+<font color="red"> 714.                 if m is None:</font>
+<font color="red"> 715.                     raise InterpolationSyntaxError(option, section,</font>
+<font color="red"> 716.                         &quot;bad interpolation variable reference %r&quot; % rest)</font>
+<font color="red"> 717.                 var = self.optionxform(m.group(1))</font>
+<font color="red"> 718.                 rest = rest[m.end():]</font>
+<font color="red"> 719.                 try:</font>
+<font color="red"> 720.                     v = map[var]</font>
+<font color="red"> 721.                 except KeyError:</font>
+<font color="red"> 722.                     raise InterpolationMissingOptionError(</font>
+<font color="red"> 723.                         option, section, rest, var)</font>
+<font color="red"> 724.                 if &quot;%&quot; in v:</font>
+<font color="red"> 725.                     self._interpolate_some(option, accum, v,</font>
+<font color="red"> 726.                                            section, map, depth + 1)</font>
+<font color="black"> 727.                 else:</font>
+<font color="red"> 728.                     accum.append(v)</font>
+<font color="black"> 729.             else:</font>
+<font color="red"> 730.                 raise InterpolationSyntaxError(</font>
+<font color="red"> 731.                     option, section,</font>
+<font color="red"> 732.                     &quot;'%%' must be followed by '%%' or '(', found: %r&quot; % (rest,))</font>
+<font color="black"> 733. </font>
+<font color="green"> 734.     def set(self, section, option, value=None):</font>
+<font color="black"> 735.         &quot;&quot;&quot;Set an option.  Extend ConfigParser.set: check for string values.&quot;&quot;&quot;</font>
+<font color="black"> 736.         # The only legal non-string value if we allow valueless</font>
+<font color="black"> 737.         # options is None, so we need to check if the value is a</font>
+<font color="black"> 738.         # string if:</font>
+<font color="black"> 739.         # - we do not allow valueless options, or</font>
+<font color="black"> 740.         # - we allow valueless options but the value is not None</font>
+<font color="red"> 741.         if self._optcre is self.OPTCRE or value:</font>
+<font color="red"> 742.             if not isinstance(value, basestring):</font>
+<font color="red"> 743.                 raise TypeError(&quot;option values must be strings&quot;)</font>
+<font color="red"> 744.         if value is not None:</font>
+<font color="black"> 745.             # check for bad percent signs:</font>
+<font color="black"> 746.             # first, replace all &quot;good&quot; interpolations</font>
+<font color="red"> 747.             tmp_value = value.replace('%%', '')</font>
+<font color="red"> 748.             tmp_value = self._interpvar_re.sub('', tmp_value)</font>
+<font color="black"> 749.             # then, check if there's a lone percent sign left</font>
+<font color="red"> 750.             if '%' in tmp_value:</font>
+<font color="red"> 751.                 raise ValueError(&quot;invalid interpolation syntax in %r at &quot;</font>
+<font color="red"> 752.                                 &quot;position %d&quot; % (value, tmp_value.find('%')))</font>
+<font color="red"> 753.         ConfigParser.set(self, section, option, value)</font>
+</pre>
+

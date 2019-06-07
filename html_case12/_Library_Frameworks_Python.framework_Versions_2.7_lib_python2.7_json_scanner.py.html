@@ -1,0 +1,74 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/json/scanner.py</b><br>
+
+
+file stats: <b>56 lines, 10 executed: 17.9% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;JSON token scanner</font>
+<font color="green">   2. &quot;&quot;&quot;</font>
+<font color="green">   3. import re</font>
+<font color="green">   4. try:</font>
+<font color="green">   5.     from _json import make_scanner as c_make_scanner</font>
+<font color="red">   6. except ImportError:</font>
+<font color="red">   7.     c_make_scanner = None</font>
+<font color="black">   8. </font>
+<font color="green">   9. __all__ = ['make_scanner']</font>
+<font color="black">  10. </font>
+<font color="green">  11. NUMBER_RE = re.compile(</font>
+<font color="green">  12.     r'(-?(?:0|[1-9]\d*))(\.\d+)?([eE][-+]?\d+)?',</font>
+<font color="green">  13.     (re.VERBOSE | re.MULTILINE | re.DOTALL))</font>
+<font color="black">  14. </font>
+<font color="green">  15. def py_make_scanner(context):</font>
+<font color="red">  16.     parse_object = context.parse_object</font>
+<font color="red">  17.     parse_array = context.parse_array</font>
+<font color="red">  18.     parse_string = context.parse_string</font>
+<font color="red">  19.     match_number = NUMBER_RE.match</font>
+<font color="red">  20.     encoding = context.encoding</font>
+<font color="red">  21.     strict = context.strict</font>
+<font color="red">  22.     parse_float = context.parse_float</font>
+<font color="red">  23.     parse_int = context.parse_int</font>
+<font color="red">  24.     parse_constant = context.parse_constant</font>
+<font color="red">  25.     object_hook = context.object_hook</font>
+<font color="red">  26.     object_pairs_hook = context.object_pairs_hook</font>
+<font color="black">  27. </font>
+<font color="red">  28.     def _scan_once(string, idx):</font>
+<font color="red">  29.         try:</font>
+<font color="red">  30.             nextchar = string[idx]</font>
+<font color="red">  31.         except IndexError:</font>
+<font color="red">  32.             raise StopIteration</font>
+<font color="black">  33. </font>
+<font color="red">  34.         if nextchar == '&quot;':</font>
+<font color="red">  35.             return parse_string(string, idx + 1, encoding, strict)</font>
+<font color="red">  36.         elif nextchar == '{':</font>
+<font color="red">  37.             return parse_object((string, idx + 1), encoding, strict,</font>
+<font color="red">  38.                 _scan_once, object_hook, object_pairs_hook)</font>
+<font color="red">  39.         elif nextchar == '[':</font>
+<font color="red">  40.             return parse_array((string, idx + 1), _scan_once)</font>
+<font color="red">  41.         elif nextchar == 'n' and string[idx:idx + 4] == 'null':</font>
+<font color="red">  42.             return None, idx + 4</font>
+<font color="red">  43.         elif nextchar == 't' and string[idx:idx + 4] == 'true':</font>
+<font color="red">  44.             return True, idx + 4</font>
+<font color="red">  45.         elif nextchar == 'f' and string[idx:idx + 5] == 'false':</font>
+<font color="red">  46.             return False, idx + 5</font>
+<font color="black">  47. </font>
+<font color="red">  48.         m = match_number(string, idx)</font>
+<font color="red">  49.         if m is not None:</font>
+<font color="red">  50.             integer, frac, exp = m.groups()</font>
+<font color="red">  51.             if frac or exp:</font>
+<font color="red">  52.                 res = parse_float(integer + (frac or '') + (exp or ''))</font>
+<font color="black">  53.             else:</font>
+<font color="red">  54.                 res = parse_int(integer)</font>
+<font color="red">  55.             return res, m.end()</font>
+<font color="red">  56.         elif nextchar == 'N' and string[idx:idx + 3] == 'NaN':</font>
+<font color="red">  57.             return parse_constant('NaN'), idx + 3</font>
+<font color="red">  58.         elif nextchar == 'I' and string[idx:idx + 8] == 'Infinity':</font>
+<font color="red">  59.             return parse_constant('Infinity'), idx + 8</font>
+<font color="red">  60.         elif nextchar == '-' and string[idx:idx + 9] == '-Infinity':</font>
+<font color="red">  61.             return parse_constant('-Infinity'), idx + 9</font>
+<font color="black">  62.         else:</font>
+<font color="red">  63.             raise StopIteration</font>
+<font color="black">  64. </font>
+<font color="red">  65.     return _scan_once</font>
+<font color="black">  66. </font>
+<font color="green">  67. make_scanner = c_make_scanner or py_make_scanner</font>
+</pre>
+

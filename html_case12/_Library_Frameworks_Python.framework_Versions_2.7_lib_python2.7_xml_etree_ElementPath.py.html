@@ -1,0 +1,310 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/xml/etree/ElementPath.py</b><br>
+
+
+file stats: <b>188 lines, 26 executed: 13.8% covered</b>
+<pre>
+<font color="black">   1. #</font>
+<font color="black">   2. # ElementTree</font>
+<font color="black">   3. # $Id: ElementPath.py 3375 2008-02-13 08:05:08Z fredrik $</font>
+<font color="black">   4. #</font>
+<font color="black">   5. # limited xpath support for element trees</font>
+<font color="black">   6. #</font>
+<font color="black">   7. # history:</font>
+<font color="black">   8. # 2003-05-23 fl   created</font>
+<font color="black">   9. # 2003-05-28 fl   added support for // etc</font>
+<font color="black">  10. # 2003-08-27 fl   fixed parsing of periods in element names</font>
+<font color="black">  11. # 2007-09-10 fl   new selection engine</font>
+<font color="black">  12. # 2007-09-12 fl   fixed parent selector</font>
+<font color="black">  13. # 2007-09-13 fl   added iterfind; changed findall to return a list</font>
+<font color="black">  14. # 2007-11-30 fl   added namespaces support</font>
+<font color="black">  15. # 2009-10-30 fl   added child element value filter</font>
+<font color="black">  16. #</font>
+<font color="black">  17. # Copyright (c) 2003-2009 by Fredrik Lundh.  All rights reserved.</font>
+<font color="black">  18. #</font>
+<font color="black">  19. # fredrik@pythonware.com</font>
+<font color="black">  20. # http://www.pythonware.com</font>
+<font color="black">  21. #</font>
+<font color="black">  22. # --------------------------------------------------------------------</font>
+<font color="black">  23. # The ElementTree toolkit is</font>
+<font color="black">  24. #</font>
+<font color="black">  25. # Copyright (c) 1999-2009 by Fredrik Lundh</font>
+<font color="black">  26. #</font>
+<font color="black">  27. # By obtaining, using, and/or copying this software and/or its</font>
+<font color="black">  28. # associated documentation, you agree that you have read, understood,</font>
+<font color="black">  29. # and will comply with the following terms and conditions:</font>
+<font color="black">  30. #</font>
+<font color="black">  31. # Permission to use, copy, modify, and distribute this software and</font>
+<font color="black">  32. # its associated documentation for any purpose and without fee is</font>
+<font color="black">  33. # hereby granted, provided that the above copyright notice appears in</font>
+<font color="black">  34. # all copies, and that both that copyright notice and this permission</font>
+<font color="black">  35. # notice appear in supporting documentation, and that the name of</font>
+<font color="black">  36. # Secret Labs AB or the author not be used in advertising or publicity</font>
+<font color="black">  37. # pertaining to distribution of the software without specific, written</font>
+<font color="black">  38. # prior permission.</font>
+<font color="black">  39. #</font>
+<font color="black">  40. # SECRET LABS AB AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD</font>
+<font color="black">  41. # TO THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANT-</font>
+<font color="black">  42. # ABILITY AND FITNESS.  IN NO EVENT SHALL SECRET LABS AB OR THE AUTHOR</font>
+<font color="black">  43. # BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY</font>
+<font color="black">  44. # DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,</font>
+<font color="black">  45. # WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS</font>
+<font color="black">  46. # ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE</font>
+<font color="black">  47. # OF THIS SOFTWARE.</font>
+<font color="black">  48. # --------------------------------------------------------------------</font>
+<font color="black">  49. </font>
+<font color="black">  50. # Licensed to PSF under a Contributor Agreement.</font>
+<font color="black">  51. # See http://www.python.org/psf/license for licensing details.</font>
+<font color="black">  52. </font>
+<font color="black">  53. ##</font>
+<font color="black">  54. # Implementation module for XPath support.  There's usually no reason</font>
+<font color="black">  55. # to import this module directly; the &lt;b&gt;ElementTree&lt;/b&gt; does this for</font>
+<font color="black">  56. # you, if needed.</font>
+<font color="black">  57. ##</font>
+<font color="black">  58. </font>
+<font color="green">  59. import re</font>
+<font color="black">  60. </font>
+<font color="green">  61. xpath_tokenizer_re = re.compile(</font>
+<font color="green">  62.     &quot;(&quot;</font>
+<font color="black">  63.     &quot;'[^']*'|\&quot;[^\&quot;]*\&quot;|&quot;</font>
+<font color="black">  64.     &quot;::|&quot;</font>
+<font color="black">  65.     &quot;//?|&quot;</font>
+<font color="black">  66.     &quot;\.\.|&quot;</font>
+<font color="black">  67.     &quot;\(\)|&quot;</font>
+<font color="black">  68.     &quot;[/.*:\[\]\(\)@=])|&quot;</font>
+<font color="black">  69.     &quot;((?:\{[^}]+\})?[^/\[\]\(\)@=\s]+)|&quot;</font>
+<font color="black">  70.     &quot;\s+&quot;</font>
+<font color="black">  71.     )</font>
+<font color="black">  72. </font>
+<font color="green">  73. def xpath_tokenizer(pattern, namespaces=None):</font>
+<font color="red">  74.     for token in xpath_tokenizer_re.findall(pattern):</font>
+<font color="red">  75.         tag = token[1]</font>
+<font color="red">  76.         if tag and tag[0] != &quot;{&quot; and &quot;:&quot; in tag:</font>
+<font color="red">  77.             try:</font>
+<font color="red">  78.                 prefix, uri = tag.split(&quot;:&quot;, 1)</font>
+<font color="red">  79.                 if not namespaces:</font>
+<font color="red">  80.                     raise KeyError</font>
+<font color="red">  81.                 yield token[0], &quot;{%s}%s&quot; % (namespaces[prefix], uri)</font>
+<font color="red">  82.             except KeyError:</font>
+<font color="red">  83.                 raise SyntaxError(&quot;prefix %r not found in prefix map&quot; % prefix)</font>
+<font color="black">  84.         else:</font>
+<font color="red">  85.             yield token</font>
+<font color="black">  86. </font>
+<font color="green">  87. def get_parent_map(context):</font>
+<font color="red">  88.     parent_map = context.parent_map</font>
+<font color="red">  89.     if parent_map is None:</font>
+<font color="red">  90.         context.parent_map = parent_map = {}</font>
+<font color="red">  91.         for p in context.root.iter():</font>
+<font color="red">  92.             for e in p:</font>
+<font color="red">  93.                 parent_map[e] = p</font>
+<font color="red">  94.     return parent_map</font>
+<font color="black">  95. </font>
+<font color="green">  96. def prepare_child(next, token):</font>
+<font color="red">  97.     tag = token[1]</font>
+<font color="red">  98.     def select(context, result):</font>
+<font color="red">  99.         for elem in result:</font>
+<font color="red"> 100.             for e in elem:</font>
+<font color="red"> 101.                 if e.tag == tag:</font>
+<font color="red"> 102.                     yield e</font>
+<font color="red"> 103.     return select</font>
+<font color="black"> 104. </font>
+<font color="green"> 105. def prepare_star(next, token):</font>
+<font color="red"> 106.     def select(context, result):</font>
+<font color="red"> 107.         for elem in result:</font>
+<font color="red"> 108.             for e in elem:</font>
+<font color="red"> 109.                 yield e</font>
+<font color="red"> 110.     return select</font>
+<font color="black"> 111. </font>
+<font color="green"> 112. def prepare_self(next, token):</font>
+<font color="red"> 113.     def select(context, result):</font>
+<font color="red"> 114.         for elem in result:</font>
+<font color="red"> 115.             yield elem</font>
+<font color="red"> 116.     return select</font>
+<font color="black"> 117. </font>
+<font color="green"> 118. def prepare_descendant(next, token):</font>
+<font color="red"> 119.     token = next()</font>
+<font color="red"> 120.     if token[0] == &quot;*&quot;:</font>
+<font color="red"> 121.         tag = &quot;*&quot;</font>
+<font color="red"> 122.     elif not token[0]:</font>
+<font color="red"> 123.         tag = token[1]</font>
+<font color="black"> 124.     else:</font>
+<font color="red"> 125.         raise SyntaxError(&quot;invalid descendant&quot;)</font>
+<font color="red"> 126.     def select(context, result):</font>
+<font color="red"> 127.         for elem in result:</font>
+<font color="red"> 128.             for e in elem.iter(tag):</font>
+<font color="red"> 129.                 if e is not elem:</font>
+<font color="red"> 130.                     yield e</font>
+<font color="red"> 131.     return select</font>
+<font color="black"> 132. </font>
+<font color="green"> 133. def prepare_parent(next, token):</font>
+<font color="red"> 134.     def select(context, result):</font>
+<font color="black"> 135.         # FIXME: raise error if .. is applied at toplevel?</font>
+<font color="red"> 136.         parent_map = get_parent_map(context)</font>
+<font color="red"> 137.         result_map = {}</font>
+<font color="red"> 138.         for elem in result:</font>
+<font color="red"> 139.             if elem in parent_map:</font>
+<font color="red"> 140.                 parent = parent_map[elem]</font>
+<font color="red"> 141.                 if parent not in result_map:</font>
+<font color="red"> 142.                     result_map[parent] = None</font>
+<font color="red"> 143.                     yield parent</font>
+<font color="red"> 144.     return select</font>
+<font color="black"> 145. </font>
+<font color="green"> 146. def prepare_predicate(next, token):</font>
+<font color="black"> 147.     # FIXME: replace with real parser!!! refs:</font>
+<font color="black"> 148.     # http://effbot.org/zone/simple-iterator-parser.htm</font>
+<font color="black"> 149.     # http://javascript.crockford.com/tdop/tdop.html</font>
+<font color="red"> 150.     signature = []</font>
+<font color="red"> 151.     predicate = []</font>
+<font color="red"> 152.     while 1:</font>
+<font color="red"> 153.         token = next()</font>
+<font color="red"> 154.         if token[0] == &quot;]&quot;:</font>
+<font color="red"> 155.             break</font>
+<font color="red"> 156.         if token[0] and token[0][:1] in &quot;'\&quot;&quot;:</font>
+<font color="red"> 157.             token = &quot;'&quot;, token[0][1:-1]</font>
+<font color="red"> 158.         signature.append(token[0] or &quot;-&quot;)</font>
+<font color="red"> 159.         predicate.append(token[1])</font>
+<font color="red"> 160.     signature = &quot;&quot;.join(signature)</font>
+<font color="black"> 161.     # use signature to determine predicate type</font>
+<font color="red"> 162.     if signature == &quot;@-&quot;:</font>
+<font color="black"> 163.         # [@attribute] predicate</font>
+<font color="red"> 164.         key = predicate[1]</font>
+<font color="red"> 165.         def select(context, result):</font>
+<font color="red"> 166.             for elem in result:</font>
+<font color="red"> 167.                 if elem.get(key) is not None:</font>
+<font color="red"> 168.                     yield elem</font>
+<font color="red"> 169.         return select</font>
+<font color="red"> 170.     if signature == &quot;@-='&quot;:</font>
+<font color="black"> 171.         # [@attribute='value']</font>
+<font color="red"> 172.         key = predicate[1]</font>
+<font color="red"> 173.         value = predicate[-1]</font>
+<font color="red"> 174.         def select(context, result):</font>
+<font color="red"> 175.             for elem in result:</font>
+<font color="red"> 176.                 if elem.get(key) == value:</font>
+<font color="red"> 177.                     yield elem</font>
+<font color="red"> 178.         return select</font>
+<font color="red"> 179.     if signature == &quot;-&quot; and not re.match(&quot;\d+$&quot;, predicate[0]):</font>
+<font color="black"> 180.         # [tag]</font>
+<font color="red"> 181.         tag = predicate[0]</font>
+<font color="red"> 182.         def select(context, result):</font>
+<font color="red"> 183.             for elem in result:</font>
+<font color="red"> 184.                 if elem.find(tag) is not None:</font>
+<font color="red"> 185.                     yield elem</font>
+<font color="red"> 186.         return select</font>
+<font color="red"> 187.     if signature == &quot;-='&quot; and not re.match(&quot;\d+$&quot;, predicate[0]):</font>
+<font color="black"> 188.         # [tag='value']</font>
+<font color="red"> 189.         tag = predicate[0]</font>
+<font color="red"> 190.         value = predicate[-1]</font>
+<font color="red"> 191.         def select(context, result):</font>
+<font color="red"> 192.             for elem in result:</font>
+<font color="red"> 193.                 for e in elem.findall(tag):</font>
+<font color="red"> 194.                     if &quot;&quot;.join(e.itertext()) == value:</font>
+<font color="red"> 195.                         yield elem</font>
+<font color="red"> 196.                         break</font>
+<font color="red"> 197.         return select</font>
+<font color="red"> 198.     if signature == &quot;-&quot; or signature == &quot;-()&quot; or signature == &quot;-()-&quot;:</font>
+<font color="black"> 199.         # [index] or [last()] or [last()-index]</font>
+<font color="red"> 200.         if signature == &quot;-&quot;:</font>
+<font color="red"> 201.             index = int(predicate[0]) - 1</font>
+<font color="black"> 202.         else:</font>
+<font color="red"> 203.             if predicate[0] != &quot;last&quot;:</font>
+<font color="red"> 204.                 raise SyntaxError(&quot;unsupported function&quot;)</font>
+<font color="red"> 205.             if signature == &quot;-()-&quot;:</font>
+<font color="red"> 206.                 try:</font>
+<font color="red"> 207.                     index = int(predicate[2]) - 1</font>
+<font color="red"> 208.                 except ValueError:</font>
+<font color="red"> 209.                     raise SyntaxError(&quot;unsupported expression&quot;)</font>
+<font color="black"> 210.             else:</font>
+<font color="red"> 211.                 index = -1</font>
+<font color="red"> 212.         def select(context, result):</font>
+<font color="red"> 213.             parent_map = get_parent_map(context)</font>
+<font color="red"> 214.             for elem in result:</font>
+<font color="red"> 215.                 try:</font>
+<font color="red"> 216.                     parent = parent_map[elem]</font>
+<font color="black"> 217.                     # FIXME: what if the selector is &quot;*&quot; ?</font>
+<font color="red"> 218.                     elems = list(parent.findall(elem.tag))</font>
+<font color="red"> 219.                     if elems[index] is elem:</font>
+<font color="red"> 220.                         yield elem</font>
+<font color="red"> 221.                 except (IndexError, KeyError):</font>
+<font color="red"> 222.                     pass</font>
+<font color="red"> 223.         return select</font>
+<font color="red"> 224.     raise SyntaxError(&quot;invalid predicate&quot;)</font>
+<font color="black"> 225. </font>
+<font color="green"> 226. ops = {</font>
+<font color="green"> 227.     &quot;&quot;: prepare_child,</font>
+<font color="green"> 228.     &quot;*&quot;: prepare_star,</font>
+<font color="green"> 229.     &quot;.&quot;: prepare_self,</font>
+<font color="green"> 230.     &quot;..&quot;: prepare_parent,</font>
+<font color="green"> 231.     &quot;//&quot;: prepare_descendant,</font>
+<font color="green"> 232.     &quot;[&quot;: prepare_predicate,</font>
+<font color="black"> 233.     }</font>
+<font color="black"> 234. </font>
+<font color="green"> 235. _cache = {}</font>
+<font color="black"> 236. </font>
+<font color="green"> 237. class _SelectorContext:</font>
+<font color="green"> 238.     parent_map = None</font>
+<font color="green"> 239.     def __init__(self, root):</font>
+<font color="red"> 240.         self.root = root</font>
+<font color="black"> 241. </font>
+<font color="black"> 242. # --------------------------------------------------------------------</font>
+<font color="black"> 243. </font>
+<font color="black"> 244. ##</font>
+<font color="black"> 245. # Generate all matching objects.</font>
+<font color="black"> 246. </font>
+<font color="green"> 247. def iterfind(elem, path, namespaces=None):</font>
+<font color="black"> 248.     # compile selector pattern</font>
+<font color="red"> 249.     if path[-1:] == &quot;/&quot;:</font>
+<font color="red"> 250.         path = path + &quot;*&quot; # implicit all (FIXME: keep this?)</font>
+<font color="red"> 251.     try:</font>
+<font color="red"> 252.         selector = _cache[path]</font>
+<font color="red"> 253.     except KeyError:</font>
+<font color="red"> 254.         if len(_cache) &gt; 100:</font>
+<font color="red"> 255.             _cache.clear()</font>
+<font color="red"> 256.         if path[:1] == &quot;/&quot;:</font>
+<font color="red"> 257.             raise SyntaxError(&quot;cannot use absolute path on element&quot;)</font>
+<font color="red"> 258.         next = iter(xpath_tokenizer(path, namespaces)).next</font>
+<font color="red"> 259.         token = next()</font>
+<font color="red"> 260.         selector = []</font>
+<font color="red"> 261.         while 1:</font>
+<font color="red"> 262.             try:</font>
+<font color="red"> 263.                 selector.append(ops[token[0]](next, token))</font>
+<font color="red"> 264.             except StopIteration:</font>
+<font color="red"> 265.                 raise SyntaxError(&quot;invalid path&quot;)</font>
+<font color="red"> 266.             try:</font>
+<font color="red"> 267.                 token = next()</font>
+<font color="red"> 268.                 if token[0] == &quot;/&quot;:</font>
+<font color="red"> 269.                     token = next()</font>
+<font color="red"> 270.             except StopIteration:</font>
+<font color="red"> 271.                 break</font>
+<font color="red"> 272.         _cache[path] = selector</font>
+<font color="black"> 273.     # execute selector pattern</font>
+<font color="red"> 274.     result = [elem]</font>
+<font color="red"> 275.     context = _SelectorContext(elem)</font>
+<font color="red"> 276.     for select in selector:</font>
+<font color="red"> 277.         result = select(context, result)</font>
+<font color="red"> 278.     return result</font>
+<font color="black"> 279. </font>
+<font color="black"> 280. ##</font>
+<font color="black"> 281. # Find first matching object.</font>
+<font color="black"> 282. </font>
+<font color="green"> 283. def find(elem, path, namespaces=None):</font>
+<font color="red"> 284.     try:</font>
+<font color="red"> 285.         return iterfind(elem, path, namespaces).next()</font>
+<font color="red"> 286.     except StopIteration:</font>
+<font color="red"> 287.         return None</font>
+<font color="black"> 288. </font>
+<font color="black"> 289. ##</font>
+<font color="black"> 290. # Find all matching objects.</font>
+<font color="black"> 291. </font>
+<font color="green"> 292. def findall(elem, path, namespaces=None):</font>
+<font color="red"> 293.     return list(iterfind(elem, path, namespaces))</font>
+<font color="black"> 294. </font>
+<font color="black"> 295. ##</font>
+<font color="black"> 296. # Find text for first matching object.</font>
+<font color="black"> 297. </font>
+<font color="green"> 298. def findtext(elem, path, default=None, namespaces=None):</font>
+<font color="red"> 299.     try:</font>
+<font color="red"> 300.         elem = iterfind(elem, path, namespaces).next()</font>
+<font color="red"> 301.         return elem.text or &quot;&quot;</font>
+<font color="red"> 302.     except StopIteration:</font>
+<font color="red"> 303.         return default</font>
+</pre>
+

@@ -1,0 +1,500 @@
+source file: <b>lifecycleModule.py</b><br>
+
+
+file stats: <b>286 lines, 140 executed: 49.0% covered</b>
+<pre>
+<font color="black">   1. #!/usr/bin/env python</font>
+<font color="black">   2. &quot;&quot;&quot;</font>
+<font color="black">   3. This module applies expiration and glacier migration policies to buckets within a given AWS account</font>
+<font color="black">   4. </font>
+<font color="black">   5. Programmer := Michael Vensky; Big Data - DevOps Engineer</font>
+<font color="black">   6. Date := July 2018</font>
+<font color="black">   7. Version = 6</font>
+<font color="black">   8. Version 6 feature(s) := adds to what was in version 5 and now has -s or --specficFolders flag</font>
+<font color="black">   9.                         to allow for the specification of prefixes within a bucket to accompamy</font>
+<font color="black">  10.                         whatever rules are specified</font>
+<font color="black">  11. </font>
+<font color="black">  12.                         This version also adds a much more effecient folderFinder; by relaxing</font>
+<font color="black">  13.                         the flexibility of version 5 being able find any level and concentrating</font>
+<font color="black">  14.                         one level-two folders the algorithm is much faster.</font>
+<font color="black">  15. Version = 8</font>
+<font color="black">  16. Version 7 was to have somehow munged together new and old policies. Instead it was decided to provide</font>
+<font color="black">  17. an interactive flag to allow for user input and customization of lifecycle policies</font>
+<font color="green">  18. &quot;&quot;&quot;</font>
+<font color="green">  19. import argparse</font>
+<font color="green">  20. import sys</font>
+<font color="green">  21. from os import environ</font>
+<font color="green">  22. import os</font>
+<font color="green">  23. import boto3</font>
+<font color="green">  24. from subprocess import call</font>
+<font color="green">  25. import json</font>
+<font color="black">  26. </font>
+<font color="black">  27. # get the 2-level folders: at this point the folders immediately contained within the bucket are level-2</font>
+<font color="black">  28. # the buckets themselves have become level-1</font>
+<font color="green">  29. def folderFinder(aBucket):</font>
+<font color="black">  30. </font>
+<font color="red">  31.     file = open(&quot;bucketObjects&quot;, &quot;r&quot;)</font>
+<font color="red">  32.     sortedLevels = []</font>
+<font color="red">  33.     justFolders = []</font>
+<font color="red">  34.     for line in file:</font>
+<font color="red">  35.         sortedLevels.append(line[:-1])</font>
+<font color="black">  36. </font>
+<font color="red">  37.     return(sortedLevels)</font>
+<font color="black">  38. </font>
+<font color="black">  39. # to get around tzinfo in datatime.datetime type</font>
+<font color="green">  40. def notSerial(time):</font>
+<font color="black">  41.     #print '************** heres the time ***********'</font>
+<font color="black">  42.     #print time</font>
+<font color="red">  43.     from_zone = tz.gettz('UTC')</font>
+<font color="red">  44.     to_zone = tz.gettz('America/Los_Angeles')</font>
+<font color="black">  45.     #zuluGone = datetime.strptime(str(time), '%Y-%m-%d %H:%M:%S.%f+00:00')</font>
+<font color="black">  46.     #zuluGone = datetime.strptime(str(time), '%Y-%m-%d %H:%M:%S.%d+00:00')</font>
+<font color="black">  47.     #zuluGone = datetime.strptime(str(time), '%Y-%m-%d %H:%M:%S+00:00')</font>
+<font color="red">  48.     zuluGone = datetime.strptime(str(time), '%Y-%m-%d %H:%M:%S+00:00')</font>
+<font color="red">  49.     zuluGone = zuluGone.replace(tzinfo=from_zone)</font>
+<font color="red">  50.     la_datetime = str(zuluGone.astimezone(to_zone) )</font>
+<font color="red">  51.     return la_datetime</font>
+<font color="black">  52. </font>
+<font color="black">  53. # construct the requisite json for a glacier transformation only lifecycle policy</font>
+<font color="green">  54. def buildTransitionOnly(policy, transformDays,bucketName,index, prefix):</font>
+<font color="red">  55.     policy['Rules'].append(</font>
+<font color="red">  56.          {</font>
+<font color="red">  57.              'ID': bucketName + 'Rule' + str(index),</font>
+<font color="red">  58.              'Prefix': prefix,</font>
+<font color="red">  59.              'Status': 'Enabled',</font>
+<font color="black">  60.              'Transitions': [</font>
+<font color="red">  61.                  {</font>
+<font color="red">  62.                      'Days': transformDays,</font>
+<font color="red">  63.                      'StorageClass': 'GLACIER'</font>
+<font color="black">  64.                  },</font>
+<font color="black">  65.              ],</font>
+<font color="black">  66. #            'NoncurrentVersionTransitions': [</font>
+<font color="black">  67. #                {</font>
+<font color="black">  68. #                    'NoncurrentDays': transformDays,</font>
+<font color="black">  69. #                    'StorageClass': 'GLACIER'</font>
+<font color="black">  70. #                },</font>
+<font color="black">  71. #            ],</font>
+<font color="black">  72. #            'AbortIncompleteMultipartUpload': {</font>
+<font color="black">  73. #                'DaysAfterInitiation': 7</font>
+<font color="black">  74. #            }</font>
+<font color="black">  75.          }</font>
+<font color="black">  76.     )</font>
+<font color="black">  77. </font>
+<font color="red">  78.     return(policy)</font>
+<font color="black">  79. </font>
+<font color="black">  80. # construct the requisite json for a expiration (ie. deletion) only lifecycle policy</font>
+<font color="green">  81. def buildExpirationOnly(policy, expireDays,bucketName,index, prefix):</font>
+<font color="red">  82.     policy['Rules'].append(</font>
+<font color="red">  83.          {</font>
+<font color="red">  84.              'Expiration': {</font>
+<font color="red">  85.                  'Days': expireDays,</font>
+<font color="black">  86.              },</font>
+<font color="red">  87.              'ID': bucketName + 'Rule' + str(index),</font>
+<font color="red">  88.              'Prefix': prefix,</font>
+<font color="red">  89.              'Status': 'Enabled',</font>
+<font color="black">  90. #            'NoncurrentVersionExpiration': {</font>
+<font color="black">  91. #                'NoncurrentDays': expireDays</font>
+<font color="black">  92. #            },</font>
+<font color="black">  93. #            'AbortIncompleteMultipartUpload': {</font>
+<font color="black">  94. #                'DaysAfterInitiation': 7</font>
+<font color="black">  95. #            }</font>
+<font color="black">  96.          }</font>
+<font color="black">  97.     )</font>
+<font color="black">  98. </font>
+<font color="red">  99.     return(policy)</font>
+<font color="black"> 100. </font>
+<font color="black"> 101. </font>
+<font color="black"> 102. # construct the requisite json for a expiration (ie. deletion) and glacier tranformation lifecycle policy</font>
+<font color="green"> 103. def buildTransAndExpire(policy, transformDays,expireDays,bucketName,index, prefix):</font>
+<font color="red"> 104.     policy['Rules'].append(</font>
+<font color="red"> 105.          {</font>
+<font color="red"> 106.              'Expiration': {</font>
+<font color="red"> 107.                  'Days': expireDays,</font>
+<font color="black"> 108.              },</font>
+<font color="red"> 109.              'ID': bucketName + 'Rule' + str(index),</font>
+<font color="red"> 110.              'Prefix': prefix,</font>
+<font color="red"> 111.              'Status': 'Enabled',</font>
+<font color="black"> 112.              'Transitions': [</font>
+<font color="red"> 113.                  {</font>
+<font color="red"> 114.                      'Days': transformDays,</font>
+<font color="red"> 115.                      'StorageClass': 'GLACIER'</font>
+<font color="black"> 116.                  },</font>
+<font color="black"> 117.              ],</font>
+<font color="black"> 118. #            'NoncurrentVersionTransitions': [</font>
+<font color="black"> 119. #                {</font>
+<font color="black"> 120. #                    'NoncurrentDays': transformDays,</font>
+<font color="black"> 121. #                    'StorageClass': 'GLACIER'</font>
+<font color="black"> 122. #                },</font>
+<font color="black"> 123. #            ],</font>
+<font color="black"> 124. #            'NoncurrentVersionExpiration': {</font>
+<font color="black"> 125. #                'NoncurrentDays': int(transformDays)*2</font>
+<font color="black"> 126. #            },</font>
+<font color="black"> 127. #            'AbortIncompleteMultipartUpload': {</font>
+<font color="black"> 128. #                'DaysAfterInitiation': 7</font>
+<font color="black"> 129. #            }</font>
+<font color="black"> 130.          }</font>
+<font color="black"> 131.     )</font>
+<font color="black"> 132. </font>
+<font color="red"> 133.     return(policy)</font>
+<font color="black"> 134. </font>
+<font color="black"> 135. # brand new fuction for version 8 to respond to -i interactive flag</font>
+<font color="green"> 136. def buildEverythingInteractive(s3, bucketName, sortedList):</font>
+<font color="green"> 137.     policy = {'Rules' : [] }</font>
+<font color="green"> 138.     print sortedList</font>
+<font color="black"> 139.     #raw_input(&quot;Stopped here&quot;)</font>
+<font color="green"> 140.     if sortedList == []:</font>
+<font color="red"> 141.         sortedList.append(&quot;&quot;)</font>
+<font color="green"> 142.     index = 0</font>
+<font color="green"> 143.     response =  s3.get_bucket_lifecycle_configuration(Bucket=bucketName)</font>
+<font color="green"> 144.     print &quot;OLD Policy looks like: &quot;</font>
+<font color="green"> 145.     print json.dumps(response['Rules'], indent=4)</font>
+<font color="black"> 146. </font>
+<font color="green"> 147.     for singlePrefix in sortedList:</font>
+<font color="green"> 148.         index = index + 1</font>
+<font color="black"> 149. </font>
+<font color="green"> 150.         print &quot;************* For bucket &quot;, bucketName, &quot; and prefix &quot;, singlePrefix, &quot; **************&quot;</font>
+<font color="black"> 151.         # get the user input</font>
+<font color="green"> 152.         transformDays = int(raw_input(&quot;Enter an integer number of days to transition to GLACIER: &quot;) )</font>
+<font color="green"> 153.         print</font>
+<font color="green"> 154.         print &quot;Expire days should exceed tranformation by 90 days in order to avoid excess charges&quot;</font>
+<font color="green"> 155.         expireDays = int(raw_input(&quot;Enter an integer number of days to expire: &quot;) )</font>
+<font color="green"> 156.         print</font>
+<font color="green"> 157.         NCtransformDays = int(raw_input(&quot;Enter an integer number of days to transition to GLACIER for non-Current versions: &quot;) )</font>
+<font color="green"> 158.         print</font>
+<font color="green"> 159.         print &quot;NOTE: for non-Current expire days, they must exceed the number of days to transition&quot;</font>
+<font color="green"> 160.         NCexpireDays = int(raw_input(&quot;Enter an integer number of days to expire for non-Current versions: &quot;) )</font>
+<font color="green"> 161.         print</font>
+<font color="green"> 162.         abortMultipartUploadAttempt = int(raw_input(&quot;Enter an integer number of days to expire failed multi-part upload attempts: &quot;) )</font>
+<font color="green"> 163.         print</font>
+<font color="black"> 164. </font>
+<font color="green"> 165.         policy['Rules'].append(</font>
+<font color="green"> 166.              {</font>
+<font color="green"> 167.                  'Expiration': {</font>
+<font color="green"> 168.                      'Days': expireDays,</font>
+<font color="black"> 169.                  },</font>
+<font color="green"> 170.                  'ID': bucketName + 'Rule' + str(index),</font>
+<font color="green"> 171.                  'Prefix': singlePrefix,</font>
+<font color="green"> 172.                  'Status': 'Enabled',</font>
+<font color="black"> 173.                  'Transitions': [</font>
+<font color="green"> 174.                      {</font>
+<font color="green"> 175.                          'Days': transformDays,</font>
+<font color="green"> 176.                          'StorageClass': 'GLACIER'</font>
+<font color="black"> 177.                      },</font>
+<font color="black"> 178.                  ],</font>
+<font color="black"> 179.                  'NoncurrentVersionTransitions': [</font>
+<font color="green"> 180.                      {</font>
+<font color="green"> 181.                          'NoncurrentDays': NCtransformDays,</font>
+<font color="green"> 182.                          'StorageClass': 'GLACIER'</font>
+<font color="black"> 183.                      },</font>
+<font color="black"> 184.                  ],</font>
+<font color="green"> 185.                  'NoncurrentVersionExpiration': {</font>
+<font color="black"> 186.                      # if user enters the same number of days for transition non-current version as here we error</font>
+<font color="green"> 187.                      'NoncurrentDays': NCexpireDays + 2</font>
+<font color="black"> 188.                      #'NoncurrentDays': int(transformDays)*2</font>
+<font color="black"> 189.                  },</font>
+<font color="green"> 190.                  'AbortIncompleteMultipartUpload': {</font>
+<font color="green"> 191.                      'DaysAfterInitiation': abortMultipartUploadAttempt</font>
+<font color="black"> 192.                  }</font>
+<font color="black"> 193.              }</font>
+<font color="black"> 194.         )</font>
+<font color="black"> 195. </font>
+<font color="black"> 196. </font>
+<font color="green"> 197.     print &quot;NEW Policy looks like: &quot;</font>
+<font color="green"> 198.     print json.dumps(policy, indent=4)</font>
+<font color="black"> 199. </font>
+<font color="green"> 200.     return(policy)</font>
+<font color="black"> 201. </font>
+<font color="black"> 202. # this function drives the 3 builder functions above; it decides to either build a rule vector of length = 1 or drive thru</font>
+<font color="black"> 203. # the entire vector; index feeds the naming of the actual rules in the builder functions</font>
+<font color="green"> 204. def buildLifecyclePolicy(theBucket,sortedLevels, transitionAnswer, daysToTransition, expirationAnswer, daysToExpiration):</font>
+<font color="red"> 205.     lifecyclePolicy = {'Rules' : [] }</font>
+<font color="red"> 206.     index = 1</font>
+<font color="black"> 207. </font>
+<font color="red"> 208.     if transitionAnswer == 'Y' and expirationAnswer == 'Y':</font>
+<font color="red"> 209.         if len(sortedLevels) == 0:</font>
+<font color="red"> 210.             newLifecyclePolicy = buildTransAndExpire(lifecyclePolicy,int(daysToTransition),int(daysToExpiration),theBucket,index, '')</font>
+<font color="black"> 211.         else:</font>
+<font color="red"> 212.             for prefix in sortedLevels:</font>
+<font color="red"> 213.                 newLifecyclePolicy = buildTransAndExpire(lifecyclePolicy,int(daysToTransition),int(daysToExpiration),theBucket,index, prefix)</font>
+<font color="red"> 214.                 index = index + 1</font>
+<font color="red"> 215.     if transitionAnswer == 'Y' and expirationAnswer == 'N':</font>
+<font color="red"> 216.         if len(sortedLevels) == 0:</font>
+<font color="red"> 217.             newLifecyclePolicy = buildTransitionOnly(lifecyclePolicy, int(daysToTransition),theBucket,index, '')</font>
+<font color="black"> 218.         else:</font>
+<font color="red"> 219.             for prefix in sortedLevels:</font>
+<font color="red"> 220.                 newLifecyclePolicy = buildTransitionOnly(lifecyclePolicy, int(daysToTransition),theBucket,index, prefix)</font>
+<font color="red"> 221.                 index = index + 1</font>
+<font color="red"> 222.     if transitionAnswer == 'N' and expirationAnswer == 'Y':</font>
+<font color="red"> 223.         if len(sortedLevels) == 0:</font>
+<font color="red"> 224.             newLifecyclePolicy = buildExpirationOnly(lifecyclePolicy, int(daysToExpiration),theBucket,index, '')</font>
+<font color="black"> 225.         else:</font>
+<font color="red"> 226.             for prefix in sortedLevels:</font>
+<font color="red"> 227.                 newLifecyclePolicy = buildExpirationOnly(lifecyclePolicy, int(daysToExpiration),theBucket,index, prefix)</font>
+<font color="red"> 228.                 index = index + 1</font>
+<font color="red"> 229.     if transitionAnswer == 'N' and expirationAnswer == 'N':</font>
+<font color="red"> 230.         print &quot;You have elected not to expire and not to transition&quot;</font>
+<font color="red"> 231.         print &quot;There is nothing for this program to do&quot;</font>
+<font color="red"> 232.         exit(1)</font>
+<font color="red"> 233.     return(newLifecyclePolicy)</font>
+<font color="black"> 234. </font>
+<font color="black"> 235. # This function is the gatekeeper for the other functions; it takes in the user input, checks it against a variety of criteria</font>
+<font color="black"> 236. # and utimately fires off the buildLifecyclePolicy function to build the lifecycle policies</font>
+<font color="black"> 237. #</font>
+<font color="black"> 238. # In addition it applies the actual policy against the bucket or objects depending on input choices</font>
+<font color="green"> 239. def main(callBucket, levelParam, glacierDays, expireDays, forceParam):</font>
+<font color="black"> 240.     # get all arguments lined up</font>
+<font color="green"> 241.     parser = argparse.ArgumentParser()</font>
+<font color="green"> 242.     parser.add_argument('--bucket', '-b', help=&quot;name of S3 bucket&quot;, type= str)</font>
+<font color="green"> 243.     parser.add_argument('--level', '-l', help=&quot;first level folder or prefix name (one/two)&quot;, type= str)</font>
+<font color="green"> 244.     parser.add_argument('--glacier', '-g', help=&quot;number of days before transition to glacier&quot;, type= int)</font>
+<font color="green"> 245.     parser.add_argument('--expire', '-e', help=&quot;number of days before expiration of affected object(s)&quot;, type= int)</font>
+<font color="green"> 246.     parser.add_argument('--force', '-f', help=&quot;if there is a pre-existing policy: force overwrite (True/False)&quot;, type= str)</font>
+<font color="green"> 247.     parser.add_argument('--testRun', '-t', help=&quot;can be run without committing policies to view output only (True/False)&quot;, type= str)</font>
+<font color="green"> 248.     parser.add_argument('--interactive', '-i', help=&quot;to be able to custom build policies (True/False)&quot;, type= str)</font>
+<font color="green"> 249.     parser.add_argument('--specificFolders', '-s', help=&quot;enter a list of folders you want rules against add a / to terminate each folder&quot;,\</font>
+<font color="green"> 250.         nargs='+', type= str)</font>
+<font color="green"> 251.     args =  parser.parse_args()</font>
+<font color="black"> 252. </font>
+<font color="black"> 253. </font>
+<font color="black"> 254.     # this logic is solely for catching calls to main from testing software</font>
+<font color="green"> 255.     if callBucket != &quot; &quot;:</font>
+<font color="red"> 256.         args.bucket = callBucket</font>
+<font color="red"> 257.         args.level = levelParam</font>
+<font color="red"> 258.         args.glacier = glacierDays</font>
+<font color="red"> 259.         args.expire = expireDays</font>
+<font color="red"> 260.         args.force = forceParam</font>
+<font color="black"> 261.         #print args</font>
+<font color="black"> 262. </font>
+<font color="black"> 263.     # return values for assert testing</font>
+<font color="green"> 264.     returnedDict = {</font>
+<font color="green"> 265.         'bucketName'		: None,</font>
+<font color="green"> 266.         'tooMany'		: None,</font>
+<font color="green"> 267.         'hasLifecycle'		: None,</font>
+<font color="green"> 268.         'versioned'		: None,</font>
+<font color="green"> 269.         'glacierAndExpire'	: None,</font>
+<font color="green"> 270.         'glacierOnly'		: None,</font>
+<font color="green"> 271.         'expireOnly'		: None,</font>
+<font color="green"> 272.         'forceOverwrite'	: None,</font>
+<font color="green"> 273.         'nothing'		: None,</font>
+<font color="black"> 274.     }</font>
+<font color="black"> 275. </font>
+<font color="black"> 276.     # you have to specify something</font>
+<font color="green"> 277.     if len(sys.argv) == 1 and callBucket == &quot; &quot;:</font>
+<font color="red"> 278.         parser.print_help()</font>
+<font color="red"> 279.         sys.exit(1)</font>
+<font color="black"> 280. </font>
+<font color="black"> 281.     # too dangerous to sweep through all buckets and specify an expiration</font>
+<font color="green"> 282.     if args.bucket == None and args.expire != None:</font>
+<font color="red"> 283.         print &quot;Error: No expiration/deletion will occur without a bucket name&quot;</font>
+<font color="red"> 284.         print &quot;In order to specify an expiration parameter you must specify a bucket name&quot;</font>
+<font color="red"> 285.         exit(2)</font>
+<font color="black"> 286. </font>
+<font color="green"> 287.     if os.getenv(&quot;AWS_PROFILE&quot;) is None:</font>
+<font color="red"> 288.         print &quot;Error: Please set AWS_PROFILE to a value corresponding to the AWS account you wish to access&quot;</font>
+<font color="red"> 289.         exit(3)</font>
+<font color="black"> 290. </font>
+<font color="black"> 291.     # the force flag is intended to force an overwrite of existing bucket lifecycle policies with what we have here</font>
+<font color="black"> 292.     # python booleans take any non-null value to be true; not just t/f</font>
+<font color="green"> 293.     if args.force is not None and args.force not in (&quot;True&quot;, &quot;False&quot;):</font>
+<font color="red"> 294.         print &quot;Error: Valid values for force are True or False&quot;</font>
+<font color="red"> 295.         exit(4)</font>
+<font color="black"> 296. </font>
+<font color="black"> 297.     # must keep things in glacier at least 90 days to avoid excessive charges</font>
+<font color="green"> 298.     if args.glacier is not None and args.expire is not None and (abs(args.glacier - args.expire) &lt; 90) and args.force :</font>
+<font color="red"> 299.             print &quot;Error: You should store objects in glacier for at least 90 days in order to avoid excessive charges&quot;</font>
+<font color="red"> 300.             print &quot;The difference between when items are placed in glacier and when items are expired should be &gt; 90 days&quot;</font>
+<font color="red"> 301.             exit(5)</font>
+<font color="black"> 302. </font>
+<font color="black"> 303.     # level is a required parameter</font>
+<font color="green"> 304.     if args.level is None or args.level not in (&quot;one&quot;, &quot;two&quot;):</font>
+<font color="red"> 305.         print 'Error: Valid values for level are &quot;one&quot; or &quot;two&quot;'</font>
+<font color="red"> 306.         print 'Level is a required parameter: You must specify a level of either &quot;one&quot; or &quot;two&quot;'</font>
+<font color="red"> 307.         exit(6)</font>
+<font color="black"> 308. </font>
+<font color="black"> 309.     # user must specify for something to do</font>
+<font color="green"> 310.     if args.glacier == None and args.expire == None:</font>
+<font color="red"> 311.         print &quot;Error have not specified either an expiration interval or a glacier-migration interval&quot;</font>
+<font color="red"> 312.         print &quot;Please specify expiration and/or glacier and try again&quot;</font>
+<font color="red"> 313.         exit(7)</font>
+<font color="black"> 314. </font>
+<font color="black"> 315.     # check if specificFolders are specified for presence of /</font>
+<font color="green"> 316.     if args.specificFolders is not None:</font>
+<font color="green"> 317.         for folder in args.specificFolders:</font>
+<font color="green"> 318.             if folder.find('/') == -1:</font>
+<font color="red"> 319.                 print &quot;Please specify an ending '/' when specifying specific folders&quot;</font>
+<font color="red"> 320.                 print &quot;The folders do not have to exist for the lifecycle rule to be created&quot;</font>
+<font color="red"> 321.                 exit(9)</font>
+<font color="black"> 322. </font>
+<font color="black"> 323. </font>
+<font color="black"> 324. </font>
+<font color="black"> 325. </font>
+<font color="black"> 326.     # if no bucket is specified do all the buckets; exception occurs above; can't do all buckets and expire</font>
+<font color="black"> 327.     # otherwise do only the named bucket</font>
+<font color="green"> 328.     s3 = boto3.client('s3')</font>
+<font color="green"> 329.     buckets =  s3.list_buckets()</font>
+<font color="green"> 330.     allBuckets = buckets['Buckets']</font>
+<font color="green"> 331.     bucketList = []</font>
+<font color="green"> 332.     if args.bucket != None:</font>
+<font color="green"> 333.         bucketList.append(args.bucket)</font>
+<font color="black"> 334.     else:</font>
+<font color="red"> 335.         for bucket in allBuckets:</font>
+<font color="red"> 336.             bucketList.append(bucket['Name'])</font>
+<font color="black"> 337. </font>
+<font color="black"> 338.     #build out the file of all objects for all buckets</font>
+<font color="green"> 339.     if os.path.isfile(&quot;bucketObjects&quot;):</font>
+<font color="red"> 340.         status = call([&quot;rm&quot;, &quot;bucketObjects&quot;])</font>
+<font color="black"> 341. </font>
+<font color="black"> 342.     # check if bucket is a valid name</font>
+<font color="green"> 343.     checkBucketList = []</font>
+<font color="green"> 344.     for checkBucket in allBuckets:</font>
+<font color="green"> 345.         checkBucketList.append(checkBucket['Name'])</font>
+<font color="green"> 346.     if args.bucket in checkBucketList or callBucket in checkBucketList or args.bucket == None:</font>
+<font color="red"> 347.         pass</font>
+<font color="black"> 348.     else:</font>
+<font color="red"> 349.         print &quot;Error: &quot;, args.bucket, &quot; not found in &quot;, os.getenv(&quot;AWS_PROFILE&quot;)</font>
+<font color="red"> 350.         print &quot;If this corresponds to the correct account check your spelling&quot;</font>
+<font color="red"> 351.         exit(8)</font>
+<font color="black"> 352. </font>
+<font color="green"> 353.     for bucket in bucketList:</font>
+<font color="green"> 354.         print &quot;**************** &quot;, bucket, &quot; ****************&quot;</font>
+<font color="green"> 355.         returnedDict['bucketName'] = bucket</font>
+<font color="green"> 356.         status = call([&quot;./pythonHelper-v3.bsh&quot;, bucket ])</font>
+<font color="black"> 357. </font>
+<font color="black"> 358.         #print args.specificFolders</font>
+<font color="black"> 359.         #stopHere = raw_input(&quot;Paused here&quot;)</font>
+<font color="green"> 360.         if args.level == 'two':</font>
+<font color="black"> 361.             # if specificFolders are called for use them;otherwise go find them</font>
+<font color="green"> 362.             if args.specificFolders is not None:</font>
+<font color="green"> 363.                 sortedList = args.specificFolders</font>
+<font color="black"> 364.             else:</font>
+<font color="red"> 365.                 sortedList = folderFinder(bucket)</font>
+<font color="black"> 366.         else:</font>
+<font color="red"> 367.             sortedList = []</font>
+<font color="black"> 368. </font>
+<font color="black"> 369.         # if the number of level-2 objects; ie. folders exceeds 100; error out and suggest either bucket level management</font>
+<font color="black"> 370.         # or reduction in the number of &quot;level-2&quot; objects</font>
+<font color="green"> 371.         tooMany = False</font>
+<font color="green"> 372.         if len(sortedList) &gt;= 100:</font>
+<font color="red"> 373.             print &quot;Warning: &quot;, bucket, &quot; has &quot;, len(sortedList) , &quot; folders: 100 is the maximum AWS number of policies allowed per bucket&quot;</font>
+<font color="red"> 374.             print 'Either use level &quot;one&quot; for bucket layer management or reduce the number of level &quot;two&quot; objects'</font>
+<font color="red"> 375.             print &quot;No lifecycle policies will be applied to &quot;, bucket</font>
+<font color="red"> 376.             tooMany = True</font>
+<font color="black"> 377. </font>
+<font color="black"> 378.         # remember to check for existing lifecyle policy and skip if force=False</font>
+<font color="green"> 379.         try:</font>
+<font color="green"> 380.             response =  s3.get_bucket_lifecycle_configuration(Bucket=bucket)</font>
+<font color="green"> 381.             hasLifecycle = True</font>
+<font color="red"> 382.         except:</font>
+<font color="red"> 383.             hasLifecycle = False</font>
+<font color="green"> 384.         returnedDict['hasLifecycle'] = hasLifecycle</font>
+<font color="black"> 385. </font>
+<font color="black"> 386. </font>
+<font color="green"> 387.         if hasLifecycle:</font>
+<font color="green"> 388.             print bucket , &quot; has a lifecycle policy&quot;</font>
+<font color="black"> 389. </font>
+<font color="black"> 390.         # if there is no versioning don't allow expiration</font>
+<font color="green"> 391.         versionResponse = s3.get_bucket_versioning(Bucket=bucket)</font>
+<font color="green"> 392.         versionEnabled = False</font>
+<font color="green"> 393.         if 'Status' in versionResponse:</font>
+<font color="red"> 394.             if versionResponse['Status'] == &quot;Enabled&quot;:</font>
+<font color="red"> 395.                 print &quot;For bucket &quot;, bucket, &quot; versioning is enabled&quot;</font>
+<font color="red"> 396.                 versionEnabled = True</font>
+<font color="black"> 397.                 #print json.dumps(versionResponse, indent=4)</font>
+<font color="black"> 398. </font>
+<font color="green"> 399.         returnedDict['versioned'] = versionEnabled</font>
+<font color="black"> 400. </font>
+<font color="green"> 401.         if os.path.isfile(&quot;bucketObjects&quot;):</font>
+<font color="green"> 402.             status = call([&quot;rm&quot;, &quot;bucketObjects&quot;])</font>
+<font color="black"> 403. </font>
+<font color="black"> 404.         # tooMany is a policy breaker: bail out of loop can't apply a policy to this many folders</font>
+<font color="green"> 405.         returnedDict['tooMany'] = tooMany</font>
+<font color="green"> 406.         if tooMany == True:</font>
+<font color="red"> 407.             continue</font>
+<font color="black"> 408. </font>
+<font color="green"> 409.         if args.force == None or args.force == 'False':</font>
+<font color="green"> 410.             force = False</font>
+<font color="red"> 411.         elif args.force == 'True':</font>
+<font color="red"> 412.             force = True</font>
+<font color="black"> 413. </font>
+<font color="black"> 414.         #print &quot;Force lifecycle overwrite = &quot;, force</font>
+<font color="black"> 415.         #print &quot;Force args lifecycle overwrite = &quot;, args.force</font>
+<font color="black"> 416.         #print type(force)</font>
+<font color="black"> 417.         #print type(args.force)</font>
+<font color="green"> 418.         newLifecyclePolicy = {}</font>
+<font color="black"> 419. </font>
+<font color="green"> 420.         if args.interactive != 'True':</font>
+<font color="red"> 421.             if (hasLifecycle and versionEnabled and force) or (not(hasLifecycle) and versionEnabled and force) or\</font>
+<font color="red"> 422.                 (not(hasLifecycle) and versionEnabled and not(force) ):</font>
+<font color="black"> 423.                 #print &quot;fire policy unrestricted&quot;</font>
+<font color="red"> 424.                 if args.glacier != None and args.expire != None:</font>
+<font color="red"> 425.                     newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'Y', args.glacier, 'Y', args.expire)</font>
+<font color="red"> 426.                     returnedDict['glacierAndExpire'] = True</font>
+<font color="red"> 427.                 elif args.glacier == None and args.expire != None:</font>
+<font color="red"> 428.                     newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'N', args.glacier, 'Y', args.expire)</font>
+<font color="red"> 429.                     returnedDict['expireOnly'] = True</font>
+<font color="red"> 430.                 elif args.glacier != None and args.expire == None:</font>
+<font color="red"> 431.                     newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'Y', args.glacier, 'N', args.expire)</font>
+<font color="red"> 432.                     returnedDict['glacierOnly'] = True</font>
+<font color="black"> 433. </font>
+<font color="red"> 434.                 returnedDict['forceOverwrite'] = force</font>
+<font color="black"> 435.                 #if args.testRun != 'True':</font>
+<font color="black"> 436.                 #    s3.put_bucket_lifecycle_configuration(Bucket=bucket,LifecycleConfiguration=newLifecyclePolicy)</font>
+<font color="black"> 437. </font>
+<font color="red"> 438.             if (not(hasLifecycle) and not(versionEnabled) and not(force) ) or (not(hasLifecycle) and not(versionEnabled) and force ) or\</font>
+<font color="red"> 439.                (hasLifecycle and not(versionEnabled) and force ):</font>
+<font color="black"> 440.                 #print &quot;fire policy NO delete&quot;</font>
+<font color="black"> 441.                 # will not fire expiration 365 used as a safe &quot;default value&quot;</font>
+<font color="black"> 442.                 # the 365 is a dummy place holder</font>
+<font color="black"> 443.                 #newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'Y', args.glacier, 'N', 365)</font>
+<font color="red"> 444.                 if args.glacier != None and args.expire != None:</font>
+<font color="black"> 445.                     #newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'Y', args.glacier, 'Y', args.expire)</font>
+<font color="red"> 446.                     returnedDict['glacierAndExpire'] = False</font>
+<font color="red"> 447.                     returnedDict['nothing'] = True</font>
+<font color="red"> 448.                 elif args.glacier == None and args.expire != None:</font>
+<font color="black"> 449.                     #newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'N', args.glacier, 'Y', args.expire)</font>
+<font color="red"> 450.                     returnedDict['expireOnly'] = False</font>
+<font color="red"> 451.                     returnedDict['nothing'] = True</font>
+<font color="red"> 452.                 elif args.glacier != None and args.expire == None:</font>
+<font color="red"> 453.                     newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'Y', args.glacier, 'N', 365)</font>
+<font color="red"> 454.                     returnedDict['glacierOnly'] = True</font>
+<font color="red"> 455.                 elif args.glacier == None and args.expire == None:</font>
+<font color="red"> 456.                     newLifecyclePolicy = buildLifecyclePolicy(bucket, sortedList , 'N', args.glacier, 'N', args.expire)</font>
+<font color="red"> 457.                     returnedDict['nothing'] = True</font>
+<font color="black"> 458. </font>
+<font color="black"> 459. </font>
+<font color="red"> 460.                 returnedDict['glacierOnly'] = True</font>
+<font color="red"> 461.                 returnedDict['forceOverwrite'] = force</font>
+<font color="black"> 462. </font>
+<font color="black"> 463.                 #if newLifecyclePolicy != {}:</font>
+<font color="black"> 464.                 #    if args.testRun != 'True':</font>
+<font color="black"> 465.                 #        s3.put_bucket_lifecycle_configuration(Bucket=bucket,LifecycleConfiguration=newLifecyclePolicy)</font>
+<font color="green"> 466.         elif args.interactive == 'True':</font>
+<font color="green"> 467.             newLifecyclePolicy = buildEverythingInteractive(s3, bucket, sortedList)</font>
+<font color="black"> 468. </font>
+<font color="black"> 469. </font>
+<font color="black"> 470. </font>
+<font color="green"> 471.         if newLifecyclePolicy != {}:</font>
+<font color="green"> 472.             print &quot;&quot;</font>
+<font color="green"> 473.             if args.testRun != 'True':</font>
+<font color="green"> 474.                 s3.put_bucket_lifecycle_configuration(Bucket=bucket,LifecycleConfiguration=newLifecyclePolicy)</font>
+<font color="green"> 475.                 print &quot;********* Here's the new lifecycle that was applied *********&quot;</font>
+<font color="red"> 476.             elif args.testRun == 'True':</font>
+<font color="red"> 477.                 print &quot;********* THIS WAS ONLY A TEST RUN; NO POLICIES WERE APPLIED AT THIS TIME  *********&quot;</font>
+<font color="green"> 478.             print json.dumps(newLifecyclePolicy, indent=4)</font>
+<font color="black"> 479.         else:</font>
+<font color="red"> 480.             print &quot;&quot;</font>
+<font color="red"> 481.             print &quot;No lifecycle policy was applied: make sure bucket, level, forceOverwrite, expire and glacier are set correctly.&quot;</font>
+<font color="red"> 482.             print &quot;Remember you can not set expiration for a bucket without versioning: also expiration must be set for individual buckets&quot;</font>
+<font color="black"> 483. </font>
+<font color="green"> 484.     return(returnedDict)</font>
+<font color="black"> 485. </font>
+<font color="green"> 486. if __name__ == '__main__':</font>
+<font color="green"> 487.     if len(sys.argv) == 1 or sys.argv[1][0:1] == &quot;-&quot;:</font>
+<font color="green"> 488.         main(&quot; &quot;, &quot; &quot;, &quot; &quot;, &quot; &quot;, &quot; &quot;)</font>
+<font color="black"> 489. </font>
+<font color="black"> 490. #pauseMe = raw_input(&quot;Stop here&quot;)</font>
+<font color="black"> 491. </font>
+<font color="black"> 492. # non-current will not be considered for this version</font>
+<font color="black"> 493. </font>
+</pre>
+

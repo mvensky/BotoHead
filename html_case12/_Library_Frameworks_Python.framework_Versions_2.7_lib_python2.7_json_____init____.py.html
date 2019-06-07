@@ -1,0 +1,359 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/json/__init__.py</b><br>
+
+
+file stats: <b>75 lines, 50 executed: 66.7% covered</b>
+<pre>
+<font color="black">   1. r&quot;&quot;&quot;JSON (JavaScript Object Notation) &lt;http://json.org&gt; is a subset of</font>
+<font color="black">   2. JavaScript syntax (ECMA-262 3rd edition) used as a lightweight data</font>
+<font color="black">   3. interchange format.</font>
+<font color="black">   4. </font>
+<font color="black">   5. :mod:`json` exposes an API familiar to users of the standard library</font>
+<font color="black">   6. :mod:`marshal` and :mod:`pickle` modules. It is the externally maintained</font>
+<font color="black">   7. version of the :mod:`json` library contained in Python 2.6, but maintains</font>
+<font color="black">   8. compatibility with Python 2.4 and Python 2.5 and (currently) has</font>
+<font color="black">   9. significant performance advantages, even without using the optional C</font>
+<font color="black">  10. extension for speedups.</font>
+<font color="black">  11. </font>
+<font color="black">  12. Encoding basic Python object hierarchies::</font>
+<font color="black">  13. </font>
+<font color="black">  14.     &gt;&gt;&gt; import json</font>
+<font color="black">  15.     &gt;&gt;&gt; json.dumps(['foo', {'bar': ('baz', None, 1.0, 2)}])</font>
+<font color="black">  16.     '[&quot;foo&quot;, {&quot;bar&quot;: [&quot;baz&quot;, null, 1.0, 2]}]'</font>
+<font color="black">  17.     &gt;&gt;&gt; print json.dumps(&quot;\&quot;foo\bar&quot;)</font>
+<font color="black">  18.     &quot;\&quot;foo\bar&quot;</font>
+<font color="black">  19.     &gt;&gt;&gt; print json.dumps(u'\u1234')</font>
+<font color="black">  20.     &quot;\u1234&quot;</font>
+<font color="black">  21.     &gt;&gt;&gt; print json.dumps('\\')</font>
+<font color="black">  22.     &quot;\\&quot;</font>
+<font color="black">  23.     &gt;&gt;&gt; print json.dumps({&quot;c&quot;: 0, &quot;b&quot;: 0, &quot;a&quot;: 0}, sort_keys=True)</font>
+<font color="black">  24.     {&quot;a&quot;: 0, &quot;b&quot;: 0, &quot;c&quot;: 0}</font>
+<font color="black">  25.     &gt;&gt;&gt; from StringIO import StringIO</font>
+<font color="black">  26.     &gt;&gt;&gt; io = StringIO()</font>
+<font color="black">  27.     &gt;&gt;&gt; json.dump(['streaming API'], io)</font>
+<font color="black">  28.     &gt;&gt;&gt; io.getvalue()</font>
+<font color="black">  29.     '[&quot;streaming API&quot;]'</font>
+<font color="black">  30. </font>
+<font color="black">  31. Compact encoding::</font>
+<font color="black">  32. </font>
+<font color="black">  33.     &gt;&gt;&gt; import json</font>
+<font color="black">  34.     &gt;&gt;&gt; json.dumps([1,2,3,{'4': 5, '6': 7}], sort_keys=True, separators=(',',':'))</font>
+<font color="black">  35.     '[1,2,3,{&quot;4&quot;:5,&quot;6&quot;:7}]'</font>
+<font color="black">  36. </font>
+<font color="black">  37. Pretty printing::</font>
+<font color="black">  38. </font>
+<font color="black">  39.     &gt;&gt;&gt; import json</font>
+<font color="black">  40.     &gt;&gt;&gt; print json.dumps({'4': 5, '6': 7}, sort_keys=True,</font>
+<font color="black">  41.     ...                  indent=4, separators=(',', ': '))</font>
+<font color="black">  42.     {</font>
+<font color="black">  43.         &quot;4&quot;: 5,</font>
+<font color="black">  44.         &quot;6&quot;: 7</font>
+<font color="black">  45.     }</font>
+<font color="black">  46. </font>
+<font color="black">  47. Decoding JSON::</font>
+<font color="black">  48. </font>
+<font color="black">  49.     &gt;&gt;&gt; import json</font>
+<font color="black">  50.     &gt;&gt;&gt; obj = [u'foo', {u'bar': [u'baz', None, 1.0, 2]}]</font>
+<font color="black">  51.     &gt;&gt;&gt; json.loads('[&quot;foo&quot;, {&quot;bar&quot;:[&quot;baz&quot;, null, 1.0, 2]}]') == obj</font>
+<font color="black">  52.     True</font>
+<font color="black">  53.     &gt;&gt;&gt; json.loads('&quot;\\&quot;foo\\bar&quot;') == u'&quot;foo\x08ar'</font>
+<font color="black">  54.     True</font>
+<font color="black">  55.     &gt;&gt;&gt; from StringIO import StringIO</font>
+<font color="black">  56.     &gt;&gt;&gt; io = StringIO('[&quot;streaming API&quot;]')</font>
+<font color="black">  57.     &gt;&gt;&gt; json.load(io)[0] == 'streaming API'</font>
+<font color="black">  58.     True</font>
+<font color="black">  59. </font>
+<font color="black">  60. Specializing JSON object decoding::</font>
+<font color="black">  61. </font>
+<font color="black">  62.     &gt;&gt;&gt; import json</font>
+<font color="black">  63.     &gt;&gt;&gt; def as_complex(dct):</font>
+<font color="black">  64.     ...     if '__complex__' in dct:</font>
+<font color="black">  65.     ...         return complex(dct['real'], dct['imag'])</font>
+<font color="black">  66.     ...     return dct</font>
+<font color="black">  67.     ...</font>
+<font color="black">  68.     &gt;&gt;&gt; json.loads('{&quot;__complex__&quot;: true, &quot;real&quot;: 1, &quot;imag&quot;: 2}',</font>
+<font color="black">  69.     ...     object_hook=as_complex)</font>
+<font color="black">  70.     (1+2j)</font>
+<font color="black">  71.     &gt;&gt;&gt; from decimal import Decimal</font>
+<font color="black">  72.     &gt;&gt;&gt; json.loads('1.1', parse_float=Decimal) == Decimal('1.1')</font>
+<font color="black">  73.     True</font>
+<font color="black">  74. </font>
+<font color="black">  75. Specializing JSON object encoding::</font>
+<font color="black">  76. </font>
+<font color="black">  77.     &gt;&gt;&gt; import json</font>
+<font color="black">  78.     &gt;&gt;&gt; def encode_complex(obj):</font>
+<font color="black">  79.     ...     if isinstance(obj, complex):</font>
+<font color="black">  80.     ...         return [obj.real, obj.imag]</font>
+<font color="black">  81.     ...     raise TypeError(repr(obj) + &quot; is not JSON serializable&quot;)</font>
+<font color="black">  82.     ...</font>
+<font color="black">  83.     &gt;&gt;&gt; json.dumps(2 + 1j, default=encode_complex)</font>
+<font color="black">  84.     '[2.0, 1.0]'</font>
+<font color="black">  85.     &gt;&gt;&gt; json.JSONEncoder(default=encode_complex).encode(2 + 1j)</font>
+<font color="black">  86.     '[2.0, 1.0]'</font>
+<font color="black">  87.     &gt;&gt;&gt; ''.join(json.JSONEncoder(default=encode_complex).iterencode(2 + 1j))</font>
+<font color="black">  88.     '[2.0, 1.0]'</font>
+<font color="black">  89. </font>
+<font color="black">  90. </font>
+<font color="black">  91. Using json.tool from the shell to validate and pretty-print::</font>
+<font color="black">  92. </font>
+<font color="black">  93.     $ echo '{&quot;json&quot;:&quot;obj&quot;}' | python -m json.tool</font>
+<font color="black">  94.     {</font>
+<font color="black">  95.         &quot;json&quot;: &quot;obj&quot;</font>
+<font color="black">  96.     }</font>
+<font color="black">  97.     $ echo '{ 1.2:3.4}' | python -m json.tool</font>
+<font color="black">  98.     Expecting property name enclosed in double quotes: line 1 column 3 (char 2)</font>
+<font color="green">  99. &quot;&quot;&quot;</font>
+<font color="green"> 100. __version__ = '2.0.9'</font>
+<font color="black"> 101. __all__ = [</font>
+<font color="green"> 102.     'dump', 'dumps', 'load', 'loads',</font>
+<font color="green"> 103.     'JSONDecoder', 'JSONEncoder',</font>
+<font color="black"> 104. ]</font>
+<font color="black"> 105. </font>
+<font color="green"> 106. __author__ = 'Bob Ippolito &lt;bob@redivi.com&gt;'</font>
+<font color="black"> 107. </font>
+<font color="green"> 108. from .decoder import JSONDecoder</font>
+<font color="green"> 109. from .encoder import JSONEncoder</font>
+<font color="black"> 110. </font>
+<font color="green"> 111. _default_encoder = JSONEncoder(</font>
+<font color="green"> 112.     skipkeys=False,</font>
+<font color="green"> 113.     ensure_ascii=True,</font>
+<font color="green"> 114.     check_circular=True,</font>
+<font color="green"> 115.     allow_nan=True,</font>
+<font color="green"> 116.     indent=None,</font>
+<font color="green"> 117.     separators=None,</font>
+<font color="green"> 118.     encoding='utf-8',</font>
+<font color="green"> 119.     default=None,</font>
+<font color="black"> 120. )</font>
+<font color="black"> 121. </font>
+<font color="green"> 122. def dump(obj, fp, skipkeys=False, ensure_ascii=True, check_circular=True,</font>
+<font color="green"> 123.         allow_nan=True, cls=None, indent=None, separators=None,</font>
+<font color="green"> 124.         encoding='utf-8', default=None, sort_keys=False, **kw):</font>
+<font color="black"> 125.     &quot;&quot;&quot;Serialize ``obj`` as a JSON formatted stream to ``fp`` (a</font>
+<font color="black"> 126.     ``.write()``-supporting file-like object).</font>
+<font color="black"> 127. </font>
+<font color="black"> 128.     If ``skipkeys`` is true then ``dict`` keys that are not basic types</font>
+<font color="black"> 129.     (``str``, ``unicode``, ``int``, ``long``, ``float``, ``bool``, ``None``)</font>
+<font color="black"> 130.     will be skipped instead of raising a ``TypeError``.</font>
+<font color="black"> 131. </font>
+<font color="black"> 132.     If ``ensure_ascii`` is true (the default), all non-ASCII characters in the</font>
+<font color="black"> 133.     output are escaped with ``\uXXXX`` sequences, and the result is a ``str``</font>
+<font color="black"> 134.     instance consisting of ASCII characters only.  If ``ensure_ascii`` is</font>
+<font color="black"> 135.     false, some chunks written to ``fp`` may be ``unicode`` instances.</font>
+<font color="black"> 136.     This usually happens because the input contains unicode strings or the</font>
+<font color="black"> 137.     ``encoding`` parameter is used. Unless ``fp.write()`` explicitly</font>
+<font color="black"> 138.     understands ``unicode`` (as in ``codecs.getwriter``) this is likely to</font>
+<font color="black"> 139.     cause an error.</font>
+<font color="black"> 140. </font>
+<font color="black"> 141.     If ``check_circular`` is false, then the circular reference check</font>
+<font color="black"> 142.     for container types will be skipped and a circular reference will</font>
+<font color="black"> 143.     result in an ``OverflowError`` (or worse).</font>
+<font color="black"> 144. </font>
+<font color="black"> 145.     If ``allow_nan`` is false, then it will be a ``ValueError`` to</font>
+<font color="black"> 146.     serialize out of range ``float`` values (``nan``, ``inf``, ``-inf``)</font>
+<font color="black"> 147.     in strict compliance of the JSON specification, instead of using the</font>
+<font color="black"> 148.     JavaScript equivalents (``NaN``, ``Infinity``, ``-Infinity``).</font>
+<font color="black"> 149. </font>
+<font color="black"> 150.     If ``indent`` is a non-negative integer, then JSON array elements and</font>
+<font color="black"> 151.     object members will be pretty-printed with that indent level. An indent</font>
+<font color="black"> 152.     level of 0 will only insert newlines. ``None`` is the most compact</font>
+<font color="black"> 153.     representation.  Since the default item separator is ``', '``,  the</font>
+<font color="black"> 154.     output might include trailing whitespace when ``indent`` is specified.</font>
+<font color="black"> 155.     You can use ``separators=(',', ': ')`` to avoid this.</font>
+<font color="black"> 156. </font>
+<font color="black"> 157.     If ``separators`` is an ``(item_separator, dict_separator)`` tuple</font>
+<font color="black"> 158.     then it will be used instead of the default ``(', ', ': ')`` separators.</font>
+<font color="black"> 159.     ``(',', ':')`` is the most compact JSON representation.</font>
+<font color="black"> 160. </font>
+<font color="black"> 161.     ``encoding`` is the character encoding for str instances, default is UTF-8.</font>
+<font color="black"> 162. </font>
+<font color="black"> 163.     ``default(obj)`` is a function that should return a serializable version</font>
+<font color="black"> 164.     of obj or raise TypeError. The default simply raises TypeError.</font>
+<font color="black"> 165. </font>
+<font color="black"> 166.     If *sort_keys* is true (default: ``False``), then the output of</font>
+<font color="black"> 167.     dictionaries will be sorted by key.</font>
+<font color="black"> 168. </font>
+<font color="black"> 169.     To use a custom ``JSONEncoder`` subclass (e.g. one that overrides the</font>
+<font color="black"> 170.     ``.default()`` method to serialize additional types), specify it with</font>
+<font color="black"> 171.     the ``cls`` kwarg; otherwise ``JSONEncoder`` is used.</font>
+<font color="black"> 172. </font>
+<font color="black"> 173.     &quot;&quot;&quot;</font>
+<font color="black"> 174.     # cached encoder</font>
+<font color="red"> 175.     if (not skipkeys and ensure_ascii and</font>
+<font color="red"> 176.         check_circular and allow_nan and</font>
+<font color="red"> 177.         cls is None and indent is None and separators is None and</font>
+<font color="red"> 178.         encoding == 'utf-8' and default is None and not sort_keys and not kw):</font>
+<font color="red"> 179.         iterable = _default_encoder.iterencode(obj)</font>
+<font color="black"> 180.     else:</font>
+<font color="red"> 181.         if cls is None:</font>
+<font color="red"> 182.             cls = JSONEncoder</font>
+<font color="red"> 183.         iterable = cls(skipkeys=skipkeys, ensure_ascii=ensure_ascii,</font>
+<font color="red"> 184.             check_circular=check_circular, allow_nan=allow_nan, indent=indent,</font>
+<font color="red"> 185.             separators=separators, encoding=encoding,</font>
+<font color="red"> 186.             default=default, sort_keys=sort_keys, **kw).iterencode(obj)</font>
+<font color="black"> 187.     # could accelerate with writelines in some versions of Python, at</font>
+<font color="black"> 188.     # a debuggability cost</font>
+<font color="red"> 189.     for chunk in iterable:</font>
+<font color="red"> 190.         fp.write(chunk)</font>
+<font color="black"> 191. </font>
+<font color="black"> 192. </font>
+<font color="green"> 193. def dumps(obj, skipkeys=False, ensure_ascii=True, check_circular=True,</font>
+<font color="green"> 194.         allow_nan=True, cls=None, indent=None, separators=None,</font>
+<font color="green"> 195.         encoding='utf-8', default=None, sort_keys=False, **kw):</font>
+<font color="black"> 196.     &quot;&quot;&quot;Serialize ``obj`` to a JSON formatted ``str``.</font>
+<font color="black"> 197. </font>
+<font color="black"> 198.     If ``skipkeys`` is true then ``dict`` keys that are not basic types</font>
+<font color="black"> 199.     (``str``, ``unicode``, ``int``, ``long``, ``float``, ``bool``, ``None``)</font>
+<font color="black"> 200.     will be skipped instead of raising a ``TypeError``.</font>
+<font color="black"> 201. </font>
+<font color="black"> 202. </font>
+<font color="black"> 203.     If ``ensure_ascii`` is false, all non-ASCII characters are not escaped, and</font>
+<font color="black"> 204.     the return value may be a ``unicode`` instance. See ``dump`` for details.</font>
+<font color="black"> 205. </font>
+<font color="black"> 206.     If ``check_circular`` is false, then the circular reference check</font>
+<font color="black"> 207.     for container types will be skipped and a circular reference will</font>
+<font color="black"> 208.     result in an ``OverflowError`` (or worse).</font>
+<font color="black"> 209. </font>
+<font color="black"> 210.     If ``allow_nan`` is false, then it will be a ``ValueError`` to</font>
+<font color="black"> 211.     serialize out of range ``float`` values (``nan``, ``inf``, ``-inf``) in</font>
+<font color="black"> 212.     strict compliance of the JSON specification, instead of using the</font>
+<font color="black"> 213.     JavaScript equivalents (``NaN``, ``Infinity``, ``-Infinity``).</font>
+<font color="black"> 214. </font>
+<font color="black"> 215.     If ``indent`` is a non-negative integer, then JSON array elements and</font>
+<font color="black"> 216.     object members will be pretty-printed with that indent level. An indent</font>
+<font color="black"> 217.     level of 0 will only insert newlines. ``None`` is the most compact</font>
+<font color="black"> 218.     representation.  Since the default item separator is ``', '``,  the</font>
+<font color="black"> 219.     output might include trailing whitespace when ``indent`` is specified.</font>
+<font color="black"> 220.     You can use ``separators=(',', ': ')`` to avoid this.</font>
+<font color="black"> 221. </font>
+<font color="black"> 222.     If ``separators`` is an ``(item_separator, dict_separator)`` tuple</font>
+<font color="black"> 223.     then it will be used instead of the default ``(', ', ': ')`` separators.</font>
+<font color="black"> 224.     ``(',', ':')`` is the most compact JSON representation.</font>
+<font color="black"> 225. </font>
+<font color="black"> 226.     ``encoding`` is the character encoding for str instances, default is UTF-8.</font>
+<font color="black"> 227. </font>
+<font color="black"> 228.     ``default(obj)`` is a function that should return a serializable version</font>
+<font color="black"> 229.     of obj or raise TypeError. The default simply raises TypeError.</font>
+<font color="black"> 230. </font>
+<font color="black"> 231.     If *sort_keys* is true (default: ``False``), then the output of</font>
+<font color="black"> 232.     dictionaries will be sorted by key.</font>
+<font color="black"> 233. </font>
+<font color="black"> 234.     To use a custom ``JSONEncoder`` subclass (e.g. one that overrides the</font>
+<font color="black"> 235.     ``.default()`` method to serialize additional types), specify it with</font>
+<font color="black"> 236.     the ``cls`` kwarg; otherwise ``JSONEncoder`` is used.</font>
+<font color="black"> 237. </font>
+<font color="black"> 238.     &quot;&quot;&quot;</font>
+<font color="black"> 239.     # cached encoder</font>
+<font color="green"> 240.     if (not skipkeys and ensure_ascii and</font>
+<font color="green"> 241.         check_circular and allow_nan and</font>
+<font color="green"> 242.         cls is None and indent is None and separators is None and</font>
+<font color="red"> 243.         encoding == 'utf-8' and default is None and not sort_keys and not kw):</font>
+<font color="red"> 244.         return _default_encoder.encode(obj)</font>
+<font color="green"> 245.     if cls is None:</font>
+<font color="green"> 246.         cls = JSONEncoder</font>
+<font color="green"> 247.     return cls(</font>
+<font color="green"> 248.         skipkeys=skipkeys, ensure_ascii=ensure_ascii,</font>
+<font color="green"> 249.         check_circular=check_circular, allow_nan=allow_nan, indent=indent,</font>
+<font color="green"> 250.         separators=separators, encoding=encoding, default=default,</font>
+<font color="green"> 251.         sort_keys=sort_keys, **kw).encode(obj)</font>
+<font color="black"> 252. </font>
+<font color="black"> 253. </font>
+<font color="green"> 254. _default_decoder = JSONDecoder(encoding=None, object_hook=None,</font>
+<font color="green"> 255.                                object_pairs_hook=None)</font>
+<font color="black"> 256. </font>
+<font color="black"> 257. </font>
+<font color="green"> 258. def load(fp, encoding=None, cls=None, object_hook=None, parse_float=None,</font>
+<font color="green"> 259.         parse_int=None, parse_constant=None, object_pairs_hook=None, **kw):</font>
+<font color="black"> 260.     &quot;&quot;&quot;Deserialize ``fp`` (a ``.read()``-supporting file-like object containing</font>
+<font color="black"> 261.     a JSON document) to a Python object.</font>
+<font color="black"> 262. </font>
+<font color="black"> 263.     If the contents of ``fp`` is encoded with an ASCII based encoding other</font>
+<font color="black"> 264.     than utf-8 (e.g. latin-1), then an appropriate ``encoding`` name must</font>
+<font color="black"> 265.     be specified. Encodings that are not ASCII based (such as UCS-2) are</font>
+<font color="black"> 266.     not allowed, and should be wrapped with</font>
+<font color="black"> 267.     ``codecs.getreader(fp)(encoding)``, or simply decoded to a ``unicode``</font>
+<font color="black"> 268.     object and passed to ``loads()``</font>
+<font color="black"> 269. </font>
+<font color="black"> 270.     ``object_hook`` is an optional function that will be called with the</font>
+<font color="black"> 271.     result of any object literal decode (a ``dict``). The return value of</font>
+<font color="black"> 272.     ``object_hook`` will be used instead of the ``dict``. This feature</font>
+<font color="black"> 273.     can be used to implement custom decoders (e.g. JSON-RPC class hinting).</font>
+<font color="black"> 274. </font>
+<font color="black"> 275.     ``object_pairs_hook`` is an optional function that will be called with the</font>
+<font color="black"> 276.     result of any object literal decoded with an ordered list of pairs.  The</font>
+<font color="black"> 277.     return value of ``object_pairs_hook`` will be used instead of the ``dict``.</font>
+<font color="black"> 278.     This feature can be used to implement custom decoders that rely on the</font>
+<font color="black"> 279.     order that the key and value pairs are decoded (for example,</font>
+<font color="black"> 280.     collections.OrderedDict will remember the order of insertion). If</font>
+<font color="black"> 281.     ``object_hook`` is also defined, the ``object_pairs_hook`` takes priority.</font>
+<font color="black"> 282. </font>
+<font color="black"> 283.     To use a custom ``JSONDecoder`` subclass, specify it with the ``cls``</font>
+<font color="black"> 284.     kwarg; otherwise ``JSONDecoder`` is used.</font>
+<font color="black"> 285. </font>
+<font color="black"> 286.     &quot;&quot;&quot;</font>
+<font color="red"> 287.     return loads(fp.read(),</font>
+<font color="red"> 288.         encoding=encoding, cls=cls, object_hook=object_hook,</font>
+<font color="red"> 289.         parse_float=parse_float, parse_int=parse_int,</font>
+<font color="red"> 290.         parse_constant=parse_constant, object_pairs_hook=object_pairs_hook,</font>
+<font color="red"> 291.         **kw)</font>
+<font color="black"> 292. </font>
+<font color="black"> 293. </font>
+<font color="green"> 294. def loads(s, encoding=None, cls=None, object_hook=None, parse_float=None,</font>
+<font color="green"> 295.         parse_int=None, parse_constant=None, object_pairs_hook=None, **kw):</font>
+<font color="black"> 296.     &quot;&quot;&quot;Deserialize ``s`` (a ``str`` or ``unicode`` instance containing a JSON</font>
+<font color="black"> 297.     document) to a Python object.</font>
+<font color="black"> 298. </font>
+<font color="black"> 299.     If ``s`` is a ``str`` instance and is encoded with an ASCII based encoding</font>
+<font color="black"> 300.     other than utf-8 (e.g. latin-1) then an appropriate ``encoding`` name</font>
+<font color="black"> 301.     must be specified. Encodings that are not ASCII based (such as UCS-2)</font>
+<font color="black"> 302.     are not allowed and should be decoded to ``unicode`` first.</font>
+<font color="black"> 303. </font>
+<font color="black"> 304.     ``object_hook`` is an optional function that will be called with the</font>
+<font color="black"> 305.     result of any object literal decode (a ``dict``). The return value of</font>
+<font color="black"> 306.     ``object_hook`` will be used instead of the ``dict``. This feature</font>
+<font color="black"> 307.     can be used to implement custom decoders (e.g. JSON-RPC class hinting).</font>
+<font color="black"> 308. </font>
+<font color="black"> 309.     ``object_pairs_hook`` is an optional function that will be called with the</font>
+<font color="black"> 310.     result of any object literal decoded with an ordered list of pairs.  The</font>
+<font color="black"> 311.     return value of ``object_pairs_hook`` will be used instead of the ``dict``.</font>
+<font color="black"> 312.     This feature can be used to implement custom decoders that rely on the</font>
+<font color="black"> 313.     order that the key and value pairs are decoded (for example,</font>
+<font color="black"> 314.     collections.OrderedDict will remember the order of insertion). If</font>
+<font color="black"> 315.     ``object_hook`` is also defined, the ``object_pairs_hook`` takes priority.</font>
+<font color="black"> 316. </font>
+<font color="black"> 317.     ``parse_float``, if specified, will be called with the string</font>
+<font color="black"> 318.     of every JSON float to be decoded. By default this is equivalent to</font>
+<font color="black"> 319.     float(num_str). This can be used to use another datatype or parser</font>
+<font color="black"> 320.     for JSON floats (e.g. decimal.Decimal).</font>
+<font color="black"> 321. </font>
+<font color="black"> 322.     ``parse_int``, if specified, will be called with the string</font>
+<font color="black"> 323.     of every JSON int to be decoded. By default this is equivalent to</font>
+<font color="black"> 324.     int(num_str). This can be used to use another datatype or parser</font>
+<font color="black"> 325.     for JSON integers (e.g. float).</font>
+<font color="black"> 326. </font>
+<font color="black"> 327.     ``parse_constant``, if specified, will be called with one of the</font>
+<font color="black"> 328.     following strings: -Infinity, Infinity, NaN.</font>
+<font color="black"> 329.     This can be used to raise an exception if invalid JSON numbers</font>
+<font color="black"> 330.     are encountered.</font>
+<font color="black"> 331. </font>
+<font color="black"> 332.     To use a custom ``JSONDecoder`` subclass, specify it with the ``cls``</font>
+<font color="black"> 333.     kwarg; otherwise ``JSONDecoder`` is used.</font>
+<font color="black"> 334. </font>
+<font color="black"> 335.     &quot;&quot;&quot;</font>
+<font color="green"> 336.     if (cls is None and encoding is None and object_hook is None and</font>
+<font color="green"> 337.             parse_int is None and parse_float is None and</font>
+<font color="green"> 338.             parse_constant is None and object_pairs_hook is None and not kw):</font>
+<font color="red"> 339.         return _default_decoder.decode(s)</font>
+<font color="green"> 340.     if cls is None:</font>
+<font color="green"> 341.         cls = JSONDecoder</font>
+<font color="green"> 342.     if object_hook is not None:</font>
+<font color="red"> 343.         kw['object_hook'] = object_hook</font>
+<font color="green"> 344.     if object_pairs_hook is not None:</font>
+<font color="green"> 345.         kw['object_pairs_hook'] = object_pairs_hook</font>
+<font color="green"> 346.     if parse_float is not None:</font>
+<font color="red"> 347.         kw['parse_float'] = parse_float</font>
+<font color="green"> 348.     if parse_int is not None:</font>
+<font color="red"> 349.         kw['parse_int'] = parse_int</font>
+<font color="green"> 350.     if parse_constant is not None:</font>
+<font color="red"> 351.         kw['parse_constant'] = parse_constant</font>
+<font color="green"> 352.     return cls(encoding=encoding, **kw).decode(s)</font>
+</pre>
+

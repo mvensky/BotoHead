@@ -1,0 +1,1066 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/cgi.py</b><br>
+
+
+file stats: <b>612 lines, 119 executed: 19.4% covered</b>
+<pre>
+<font color="black">   1. #! /usr/local/bin/python</font>
+<font color="black">   2. </font>
+<font color="black">   3. # NOTE: the above &quot;/usr/local/bin/python&quot; is NOT a mistake.  It is</font>
+<font color="black">   4. # intentionally NOT &quot;/usr/bin/env python&quot;.  On many systems</font>
+<font color="black">   5. # (e.g. Solaris), /usr/local/bin is not in $PATH as passed to CGI</font>
+<font color="black">   6. # scripts, and /usr/local/bin is the default directory where Python is</font>
+<font color="black">   7. # installed, so /usr/bin/env would be unable to find python.  Granted,</font>
+<font color="black">   8. # binary installations by Linux vendors often install Python in</font>
+<font color="black">   9. # /usr/bin.  So let those vendors patch cgi.py to match their choice</font>
+<font color="black">  10. # of installation.</font>
+<font color="black">  11. </font>
+<font color="black">  12. &quot;&quot;&quot;Support module for CGI (Common Gateway Interface) scripts.</font>
+<font color="black">  13. </font>
+<font color="black">  14. This module defines a number of utilities for use by CGI scripts</font>
+<font color="black">  15. written in Python.</font>
+<font color="green">  16. &quot;&quot;&quot;</font>
+<font color="black">  17. </font>
+<font color="black">  18. # XXX Perhaps there should be a slimmed version that doesn't contain</font>
+<font color="black">  19. # all those backwards compatible and debugging classes and functions?</font>
+<font color="black">  20. </font>
+<font color="black">  21. # History</font>
+<font color="black">  22. # -------</font>
+<font color="black">  23. #</font>
+<font color="black">  24. # Michael McLay started this module.  Steve Majewski changed the</font>
+<font color="black">  25. # interface to SvFormContentDict and FormContentDict.  The multipart</font>
+<font color="black">  26. # parsing was inspired by code submitted by Andreas Paepcke.  Guido van</font>
+<font color="black">  27. # Rossum rewrote, reformatted and documented the module and is currently</font>
+<font color="black">  28. # responsible for its maintenance.</font>
+<font color="black">  29. #</font>
+<font color="black">  30. </font>
+<font color="green">  31. __version__ = &quot;2.6&quot;</font>
+<font color="black">  32. </font>
+<font color="black">  33. </font>
+<font color="black">  34. # Imports</font>
+<font color="black">  35. # =======</font>
+<font color="black">  36. </font>
+<font color="green">  37. from operator import attrgetter</font>
+<font color="green">  38. import sys</font>
+<font color="green">  39. import os</font>
+<font color="green">  40. import UserDict</font>
+<font color="green">  41. import urlparse</font>
+<font color="black">  42. </font>
+<font color="green">  43. from warnings import filterwarnings, catch_warnings, warn</font>
+<font color="green">  44. with catch_warnings():</font>
+<font color="green">  45.     if sys.py3kwarning:</font>
+<font color="red">  46.         filterwarnings(&quot;ignore&quot;, &quot;.*mimetools has been removed&quot;,</font>
+<font color="red">  47.                        DeprecationWarning)</font>
+<font color="red">  48.         filterwarnings(&quot;ignore&quot;, &quot;.*rfc822 has been removed&quot;,</font>
+<font color="red">  49.                        DeprecationWarning)</font>
+<font color="green">  50.     import mimetools</font>
+<font color="green">  51.     import rfc822</font>
+<font color="black">  52. </font>
+<font color="green">  53. try:</font>
+<font color="green">  54.     from cStringIO import StringIO</font>
+<font color="red">  55. except ImportError:</font>
+<font color="red">  56.     from StringIO import StringIO</font>
+<font color="black">  57. </font>
+<font color="green">  58. __all__ = [&quot;MiniFieldStorage&quot;, &quot;FieldStorage&quot;, &quot;FormContentDict&quot;,</font>
+<font color="green">  59.            &quot;SvFormContentDict&quot;, &quot;InterpFormContentDict&quot;, &quot;FormContent&quot;,</font>
+<font color="green">  60.            &quot;parse&quot;, &quot;parse_qs&quot;, &quot;parse_qsl&quot;, &quot;parse_multipart&quot;,</font>
+<font color="green">  61.            &quot;parse_header&quot;, &quot;print_exception&quot;, &quot;print_environ&quot;,</font>
+<font color="green">  62.            &quot;print_form&quot;, &quot;print_directory&quot;, &quot;print_arguments&quot;,</font>
+<font color="green">  63.            &quot;print_environ_usage&quot;, &quot;escape&quot;]</font>
+<font color="black">  64. </font>
+<font color="black">  65. # Logging support</font>
+<font color="black">  66. # ===============</font>
+<font color="black">  67. </font>
+<font color="green">  68. logfile = &quot;&quot;            # Filename to log to, if not empty</font>
+<font color="green">  69. logfp = None            # File object to log to, if not None</font>
+<font color="black">  70. </font>
+<font color="green">  71. def initlog(*allargs):</font>
+<font color="black">  72.     &quot;&quot;&quot;Write a log message, if there is a log file.</font>
+<font color="black">  73. </font>
+<font color="black">  74.     Even though this function is called initlog(), you should always</font>
+<font color="black">  75.     use log(); log is a variable that is set either to initlog</font>
+<font color="black">  76.     (initially), to dolog (once the log file has been opened), or to</font>
+<font color="black">  77.     nolog (when logging is disabled).</font>
+<font color="black">  78. </font>
+<font color="black">  79.     The first argument is a format string; the remaining arguments (if</font>
+<font color="black">  80.     any) are arguments to the % operator, so e.g.</font>
+<font color="black">  81.         log(&quot;%s: %s&quot;, &quot;a&quot;, &quot;b&quot;)</font>
+<font color="black">  82.     will write &quot;a: b&quot; to the log file, followed by a newline.</font>
+<font color="black">  83. </font>
+<font color="black">  84.     If the global logfp is not None, it should be a file object to</font>
+<font color="black">  85.     which log data is written.</font>
+<font color="black">  86. </font>
+<font color="black">  87.     If the global logfp is None, the global logfile may be a string</font>
+<font color="black">  88.     giving a filename to open, in append mode.  This file should be</font>
+<font color="black">  89.     world writable!!!  If the file can't be opened, logging is</font>
+<font color="black">  90.     silently disabled (since there is no safe place where we could</font>
+<font color="black">  91.     send an error message).</font>
+<font color="black">  92. </font>
+<font color="black">  93.     &quot;&quot;&quot;</font>
+<font color="black">  94.     global logfp, log</font>
+<font color="red">  95.     if logfile and not logfp:</font>
+<font color="red">  96.         try:</font>
+<font color="red">  97.             logfp = open(logfile, &quot;a&quot;)</font>
+<font color="red">  98.         except IOError:</font>
+<font color="red">  99.             pass</font>
+<font color="red"> 100.     if not logfp:</font>
+<font color="red"> 101.         log = nolog</font>
+<font color="black"> 102.     else:</font>
+<font color="red"> 103.         log = dolog</font>
+<font color="red"> 104.     log(*allargs)</font>
+<font color="black"> 105. </font>
+<font color="green"> 106. def dolog(fmt, *args):</font>
+<font color="black"> 107.     &quot;&quot;&quot;Write a log message to the log file.  See initlog() for docs.&quot;&quot;&quot;</font>
+<font color="red"> 108.     logfp.write(fmt%args + &quot;\n&quot;)</font>
+<font color="black"> 109. </font>
+<font color="green"> 110. def nolog(*allargs):</font>
+<font color="black"> 111.     &quot;&quot;&quot;Dummy function, assigned to log when logging is disabled.&quot;&quot;&quot;</font>
+<font color="red"> 112.     pass</font>
+<font color="black"> 113. </font>
+<font color="green"> 114. log = initlog           # The current logging function</font>
+<font color="black"> 115. </font>
+<font color="black"> 116. </font>
+<font color="black"> 117. # Parsing functions</font>
+<font color="black"> 118. # =================</font>
+<font color="black"> 119. </font>
+<font color="black"> 120. # Maximum input we will accept when REQUEST_METHOD is POST</font>
+<font color="black"> 121. # 0 ==&gt; unlimited input</font>
+<font color="green"> 122. maxlen = 0</font>
+<font color="black"> 123. </font>
+<font color="green"> 124. def parse(fp=None, environ=os.environ, keep_blank_values=0, strict_parsing=0):</font>
+<font color="black"> 125.     &quot;&quot;&quot;Parse a query in the environment or from a file (default stdin)</font>
+<font color="black"> 126. </font>
+<font color="black"> 127.         Arguments, all optional:</font>
+<font color="black"> 128. </font>
+<font color="black"> 129.         fp              : file pointer; default: sys.stdin</font>
+<font color="black"> 130. </font>
+<font color="black"> 131.         environ         : environment dictionary; default: os.environ</font>
+<font color="black"> 132. </font>
+<font color="black"> 133.         keep_blank_values: flag indicating whether blank values in</font>
+<font color="black"> 134.             percent-encoded forms should be treated as blank strings.</font>
+<font color="black"> 135.             A true value indicates that blanks should be retained as</font>
+<font color="black"> 136.             blank strings.  The default false value indicates that</font>
+<font color="black"> 137.             blank values are to be ignored and treated as if they were</font>
+<font color="black"> 138.             not included.</font>
+<font color="black"> 139. </font>
+<font color="black"> 140.         strict_parsing: flag indicating what to do with parsing errors.</font>
+<font color="black"> 141.             If false (the default), errors are silently ignored.</font>
+<font color="black"> 142.             If true, errors raise a ValueError exception.</font>
+<font color="black"> 143.     &quot;&quot;&quot;</font>
+<font color="red"> 144.     if fp is None:</font>
+<font color="red"> 145.         fp = sys.stdin</font>
+<font color="red"> 146.     if not 'REQUEST_METHOD' in environ:</font>
+<font color="red"> 147.         environ['REQUEST_METHOD'] = 'GET'       # For testing stand-alone</font>
+<font color="red"> 148.     if environ['REQUEST_METHOD'] == 'POST':</font>
+<font color="red"> 149.         ctype, pdict = parse_header(environ['CONTENT_TYPE'])</font>
+<font color="red"> 150.         if ctype == 'multipart/form-data':</font>
+<font color="red"> 151.             return parse_multipart(fp, pdict)</font>
+<font color="red"> 152.         elif ctype == 'application/x-www-form-urlencoded':</font>
+<font color="red"> 153.             clength = int(environ['CONTENT_LENGTH'])</font>
+<font color="red"> 154.             if maxlen and clength &gt; maxlen:</font>
+<font color="red"> 155.                 raise ValueError, 'Maximum content length exceeded'</font>
+<font color="red"> 156.             qs = fp.read(clength)</font>
+<font color="black"> 157.         else:</font>
+<font color="red"> 158.             qs = ''                     # Unknown content-type</font>
+<font color="red"> 159.         if 'QUERY_STRING' in environ:</font>
+<font color="red"> 160.             if qs: qs = qs + '&amp;'</font>
+<font color="red"> 161.             qs = qs + environ['QUERY_STRING']</font>
+<font color="red"> 162.         elif sys.argv[1:]:</font>
+<font color="red"> 163.             if qs: qs = qs + '&amp;'</font>
+<font color="red"> 164.             qs = qs + sys.argv[1]</font>
+<font color="red"> 165.         environ['QUERY_STRING'] = qs    # XXX Shouldn't, really</font>
+<font color="red"> 166.     elif 'QUERY_STRING' in environ:</font>
+<font color="red"> 167.         qs = environ['QUERY_STRING']</font>
+<font color="black"> 168.     else:</font>
+<font color="red"> 169.         if sys.argv[1:]:</font>
+<font color="red"> 170.             qs = sys.argv[1]</font>
+<font color="black"> 171.         else:</font>
+<font color="red"> 172.             qs = &quot;&quot;</font>
+<font color="red"> 173.         environ['QUERY_STRING'] = qs    # XXX Shouldn't, really</font>
+<font color="red"> 174.     return urlparse.parse_qs(qs, keep_blank_values, strict_parsing)</font>
+<font color="black"> 175. </font>
+<font color="black"> 176. </font>
+<font color="black"> 177. # parse query string function called from urlparse,</font>
+<font color="black"> 178. # this is done in order to maintain backward compatibility.</font>
+<font color="black"> 179. </font>
+<font color="green"> 180. def parse_qs(qs, keep_blank_values=0, strict_parsing=0):</font>
+<font color="black"> 181.     &quot;&quot;&quot;Parse a query given as a string argument.&quot;&quot;&quot;</font>
+<font color="red"> 182.     warn(&quot;cgi.parse_qs is deprecated, use urlparse.parse_qs instead&quot;,</font>
+<font color="red"> 183.          PendingDeprecationWarning, 2)</font>
+<font color="red"> 184.     return urlparse.parse_qs(qs, keep_blank_values, strict_parsing)</font>
+<font color="black"> 185. </font>
+<font color="black"> 186. </font>
+<font color="green"> 187. def parse_qsl(qs, keep_blank_values=0, strict_parsing=0):</font>
+<font color="black"> 188.     &quot;&quot;&quot;Parse a query given as a string argument.&quot;&quot;&quot;</font>
+<font color="red"> 189.     warn(&quot;cgi.parse_qsl is deprecated, use urlparse.parse_qsl instead&quot;,</font>
+<font color="red"> 190.          PendingDeprecationWarning, 2)</font>
+<font color="red"> 191.     return urlparse.parse_qsl(qs, keep_blank_values, strict_parsing)</font>
+<font color="black"> 192. </font>
+<font color="green"> 193. def parse_multipart(fp, pdict):</font>
+<font color="black"> 194.     &quot;&quot;&quot;Parse multipart input.</font>
+<font color="black"> 195. </font>
+<font color="black"> 196.     Arguments:</font>
+<font color="black"> 197.     fp   : input file</font>
+<font color="black"> 198.     pdict: dictionary containing other parameters of content-type header</font>
+<font color="black"> 199. </font>
+<font color="black"> 200.     Returns a dictionary just like parse_qs(): keys are the field names, each</font>
+<font color="black"> 201.     value is a list of values for that field.  This is easy to use but not</font>
+<font color="black"> 202.     much good if you are expecting megabytes to be uploaded -- in that case,</font>
+<font color="black"> 203.     use the FieldStorage class instead which is much more flexible.  Note</font>
+<font color="black"> 204.     that content-type is the raw, unparsed contents of the content-type</font>
+<font color="black"> 205.     header.</font>
+<font color="black"> 206. </font>
+<font color="black"> 207.     XXX This does not parse nested multipart parts -- use FieldStorage for</font>
+<font color="black"> 208.     that.</font>
+<font color="black"> 209. </font>
+<font color="black"> 210.     XXX This should really be subsumed by FieldStorage altogether -- no</font>
+<font color="black"> 211.     point in having two implementations of the same parsing algorithm.</font>
+<font color="black"> 212.     Also, FieldStorage protects itself better against certain DoS attacks</font>
+<font color="black"> 213.     by limiting the size of the data read in one chunk.  The API here</font>
+<font color="black"> 214.     does not support that kind of protection.  This also affects parse()</font>
+<font color="black"> 215.     since it can call parse_multipart().</font>
+<font color="black"> 216. </font>
+<font color="black"> 217.     &quot;&quot;&quot;</font>
+<font color="red"> 218.     boundary = &quot;&quot;</font>
+<font color="red"> 219.     if 'boundary' in pdict:</font>
+<font color="red"> 220.         boundary = pdict['boundary']</font>
+<font color="red"> 221.     if not valid_boundary(boundary):</font>
+<font color="red"> 222.         raise ValueError,  ('Invalid boundary in multipart form: %r'</font>
+<font color="red"> 223.                             % (boundary,))</font>
+<font color="black"> 224. </font>
+<font color="red"> 225.     nextpart = &quot;--&quot; + boundary</font>
+<font color="red"> 226.     lastpart = &quot;--&quot; + boundary + &quot;--&quot;</font>
+<font color="red"> 227.     partdict = {}</font>
+<font color="red"> 228.     terminator = &quot;&quot;</font>
+<font color="black"> 229. </font>
+<font color="red"> 230.     while terminator != lastpart:</font>
+<font color="red"> 231.         bytes = -1</font>
+<font color="red"> 232.         data = None</font>
+<font color="red"> 233.         if terminator:</font>
+<font color="black"> 234.             # At start of next part.  Read headers first.</font>
+<font color="red"> 235.             headers = mimetools.Message(fp)</font>
+<font color="red"> 236.             clength = headers.getheader('content-length')</font>
+<font color="red"> 237.             if clength:</font>
+<font color="red"> 238.                 try:</font>
+<font color="red"> 239.                     bytes = int(clength)</font>
+<font color="red"> 240.                 except ValueError:</font>
+<font color="red"> 241.                     pass</font>
+<font color="red"> 242.             if bytes &gt; 0:</font>
+<font color="red"> 243.                 if maxlen and bytes &gt; maxlen:</font>
+<font color="red"> 244.                     raise ValueError, 'Maximum content length exceeded'</font>
+<font color="red"> 245.                 data = fp.read(bytes)</font>
+<font color="black"> 246.             else:</font>
+<font color="red"> 247.                 data = &quot;&quot;</font>
+<font color="black"> 248.         # Read lines until end of part.</font>
+<font color="red"> 249.         lines = []</font>
+<font color="red"> 250.         while 1:</font>
+<font color="red"> 251.             line = fp.readline()</font>
+<font color="red"> 252.             if not line:</font>
+<font color="red"> 253.                 terminator = lastpart # End outer loop</font>
+<font color="red"> 254.                 break</font>
+<font color="red"> 255.             if line[:2] == &quot;--&quot;:</font>
+<font color="red"> 256.                 terminator = line.strip()</font>
+<font color="red"> 257.                 if terminator in (nextpart, lastpart):</font>
+<font color="red"> 258.                     break</font>
+<font color="red"> 259.             lines.append(line)</font>
+<font color="black"> 260.         # Done with part.</font>
+<font color="red"> 261.         if data is None:</font>
+<font color="red"> 262.             continue</font>
+<font color="red"> 263.         if bytes &lt; 0:</font>
+<font color="red"> 264.             if lines:</font>
+<font color="black"> 265.                 # Strip final line terminator</font>
+<font color="red"> 266.                 line = lines[-1]</font>
+<font color="red"> 267.                 if line[-2:] == &quot;\r\n&quot;:</font>
+<font color="red"> 268.                     line = line[:-2]</font>
+<font color="red"> 269.                 elif line[-1:] == &quot;\n&quot;:</font>
+<font color="red"> 270.                     line = line[:-1]</font>
+<font color="red"> 271.                 lines[-1] = line</font>
+<font color="red"> 272.                 data = &quot;&quot;.join(lines)</font>
+<font color="red"> 273.         line = headers['content-disposition']</font>
+<font color="red"> 274.         if not line:</font>
+<font color="red"> 275.             continue</font>
+<font color="red"> 276.         key, params = parse_header(line)</font>
+<font color="red"> 277.         if key != 'form-data':</font>
+<font color="red"> 278.             continue</font>
+<font color="red"> 279.         if 'name' in params:</font>
+<font color="red"> 280.             name = params['name']</font>
+<font color="black"> 281.         else:</font>
+<font color="red"> 282.             continue</font>
+<font color="red"> 283.         if name in partdict:</font>
+<font color="red"> 284.             partdict[name].append(data)</font>
+<font color="black"> 285.         else:</font>
+<font color="red"> 286.             partdict[name] = [data]</font>
+<font color="black"> 287. </font>
+<font color="red"> 288.     return partdict</font>
+<font color="black"> 289. </font>
+<font color="black"> 290. </font>
+<font color="green"> 291. def _parseparam(s):</font>
+<font color="green"> 292.     while s[:1] == ';':</font>
+<font color="green"> 293.         s = s[1:]</font>
+<font color="green"> 294.         end = s.find(';')</font>
+<font color="green"> 295.         while end &gt; 0 and (s.count('&quot;', 0, end) - s.count('\\&quot;', 0, end)) % 2:</font>
+<font color="red"> 296.             end = s.find(';', end + 1)</font>
+<font color="green"> 297.         if end &lt; 0:</font>
+<font color="green"> 298.             end = len(s)</font>
+<font color="green"> 299.         f = s[:end]</font>
+<font color="green"> 300.         yield f.strip()</font>
+<font color="green"> 301.         s = s[end:]</font>
+<font color="black"> 302. </font>
+<font color="green"> 303. def parse_header(line):</font>
+<font color="black"> 304.     &quot;&quot;&quot;Parse a Content-type like header.</font>
+<font color="black"> 305. </font>
+<font color="black"> 306.     Return the main content-type and a dictionary of options.</font>
+<font color="black"> 307. </font>
+<font color="black"> 308.     &quot;&quot;&quot;</font>
+<font color="green"> 309.     parts = _parseparam(';' + line)</font>
+<font color="green"> 310.     key = parts.next()</font>
+<font color="green"> 311.     pdict = {}</font>
+<font color="green"> 312.     for p in parts:</font>
+<font color="red"> 313.         i = p.find('=')</font>
+<font color="red"> 314.         if i &gt;= 0:</font>
+<font color="red"> 315.             name = p[:i].strip().lower()</font>
+<font color="red"> 316.             value = p[i+1:].strip()</font>
+<font color="red"> 317.             if len(value) &gt;= 2 and value[0] == value[-1] == '&quot;':</font>
+<font color="red"> 318.                 value = value[1:-1]</font>
+<font color="red"> 319.                 value = value.replace('\\\\', '\\').replace('\\&quot;', '&quot;')</font>
+<font color="red"> 320.             pdict[name] = value</font>
+<font color="green"> 321.     return key, pdict</font>
+<font color="black"> 322. </font>
+<font color="black"> 323. </font>
+<font color="black"> 324. # Classes for field storage</font>
+<font color="black"> 325. # =========================</font>
+<font color="black"> 326. </font>
+<font color="green"> 327. class MiniFieldStorage:</font>
+<font color="black"> 328. </font>
+<font color="green"> 329.     &quot;&quot;&quot;Like FieldStorage, for use when no file uploads are possible.&quot;&quot;&quot;</font>
+<font color="black"> 330. </font>
+<font color="black"> 331.     # Dummy attributes</font>
+<font color="green"> 332.     filename = None</font>
+<font color="green"> 333.     list = None</font>
+<font color="green"> 334.     type = None</font>
+<font color="green"> 335.     file = None</font>
+<font color="green"> 336.     type_options = {}</font>
+<font color="green"> 337.     disposition = None</font>
+<font color="green"> 338.     disposition_options = {}</font>
+<font color="green"> 339.     headers = {}</font>
+<font color="black"> 340. </font>
+<font color="green"> 341.     def __init__(self, name, value):</font>
+<font color="black"> 342.         &quot;&quot;&quot;Constructor from field name and value.&quot;&quot;&quot;</font>
+<font color="red"> 343.         self.name = name</font>
+<font color="red"> 344.         self.value = value</font>
+<font color="black"> 345.         # self.file = StringIO(value)</font>
+<font color="black"> 346. </font>
+<font color="green"> 347.     def __repr__(self):</font>
+<font color="black"> 348.         &quot;&quot;&quot;Return printable representation.&quot;&quot;&quot;</font>
+<font color="red"> 349.         return &quot;MiniFieldStorage(%r, %r)&quot; % (self.name, self.value)</font>
+<font color="black"> 350. </font>
+<font color="black"> 351. </font>
+<font color="green"> 352. class FieldStorage:</font>
+<font color="black"> 353. </font>
+<font color="black"> 354.     &quot;&quot;&quot;Store a sequence of fields, reading multipart/form-data.</font>
+<font color="black"> 355. </font>
+<font color="black"> 356.     This class provides naming, typing, files stored on disk, and</font>
+<font color="black"> 357.     more.  At the top level, it is accessible like a dictionary, whose</font>
+<font color="black"> 358.     keys are the field names.  (Note: None can occur as a field name.)</font>
+<font color="black"> 359.     The items are either a Python list (if there's multiple values) or</font>
+<font color="black"> 360.     another FieldStorage or MiniFieldStorage object.  If it's a single</font>
+<font color="black"> 361.     object, it has the following attributes:</font>
+<font color="black"> 362. </font>
+<font color="black"> 363.     name: the field name, if specified; otherwise None</font>
+<font color="black"> 364. </font>
+<font color="black"> 365.     filename: the filename, if specified; otherwise None; this is the</font>
+<font color="black"> 366.         client side filename, *not* the file name on which it is</font>
+<font color="black"> 367.         stored (that's a temporary file you don't deal with)</font>
+<font color="black"> 368. </font>
+<font color="black"> 369.     value: the value as a *string*; for file uploads, this</font>
+<font color="black"> 370.         transparently reads the file every time you request the value</font>
+<font color="black"> 371. </font>
+<font color="black"> 372.     file: the file(-like) object from which you can read the data;</font>
+<font color="black"> 373.         None if the data is stored a simple string</font>
+<font color="black"> 374. </font>
+<font color="black"> 375.     type: the content-type, or None if not specified</font>
+<font color="black"> 376. </font>
+<font color="black"> 377.     type_options: dictionary of options specified on the content-type</font>
+<font color="black"> 378.         line</font>
+<font color="black"> 379. </font>
+<font color="black"> 380.     disposition: content-disposition, or None if not specified</font>
+<font color="black"> 381. </font>
+<font color="black"> 382.     disposition_options: dictionary of corresponding options</font>
+<font color="black"> 383. </font>
+<font color="black"> 384.     headers: a dictionary(-like) object (sometimes rfc822.Message or a</font>
+<font color="black"> 385.         subclass thereof) containing *all* headers</font>
+<font color="black"> 386. </font>
+<font color="black"> 387.     The class is subclassable, mostly for the purpose of overriding</font>
+<font color="black"> 388.     the make_file() method, which is called internally to come up with</font>
+<font color="black"> 389.     a file open for reading and writing.  This makes it possible to</font>
+<font color="black"> 390.     override the default choice of storing all files in a temporary</font>
+<font color="black"> 391.     directory and unlinking them as soon as they have been opened.</font>
+<font color="black"> 392. </font>
+<font color="green"> 393.     &quot;&quot;&quot;</font>
+<font color="black"> 394. </font>
+<font color="green"> 395.     def __init__(self, fp=None, headers=None, outerboundary=&quot;&quot;,</font>
+<font color="green"> 396.                  environ=os.environ, keep_blank_values=0, strict_parsing=0):</font>
+<font color="black"> 397.         &quot;&quot;&quot;Constructor.  Read multipart/* until last part.</font>
+<font color="black"> 398. </font>
+<font color="black"> 399.         Arguments, all optional:</font>
+<font color="black"> 400. </font>
+<font color="black"> 401.         fp              : file pointer; default: sys.stdin</font>
+<font color="black"> 402.             (not used when the request method is GET)</font>
+<font color="black"> 403. </font>
+<font color="black"> 404.         headers         : header dictionary-like object; default:</font>
+<font color="black"> 405.             taken from environ as per CGI spec</font>
+<font color="black"> 406. </font>
+<font color="black"> 407.         outerboundary   : terminating multipart boundary</font>
+<font color="black"> 408.             (for internal use only)</font>
+<font color="black"> 409. </font>
+<font color="black"> 410.         environ         : environment dictionary; default: os.environ</font>
+<font color="black"> 411. </font>
+<font color="black"> 412.         keep_blank_values: flag indicating whether blank values in</font>
+<font color="black"> 413.             percent-encoded forms should be treated as blank strings.</font>
+<font color="black"> 414.             A true value indicates that blanks should be retained as</font>
+<font color="black"> 415.             blank strings.  The default false value indicates that</font>
+<font color="black"> 416.             blank values are to be ignored and treated as if they were</font>
+<font color="black"> 417.             not included.</font>
+<font color="black"> 418. </font>
+<font color="black"> 419.         strict_parsing: flag indicating what to do with parsing errors.</font>
+<font color="black"> 420.             If false (the default), errors are silently ignored.</font>
+<font color="black"> 421.             If true, errors raise a ValueError exception.</font>
+<font color="black"> 422. </font>
+<font color="black"> 423.         &quot;&quot;&quot;</font>
+<font color="red"> 424.         method = 'GET'</font>
+<font color="red"> 425.         self.keep_blank_values = keep_blank_values</font>
+<font color="red"> 426.         self.strict_parsing = strict_parsing</font>
+<font color="red"> 427.         if 'REQUEST_METHOD' in environ:</font>
+<font color="red"> 428.             method = environ['REQUEST_METHOD'].upper()</font>
+<font color="red"> 429.         self.qs_on_post = None</font>
+<font color="red"> 430.         if method == 'GET' or method == 'HEAD':</font>
+<font color="red"> 431.             if 'QUERY_STRING' in environ:</font>
+<font color="red"> 432.                 qs = environ['QUERY_STRING']</font>
+<font color="red"> 433.             elif sys.argv[1:]:</font>
+<font color="red"> 434.                 qs = sys.argv[1]</font>
+<font color="black"> 435.             else:</font>
+<font color="red"> 436.                 qs = &quot;&quot;</font>
+<font color="red"> 437.             fp = StringIO(qs)</font>
+<font color="red"> 438.             if headers is None:</font>
+<font color="red"> 439.                 headers = {'content-type':</font>
+<font color="red"> 440.                            &quot;application/x-www-form-urlencoded&quot;}</font>
+<font color="red"> 441.         if headers is None:</font>
+<font color="red"> 442.             headers = {}</font>
+<font color="red"> 443.             if method == 'POST':</font>
+<font color="black"> 444.                 # Set default content-type for POST to what's traditional</font>
+<font color="red"> 445.                 headers['content-type'] = &quot;application/x-www-form-urlencoded&quot;</font>
+<font color="red"> 446.             if 'CONTENT_TYPE' in environ:</font>
+<font color="red"> 447.                 headers['content-type'] = environ['CONTENT_TYPE']</font>
+<font color="red"> 448.             if 'QUERY_STRING' in environ:</font>
+<font color="red"> 449.                 self.qs_on_post = environ['QUERY_STRING']</font>
+<font color="red"> 450.             if 'CONTENT_LENGTH' in environ:</font>
+<font color="red"> 451.                 headers['content-length'] = environ['CONTENT_LENGTH']</font>
+<font color="red"> 452.         self.fp = fp or sys.stdin</font>
+<font color="red"> 453.         self.headers = headers</font>
+<font color="red"> 454.         self.outerboundary = outerboundary</font>
+<font color="black"> 455. </font>
+<font color="black"> 456.         # Process content-disposition header</font>
+<font color="red"> 457.         cdisp, pdict = &quot;&quot;, {}</font>
+<font color="red"> 458.         if 'content-disposition' in self.headers:</font>
+<font color="red"> 459.             cdisp, pdict = parse_header(self.headers['content-disposition'])</font>
+<font color="red"> 460.         self.disposition = cdisp</font>
+<font color="red"> 461.         self.disposition_options = pdict</font>
+<font color="red"> 462.         self.name = None</font>
+<font color="red"> 463.         if 'name' in pdict:</font>
+<font color="red"> 464.             self.name = pdict['name']</font>
+<font color="red"> 465.         self.filename = None</font>
+<font color="red"> 466.         if 'filename' in pdict:</font>
+<font color="red"> 467.             self.filename = pdict['filename']</font>
+<font color="black"> 468. </font>
+<font color="black"> 469.         # Process content-type header</font>
+<font color="black"> 470.         #</font>
+<font color="black"> 471.         # Honor any existing content-type header.  But if there is no</font>
+<font color="black"> 472.         # content-type header, use some sensible defaults.  Assume</font>
+<font color="black"> 473.         # outerboundary is &quot;&quot; at the outer level, but something non-false</font>
+<font color="black"> 474.         # inside a multi-part.  The default for an inner part is text/plain,</font>
+<font color="black"> 475.         # but for an outer part it should be urlencoded.  This should catch</font>
+<font color="black"> 476.         # bogus clients which erroneously forget to include a content-type</font>
+<font color="black"> 477.         # header.</font>
+<font color="black"> 478.         #</font>
+<font color="black"> 479.         # See below for what we do if there does exist a content-type header,</font>
+<font color="black"> 480.         # but it happens to be something we don't understand.</font>
+<font color="red"> 481.         if 'content-type' in self.headers:</font>
+<font color="red"> 482.             ctype, pdict = parse_header(self.headers['content-type'])</font>
+<font color="red"> 483.         elif self.outerboundary or method != 'POST':</font>
+<font color="red"> 484.             ctype, pdict = &quot;text/plain&quot;, {}</font>
+<font color="black"> 485.         else:</font>
+<font color="red"> 486.             ctype, pdict = 'application/x-www-form-urlencoded', {}</font>
+<font color="red"> 487.         self.type = ctype</font>
+<font color="red"> 488.         self.type_options = pdict</font>
+<font color="red"> 489.         self.innerboundary = &quot;&quot;</font>
+<font color="red"> 490.         if 'boundary' in pdict:</font>
+<font color="red"> 491.             self.innerboundary = pdict['boundary']</font>
+<font color="red"> 492.         clen = -1</font>
+<font color="red"> 493.         if 'content-length' in self.headers:</font>
+<font color="red"> 494.             try:</font>
+<font color="red"> 495.                 clen = int(self.headers['content-length'])</font>
+<font color="red"> 496.             except ValueError:</font>
+<font color="red"> 497.                 pass</font>
+<font color="red"> 498.             if maxlen and clen &gt; maxlen:</font>
+<font color="red"> 499.                 raise ValueError, 'Maximum content length exceeded'</font>
+<font color="red"> 500.         self.length = clen</font>
+<font color="black"> 501. </font>
+<font color="red"> 502.         self.list = self.file = None</font>
+<font color="red"> 503.         self.done = 0</font>
+<font color="red"> 504.         if ctype == 'application/x-www-form-urlencoded':</font>
+<font color="red"> 505.             self.read_urlencoded()</font>
+<font color="red"> 506.         elif ctype[:10] == 'multipart/':</font>
+<font color="red"> 507.             self.read_multi(environ, keep_blank_values, strict_parsing)</font>
+<font color="black"> 508.         else:</font>
+<font color="red"> 509.             self.read_single()</font>
+<font color="black"> 510. </font>
+<font color="green"> 511.     def __repr__(self):</font>
+<font color="black"> 512.         &quot;&quot;&quot;Return a printable representation.&quot;&quot;&quot;</font>
+<font color="red"> 513.         return &quot;FieldStorage(%r, %r, %r)&quot; % (</font>
+<font color="red"> 514.                 self.name, self.filename, self.value)</font>
+<font color="black"> 515. </font>
+<font color="green"> 516.     def __iter__(self):</font>
+<font color="red"> 517.         return iter(self.keys())</font>
+<font color="black"> 518. </font>
+<font color="green"> 519.     def __getattr__(self, name):</font>
+<font color="red"> 520.         if name != 'value':</font>
+<font color="red"> 521.             raise AttributeError, name</font>
+<font color="red"> 522.         if self.file:</font>
+<font color="red"> 523.             self.file.seek(0)</font>
+<font color="red"> 524.             value = self.file.read()</font>
+<font color="red"> 525.             self.file.seek(0)</font>
+<font color="red"> 526.         elif self.list is not None:</font>
+<font color="red"> 527.             value = self.list</font>
+<font color="black"> 528.         else:</font>
+<font color="red"> 529.             value = None</font>
+<font color="red"> 530.         return value</font>
+<font color="black"> 531. </font>
+<font color="green"> 532.     def __getitem__(self, key):</font>
+<font color="black"> 533.         &quot;&quot;&quot;Dictionary style indexing.&quot;&quot;&quot;</font>
+<font color="red"> 534.         if self.list is None:</font>
+<font color="red"> 535.             raise TypeError, &quot;not indexable&quot;</font>
+<font color="red"> 536.         found = []</font>
+<font color="red"> 537.         for item in self.list:</font>
+<font color="red"> 538.             if item.name == key: found.append(item)</font>
+<font color="red"> 539.         if not found:</font>
+<font color="red"> 540.             raise KeyError, key</font>
+<font color="red"> 541.         if len(found) == 1:</font>
+<font color="red"> 542.             return found[0]</font>
+<font color="black"> 543.         else:</font>
+<font color="red"> 544.             return found</font>
+<font color="black"> 545. </font>
+<font color="green"> 546.     def getvalue(self, key, default=None):</font>
+<font color="black"> 547.         &quot;&quot;&quot;Dictionary style get() method, including 'value' lookup.&quot;&quot;&quot;</font>
+<font color="red"> 548.         if key in self:</font>
+<font color="red"> 549.             value = self[key]</font>
+<font color="red"> 550.             if type(value) is type([]):</font>
+<font color="red"> 551.                 return map(attrgetter('value'), value)</font>
+<font color="black"> 552.             else:</font>
+<font color="red"> 553.                 return value.value</font>
+<font color="black"> 554.         else:</font>
+<font color="red"> 555.             return default</font>
+<font color="black"> 556. </font>
+<font color="green"> 557.     def getfirst(self, key, default=None):</font>
+<font color="black"> 558.         &quot;&quot;&quot; Return the first value received.&quot;&quot;&quot;</font>
+<font color="red"> 559.         if key in self:</font>
+<font color="red"> 560.             value = self[key]</font>
+<font color="red"> 561.             if type(value) is type([]):</font>
+<font color="red"> 562.                 return value[0].value</font>
+<font color="black"> 563.             else:</font>
+<font color="red"> 564.                 return value.value</font>
+<font color="black"> 565.         else:</font>
+<font color="red"> 566.             return default</font>
+<font color="black"> 567. </font>
+<font color="green"> 568.     def getlist(self, key):</font>
+<font color="black"> 569.         &quot;&quot;&quot; Return list of received values.&quot;&quot;&quot;</font>
+<font color="red"> 570.         if key in self:</font>
+<font color="red"> 571.             value = self[key]</font>
+<font color="red"> 572.             if type(value) is type([]):</font>
+<font color="red"> 573.                 return map(attrgetter('value'), value)</font>
+<font color="black"> 574.             else:</font>
+<font color="red"> 575.                 return [value.value]</font>
+<font color="black"> 576.         else:</font>
+<font color="red"> 577.             return []</font>
+<font color="black"> 578. </font>
+<font color="green"> 579.     def keys(self):</font>
+<font color="black"> 580.         &quot;&quot;&quot;Dictionary style keys() method.&quot;&quot;&quot;</font>
+<font color="red"> 581.         if self.list is None:</font>
+<font color="red"> 582.             raise TypeError, &quot;not indexable&quot;</font>
+<font color="red"> 583.         return list(set(item.name for item in self.list))</font>
+<font color="black"> 584. </font>
+<font color="green"> 585.     def has_key(self, key):</font>
+<font color="black"> 586.         &quot;&quot;&quot;Dictionary style has_key() method.&quot;&quot;&quot;</font>
+<font color="red"> 587.         if self.list is None:</font>
+<font color="red"> 588.             raise TypeError, &quot;not indexable&quot;</font>
+<font color="red"> 589.         return any(item.name == key for item in self.list)</font>
+<font color="black"> 590. </font>
+<font color="green"> 591.     def __contains__(self, key):</font>
+<font color="black"> 592.         &quot;&quot;&quot;Dictionary style __contains__ method.&quot;&quot;&quot;</font>
+<font color="red"> 593.         if self.list is None:</font>
+<font color="red"> 594.             raise TypeError, &quot;not indexable&quot;</font>
+<font color="red"> 595.         return any(item.name == key for item in self.list)</font>
+<font color="black"> 596. </font>
+<font color="green"> 597.     def __len__(self):</font>
+<font color="black"> 598.         &quot;&quot;&quot;Dictionary style len(x) support.&quot;&quot;&quot;</font>
+<font color="red"> 599.         return len(self.keys())</font>
+<font color="black"> 600. </font>
+<font color="green"> 601.     def __nonzero__(self):</font>
+<font color="red"> 602.         return bool(self.list)</font>
+<font color="black"> 603. </font>
+<font color="green"> 604.     def read_urlencoded(self):</font>
+<font color="black"> 605.         &quot;&quot;&quot;Internal: read data in query string format.&quot;&quot;&quot;</font>
+<font color="red"> 606.         qs = self.fp.read(self.length)</font>
+<font color="red"> 607.         if self.qs_on_post:</font>
+<font color="red"> 608.             qs += '&amp;' + self.qs_on_post</font>
+<font color="red"> 609.         self.list = list = []</font>
+<font color="red"> 610.         for key, value in urlparse.parse_qsl(qs, self.keep_blank_values,</font>
+<font color="red"> 611.                                             self.strict_parsing):</font>
+<font color="red"> 612.             list.append(MiniFieldStorage(key, value))</font>
+<font color="red"> 613.         self.skip_lines()</font>
+<font color="black"> 614. </font>
+<font color="green"> 615.     FieldStorageClass = None</font>
+<font color="black"> 616. </font>
+<font color="green"> 617.     def read_multi(self, environ, keep_blank_values, strict_parsing):</font>
+<font color="black"> 618.         &quot;&quot;&quot;Internal: read a part that is itself multipart.&quot;&quot;&quot;</font>
+<font color="red"> 619.         ib = self.innerboundary</font>
+<font color="red"> 620.         if not valid_boundary(ib):</font>
+<font color="red"> 621.             raise ValueError, 'Invalid boundary in multipart form: %r' % (ib,)</font>
+<font color="red"> 622.         self.list = []</font>
+<font color="red"> 623.         if self.qs_on_post:</font>
+<font color="red"> 624.             for key, value in urlparse.parse_qsl(self.qs_on_post,</font>
+<font color="red"> 625.                                 self.keep_blank_values, self.strict_parsing):</font>
+<font color="red"> 626.                 self.list.append(MiniFieldStorage(key, value))</font>
+<font color="red"> 627.             FieldStorageClass = None</font>
+<font color="black"> 628. </font>
+<font color="red"> 629.         klass = self.FieldStorageClass or self.__class__</font>
+<font color="red"> 630.         part = klass(self.fp, {}, ib,</font>
+<font color="red"> 631.                      environ, keep_blank_values, strict_parsing)</font>
+<font color="black"> 632.         # Throw first part away</font>
+<font color="red"> 633.         while not part.done:</font>
+<font color="red"> 634.             headers = rfc822.Message(self.fp)</font>
+<font color="red"> 635.             part = klass(self.fp, headers, ib,</font>
+<font color="red"> 636.                          environ, keep_blank_values, strict_parsing)</font>
+<font color="red"> 637.             self.list.append(part)</font>
+<font color="red"> 638.         self.skip_lines()</font>
+<font color="black"> 639. </font>
+<font color="green"> 640.     def read_single(self):</font>
+<font color="black"> 641.         &quot;&quot;&quot;Internal: read an atomic part.&quot;&quot;&quot;</font>
+<font color="red"> 642.         if self.length &gt;= 0:</font>
+<font color="red"> 643.             self.read_binary()</font>
+<font color="red"> 644.             self.skip_lines()</font>
+<font color="black"> 645.         else:</font>
+<font color="red"> 646.             self.read_lines()</font>
+<font color="red"> 647.         self.file.seek(0)</font>
+<font color="black"> 648. </font>
+<font color="green"> 649.     bufsize = 8*1024            # I/O buffering size for copy to file</font>
+<font color="black"> 650. </font>
+<font color="green"> 651.     def read_binary(self):</font>
+<font color="black"> 652.         &quot;&quot;&quot;Internal: read binary data.&quot;&quot;&quot;</font>
+<font color="red"> 653.         self.file = self.make_file('b')</font>
+<font color="red"> 654.         todo = self.length</font>
+<font color="red"> 655.         if todo &gt;= 0:</font>
+<font color="red"> 656.             while todo &gt; 0:</font>
+<font color="red"> 657.                 data = self.fp.read(min(todo, self.bufsize))</font>
+<font color="red"> 658.                 if not data:</font>
+<font color="red"> 659.                     self.done = -1</font>
+<font color="red"> 660.                     break</font>
+<font color="red"> 661.                 self.file.write(data)</font>
+<font color="red"> 662.                 todo = todo - len(data)</font>
+<font color="black"> 663. </font>
+<font color="green"> 664.     def read_lines(self):</font>
+<font color="black"> 665.         &quot;&quot;&quot;Internal: read lines until EOF or outerboundary.&quot;&quot;&quot;</font>
+<font color="red"> 666.         self.file = self.__file = StringIO()</font>
+<font color="red"> 667.         if self.outerboundary:</font>
+<font color="red"> 668.             self.read_lines_to_outerboundary()</font>
+<font color="black"> 669.         else:</font>
+<font color="red"> 670.             self.read_lines_to_eof()</font>
+<font color="black"> 671. </font>
+<font color="green"> 672.     def __write(self, line):</font>
+<font color="red"> 673.         if self.__file is not None:</font>
+<font color="red"> 674.             if self.__file.tell() + len(line) &gt; 1000:</font>
+<font color="red"> 675.                 self.file = self.make_file('')</font>
+<font color="red"> 676.                 self.file.write(self.__file.getvalue())</font>
+<font color="red"> 677.                 self.__file = None</font>
+<font color="red"> 678.         self.file.write(line)</font>
+<font color="black"> 679. </font>
+<font color="green"> 680.     def read_lines_to_eof(self):</font>
+<font color="black"> 681.         &quot;&quot;&quot;Internal: read lines until EOF.&quot;&quot;&quot;</font>
+<font color="red"> 682.         while 1:</font>
+<font color="red"> 683.             line = self.fp.readline(1&lt;&lt;16)</font>
+<font color="red"> 684.             if not line:</font>
+<font color="red"> 685.                 self.done = -1</font>
+<font color="red"> 686.                 break</font>
+<font color="red"> 687.             self.__write(line)</font>
+<font color="black"> 688. </font>
+<font color="green"> 689.     def read_lines_to_outerboundary(self):</font>
+<font color="black"> 690.         &quot;&quot;&quot;Internal: read lines until outerboundary.&quot;&quot;&quot;</font>
+<font color="red"> 691.         next = &quot;--&quot; + self.outerboundary</font>
+<font color="red"> 692.         last = next + &quot;--&quot;</font>
+<font color="red"> 693.         delim = &quot;&quot;</font>
+<font color="red"> 694.         last_line_lfend = True</font>
+<font color="red"> 695.         while 1:</font>
+<font color="red"> 696.             line = self.fp.readline(1&lt;&lt;16)</font>
+<font color="red"> 697.             if not line:</font>
+<font color="red"> 698.                 self.done = -1</font>
+<font color="red"> 699.                 break</font>
+<font color="red"> 700.             if delim == &quot;\r&quot;:</font>
+<font color="red"> 701.                 line = delim + line</font>
+<font color="red"> 702.                 delim = &quot;&quot;</font>
+<font color="red"> 703.             if line[:2] == &quot;--&quot; and last_line_lfend:</font>
+<font color="red"> 704.                 strippedline = line.strip()</font>
+<font color="red"> 705.                 if strippedline == next:</font>
+<font color="red"> 706.                     break</font>
+<font color="red"> 707.                 if strippedline == last:</font>
+<font color="red"> 708.                     self.done = 1</font>
+<font color="red"> 709.                     break</font>
+<font color="red"> 710.             odelim = delim</font>
+<font color="red"> 711.             if line[-2:] == &quot;\r\n&quot;:</font>
+<font color="red"> 712.                 delim = &quot;\r\n&quot;</font>
+<font color="red"> 713.                 line = line[:-2]</font>
+<font color="red"> 714.                 last_line_lfend = True</font>
+<font color="red"> 715.             elif line[-1] == &quot;\n&quot;:</font>
+<font color="red"> 716.                 delim = &quot;\n&quot;</font>
+<font color="red"> 717.                 line = line[:-1]</font>
+<font color="red"> 718.                 last_line_lfend = True</font>
+<font color="red"> 719.             elif line[-1] == &quot;\r&quot;:</font>
+<font color="black"> 720.                 # We may interrupt \r\n sequences if they span the 2**16</font>
+<font color="black"> 721.                 # byte boundary</font>
+<font color="red"> 722.                 delim = &quot;\r&quot;</font>
+<font color="red"> 723.                 line = line[:-1]</font>
+<font color="red"> 724.                 last_line_lfend = False</font>
+<font color="black"> 725.             else:</font>
+<font color="red"> 726.                 delim = &quot;&quot;</font>
+<font color="red"> 727.                 last_line_lfend = False</font>
+<font color="red"> 728.             self.__write(odelim + line)</font>
+<font color="black"> 729. </font>
+<font color="green"> 730.     def skip_lines(self):</font>
+<font color="black"> 731.         &quot;&quot;&quot;Internal: skip lines until outer boundary if defined.&quot;&quot;&quot;</font>
+<font color="red"> 732.         if not self.outerboundary or self.done:</font>
+<font color="red"> 733.             return</font>
+<font color="red"> 734.         next = &quot;--&quot; + self.outerboundary</font>
+<font color="red"> 735.         last = next + &quot;--&quot;</font>
+<font color="red"> 736.         last_line_lfend = True</font>
+<font color="red"> 737.         while 1:</font>
+<font color="red"> 738.             line = self.fp.readline(1&lt;&lt;16)</font>
+<font color="red"> 739.             if not line:</font>
+<font color="red"> 740.                 self.done = -1</font>
+<font color="red"> 741.                 break</font>
+<font color="red"> 742.             if line[:2] == &quot;--&quot; and last_line_lfend:</font>
+<font color="red"> 743.                 strippedline = line.strip()</font>
+<font color="red"> 744.                 if strippedline == next:</font>
+<font color="red"> 745.                     break</font>
+<font color="red"> 746.                 if strippedline == last:</font>
+<font color="red"> 747.                     self.done = 1</font>
+<font color="red"> 748.                     break</font>
+<font color="red"> 749.             last_line_lfend = line.endswith('\n')</font>
+<font color="black"> 750. </font>
+<font color="green"> 751.     def make_file(self, binary=None):</font>
+<font color="black"> 752.         &quot;&quot;&quot;Overridable: return a readable &amp; writable file.</font>
+<font color="black"> 753. </font>
+<font color="black"> 754.         The file will be used as follows:</font>
+<font color="black"> 755.         - data is written to it</font>
+<font color="black"> 756.         - seek(0)</font>
+<font color="black"> 757.         - data is read from it</font>
+<font color="black"> 758. </font>
+<font color="black"> 759.         The 'binary' argument is unused -- the file is always opened</font>
+<font color="black"> 760.         in binary mode.</font>
+<font color="black"> 761. </font>
+<font color="black"> 762.         This version opens a temporary file for reading and writing,</font>
+<font color="black"> 763.         and immediately deletes (unlinks) it.  The trick (on Unix!) is</font>
+<font color="black"> 764.         that the file can still be used, but it can't be opened by</font>
+<font color="black"> 765.         another process, and it will automatically be deleted when it</font>
+<font color="black"> 766.         is closed or when the current process terminates.</font>
+<font color="black"> 767. </font>
+<font color="black"> 768.         If you want a more permanent file, you derive a class which</font>
+<font color="black"> 769.         overrides this method.  If you want a visible temporary file</font>
+<font color="black"> 770.         that is nevertheless automatically deleted when the script</font>
+<font color="black"> 771.         terminates, try defining a __del__ method in a derived class</font>
+<font color="black"> 772.         which unlinks the temporary files you have created.</font>
+<font color="black"> 773. </font>
+<font color="black"> 774.         &quot;&quot;&quot;</font>
+<font color="red"> 775.         import tempfile</font>
+<font color="red"> 776.         return tempfile.TemporaryFile(&quot;w+b&quot;)</font>
+<font color="black"> 777. </font>
+<font color="black"> 778. </font>
+<font color="black"> 779. </font>
+<font color="black"> 780. # Backwards Compatibility Classes</font>
+<font color="black"> 781. # ===============================</font>
+<font color="black"> 782. </font>
+<font color="green"> 783. class FormContentDict(UserDict.UserDict):</font>
+<font color="black"> 784.     &quot;&quot;&quot;Form content as dictionary with a list of values per field.</font>
+<font color="black"> 785. </font>
+<font color="black"> 786.     form = FormContentDict()</font>
+<font color="black"> 787. </font>
+<font color="black"> 788.     form[key] -&gt; [value, value, ...]</font>
+<font color="black"> 789.     key in form -&gt; Boolean</font>
+<font color="black"> 790.     form.keys() -&gt; [key, key, ...]</font>
+<font color="black"> 791.     form.values() -&gt; [[val, val, ...], [val, val, ...], ...]</font>
+<font color="black"> 792.     form.items() -&gt;  [(key, [val, val, ...]), (key, [val, val, ...]), ...]</font>
+<font color="black"> 793.     form.dict == {key: [val, val, ...], ...}</font>
+<font color="black"> 794. </font>
+<font color="green"> 795.     &quot;&quot;&quot;</font>
+<font color="green"> 796.     def __init__(self, environ=os.environ, keep_blank_values=0, strict_parsing=0):</font>
+<font color="red"> 797.         self.dict = self.data = parse(environ=environ,</font>
+<font color="red"> 798.                                       keep_blank_values=keep_blank_values,</font>
+<font color="red"> 799.                                       strict_parsing=strict_parsing)</font>
+<font color="red"> 800.         self.query_string = environ['QUERY_STRING']</font>
+<font color="black"> 801. </font>
+<font color="black"> 802. </font>
+<font color="green"> 803. class SvFormContentDict(FormContentDict):</font>
+<font color="black"> 804.     &quot;&quot;&quot;Form content as dictionary expecting a single value per field.</font>
+<font color="black"> 805. </font>
+<font color="black"> 806.     If you only expect a single value for each field, then form[key]</font>
+<font color="black"> 807.     will return that single value.  It will raise an IndexError if</font>
+<font color="black"> 808.     that expectation is not true.  If you expect a field to have</font>
+<font color="black"> 809.     possible multiple values, than you can use form.getlist(key) to</font>
+<font color="black"> 810.     get all of the values.  values() and items() are a compromise:</font>
+<font color="black"> 811.     they return single strings where there is a single value, and</font>
+<font color="black"> 812.     lists of strings otherwise.</font>
+<font color="black"> 813. </font>
+<font color="green"> 814.     &quot;&quot;&quot;</font>
+<font color="green"> 815.     def __getitem__(self, key):</font>
+<font color="red"> 816.         if len(self.dict[key]) &gt; 1:</font>
+<font color="red"> 817.             raise IndexError, 'expecting a single value'</font>
+<font color="red"> 818.         return self.dict[key][0]</font>
+<font color="green"> 819.     def getlist(self, key):</font>
+<font color="red"> 820.         return self.dict[key]</font>
+<font color="green"> 821.     def values(self):</font>
+<font color="red"> 822.         result = []</font>
+<font color="red"> 823.         for value in self.dict.values():</font>
+<font color="red"> 824.             if len(value) == 1:</font>
+<font color="red"> 825.                 result.append(value[0])</font>
+<font color="red"> 826.             else: result.append(value)</font>
+<font color="red"> 827.         return result</font>
+<font color="green"> 828.     def items(self):</font>
+<font color="red"> 829.         result = []</font>
+<font color="red"> 830.         for key, value in self.dict.items():</font>
+<font color="red"> 831.             if len(value) == 1:</font>
+<font color="red"> 832.                 result.append((key, value[0]))</font>
+<font color="red"> 833.             else: result.append((key, value))</font>
+<font color="red"> 834.         return result</font>
+<font color="black"> 835. </font>
+<font color="black"> 836. </font>
+<font color="green"> 837. class InterpFormContentDict(SvFormContentDict):</font>
+<font color="green"> 838.     &quot;&quot;&quot;This class is present for backwards compatibility only.&quot;&quot;&quot;</font>
+<font color="green"> 839.     def __getitem__(self, key):</font>
+<font color="red"> 840.         v = SvFormContentDict.__getitem__(self, key)</font>
+<font color="red"> 841.         if v[0] in '0123456789+-.':</font>
+<font color="red"> 842.             try: return int(v)</font>
+<font color="red"> 843.             except ValueError:</font>
+<font color="red"> 844.                 try: return float(v)</font>
+<font color="red"> 845.                 except ValueError: pass</font>
+<font color="red"> 846.         return v.strip()</font>
+<font color="green"> 847.     def values(self):</font>
+<font color="red"> 848.         result = []</font>
+<font color="red"> 849.         for key in self.keys():</font>
+<font color="red"> 850.             try:</font>
+<font color="red"> 851.                 result.append(self[key])</font>
+<font color="red"> 852.             except IndexError:</font>
+<font color="red"> 853.                 result.append(self.dict[key])</font>
+<font color="red"> 854.         return result</font>
+<font color="green"> 855.     def items(self):</font>
+<font color="red"> 856.         result = []</font>
+<font color="red"> 857.         for key in self.keys():</font>
+<font color="red"> 858.             try:</font>
+<font color="red"> 859.                 result.append((key, self[key]))</font>
+<font color="red"> 860.             except IndexError:</font>
+<font color="red"> 861.                 result.append((key, self.dict[key]))</font>
+<font color="red"> 862.         return result</font>
+<font color="black"> 863. </font>
+<font color="black"> 864. </font>
+<font color="green"> 865. class FormContent(FormContentDict):</font>
+<font color="green"> 866.     &quot;&quot;&quot;This class is present for backwards compatibility only.&quot;&quot;&quot;</font>
+<font color="green"> 867.     def values(self, key):</font>
+<font color="red"> 868.         if key in self.dict :return self.dict[key]</font>
+<font color="red"> 869.         else: return None</font>
+<font color="green"> 870.     def indexed_value(self, key, location):</font>
+<font color="red"> 871.         if key in self.dict:</font>
+<font color="red"> 872.             if len(self.dict[key]) &gt; location:</font>
+<font color="red"> 873.                 return self.dict[key][location]</font>
+<font color="red"> 874.             else: return None</font>
+<font color="red"> 875.         else: return None</font>
+<font color="green"> 876.     def value(self, key):</font>
+<font color="red"> 877.         if key in self.dict: return self.dict[key][0]</font>
+<font color="red"> 878.         else: return None</font>
+<font color="green"> 879.     def length(self, key):</font>
+<font color="red"> 880.         return len(self.dict[key])</font>
+<font color="green"> 881.     def stripped(self, key):</font>
+<font color="red"> 882.         if key in self.dict: return self.dict[key][0].strip()</font>
+<font color="red"> 883.         else: return None</font>
+<font color="green"> 884.     def pars(self):</font>
+<font color="red"> 885.         return self.dict</font>
+<font color="black"> 886. </font>
+<font color="black"> 887. </font>
+<font color="black"> 888. # Test/debug code</font>
+<font color="black"> 889. # ===============</font>
+<font color="black"> 890. </font>
+<font color="green"> 891. def test(environ=os.environ):</font>
+<font color="black"> 892.     &quot;&quot;&quot;Robust test CGI script, usable as main program.</font>
+<font color="black"> 893. </font>
+<font color="black"> 894.     Write minimal HTTP headers and dump all information provided to</font>
+<font color="black"> 895.     the script in HTML form.</font>
+<font color="black"> 896. </font>
+<font color="black"> 897.     &quot;&quot;&quot;</font>
+<font color="red"> 898.     print &quot;Content-type: text/html&quot;</font>
+<font color="red"> 899.     print</font>
+<font color="red"> 900.     sys.stderr = sys.stdout</font>
+<font color="red"> 901.     try:</font>
+<font color="red"> 902.         form = FieldStorage()   # Replace with other classes to test those</font>
+<font color="red"> 903.         print_directory()</font>
+<font color="red"> 904.         print_arguments()</font>
+<font color="red"> 905.         print_form(form)</font>
+<font color="red"> 906.         print_environ(environ)</font>
+<font color="red"> 907.         print_environ_usage()</font>
+<font color="red"> 908.         def f():</font>
+<font color="red"> 909.             exec &quot;testing print_exception() -- &lt;I&gt;italics?&lt;/I&gt;&quot;</font>
+<font color="red"> 910.         def g(f=f):</font>
+<font color="red"> 911.             f()</font>
+<font color="red"> 912.         print &quot;&lt;H3&gt;What follows is a test, not an actual exception:&lt;/H3&gt;&quot;</font>
+<font color="red"> 913.         g()</font>
+<font color="red"> 914.     except:</font>
+<font color="red"> 915.         print_exception()</font>
+<font color="black"> 916. </font>
+<font color="red"> 917.     print &quot;&lt;H1&gt;Second try with a small maxlen...&lt;/H1&gt;&quot;</font>
+<font color="black"> 918. </font>
+<font color="black"> 919.     global maxlen</font>
+<font color="red"> 920.     maxlen = 50</font>
+<font color="red"> 921.     try:</font>
+<font color="red"> 922.         form = FieldStorage()   # Replace with other classes to test those</font>
+<font color="red"> 923.         print_directory()</font>
+<font color="red"> 924.         print_arguments()</font>
+<font color="red"> 925.         print_form(form)</font>
+<font color="red"> 926.         print_environ(environ)</font>
+<font color="red"> 927.     except:</font>
+<font color="red"> 928.         print_exception()</font>
+<font color="black"> 929. </font>
+<font color="green"> 930. def print_exception(type=None, value=None, tb=None, limit=None):</font>
+<font color="red"> 931.     if type is None:</font>
+<font color="red"> 932.         type, value, tb = sys.exc_info()</font>
+<font color="red"> 933.     import traceback</font>
+<font color="red"> 934.     print</font>
+<font color="red"> 935.     print &quot;&lt;H3&gt;Traceback (most recent call last):&lt;/H3&gt;&quot;</font>
+<font color="red"> 936.     list = traceback.format_tb(tb, limit) + \</font>
+<font color="red"> 937.            traceback.format_exception_only(type, value)</font>
+<font color="red"> 938.     print &quot;&lt;PRE&gt;%s&lt;B&gt;%s&lt;/B&gt;&lt;/PRE&gt;&quot; % (</font>
+<font color="red"> 939.         escape(&quot;&quot;.join(list[:-1])),</font>
+<font color="red"> 940.         escape(list[-1]),</font>
+<font color="black"> 941.         )</font>
+<font color="red"> 942.     del tb</font>
+<font color="black"> 943. </font>
+<font color="green"> 944. def print_environ(environ=os.environ):</font>
+<font color="black"> 945.     &quot;&quot;&quot;Dump the shell environment as HTML.&quot;&quot;&quot;</font>
+<font color="red"> 946.     keys = environ.keys()</font>
+<font color="red"> 947.     keys.sort()</font>
+<font color="red"> 948.     print</font>
+<font color="red"> 949.     print &quot;&lt;H3&gt;Shell Environment:&lt;/H3&gt;&quot;</font>
+<font color="red"> 950.     print &quot;&lt;DL&gt;&quot;</font>
+<font color="red"> 951.     for key in keys:</font>
+<font color="red"> 952.         print &quot;&lt;DT&gt;&quot;, escape(key), &quot;&lt;DD&gt;&quot;, escape(environ[key])</font>
+<font color="red"> 953.     print &quot;&lt;/DL&gt;&quot;</font>
+<font color="red"> 954.     print</font>
+<font color="black"> 955. </font>
+<font color="green"> 956. def print_form(form):</font>
+<font color="black"> 957.     &quot;&quot;&quot;Dump the contents of a form as HTML.&quot;&quot;&quot;</font>
+<font color="red"> 958.     keys = form.keys()</font>
+<font color="red"> 959.     keys.sort()</font>
+<font color="red"> 960.     print</font>
+<font color="red"> 961.     print &quot;&lt;H3&gt;Form Contents:&lt;/H3&gt;&quot;</font>
+<font color="red"> 962.     if not keys:</font>
+<font color="red"> 963.         print &quot;&lt;P&gt;No form fields.&quot;</font>
+<font color="red"> 964.     print &quot;&lt;DL&gt;&quot;</font>
+<font color="red"> 965.     for key in keys:</font>
+<font color="red"> 966.         print &quot;&lt;DT&gt;&quot; + escape(key) + &quot;:&quot;,</font>
+<font color="red"> 967.         value = form[key]</font>
+<font color="red"> 968.         print &quot;&lt;i&gt;&quot; + escape(repr(type(value))) + &quot;&lt;/i&gt;&quot;</font>
+<font color="red"> 969.         print &quot;&lt;DD&gt;&quot; + escape(repr(value))</font>
+<font color="red"> 970.     print &quot;&lt;/DL&gt;&quot;</font>
+<font color="red"> 971.     print</font>
+<font color="black"> 972. </font>
+<font color="green"> 973. def print_directory():</font>
+<font color="black"> 974.     &quot;&quot;&quot;Dump the current directory as HTML.&quot;&quot;&quot;</font>
+<font color="red"> 975.     print</font>
+<font color="red"> 976.     print &quot;&lt;H3&gt;Current Working Directory:&lt;/H3&gt;&quot;</font>
+<font color="red"> 977.     try:</font>
+<font color="red"> 978.         pwd = os.getcwd()</font>
+<font color="red"> 979.     except os.error, msg:</font>
+<font color="red"> 980.         print &quot;os.error:&quot;, escape(str(msg))</font>
+<font color="black"> 981.     else:</font>
+<font color="red"> 982.         print escape(pwd)</font>
+<font color="red"> 983.     print</font>
+<font color="black"> 984. </font>
+<font color="green"> 985. def print_arguments():</font>
+<font color="red"> 986.     print</font>
+<font color="red"> 987.     print &quot;&lt;H3&gt;Command Line Arguments:&lt;/H3&gt;&quot;</font>
+<font color="red"> 988.     print</font>
+<font color="red"> 989.     print sys.argv</font>
+<font color="red"> 990.     print</font>
+<font color="black"> 991. </font>
+<font color="green"> 992. def print_environ_usage():</font>
+<font color="black"> 993.     &quot;&quot;&quot;Dump a list of environment variables used by CGI as HTML.&quot;&quot;&quot;</font>
+<font color="black"> 994.     print &quot;&quot;&quot;</font>
+<font color="black"> 995. &lt;H3&gt;These environment variables could have been set:&lt;/H3&gt;</font>
+<font color="black"> 996. &lt;UL&gt;</font>
+<font color="black"> 997. &lt;LI&gt;AUTH_TYPE</font>
+<font color="black"> 998. &lt;LI&gt;CONTENT_LENGTH</font>
+<font color="black"> 999. &lt;LI&gt;CONTENT_TYPE</font>
+<font color="black">1000. &lt;LI&gt;DATE_GMT</font>
+<font color="black">1001. &lt;LI&gt;DATE_LOCAL</font>
+<font color="black">1002. &lt;LI&gt;DOCUMENT_NAME</font>
+<font color="black">1003. &lt;LI&gt;DOCUMENT_ROOT</font>
+<font color="black">1004. &lt;LI&gt;DOCUMENT_URI</font>
+<font color="black">1005. &lt;LI&gt;GATEWAY_INTERFACE</font>
+<font color="black">1006. &lt;LI&gt;LAST_MODIFIED</font>
+<font color="black">1007. &lt;LI&gt;PATH</font>
+<font color="black">1008. &lt;LI&gt;PATH_INFO</font>
+<font color="black">1009. &lt;LI&gt;PATH_TRANSLATED</font>
+<font color="black">1010. &lt;LI&gt;QUERY_STRING</font>
+<font color="black">1011. &lt;LI&gt;REMOTE_ADDR</font>
+<font color="black">1012. &lt;LI&gt;REMOTE_HOST</font>
+<font color="black">1013. &lt;LI&gt;REMOTE_IDENT</font>
+<font color="black">1014. &lt;LI&gt;REMOTE_USER</font>
+<font color="black">1015. &lt;LI&gt;REQUEST_METHOD</font>
+<font color="black">1016. &lt;LI&gt;SCRIPT_NAME</font>
+<font color="black">1017. &lt;LI&gt;SERVER_NAME</font>
+<font color="black">1018. &lt;LI&gt;SERVER_PORT</font>
+<font color="black">1019. &lt;LI&gt;SERVER_PROTOCOL</font>
+<font color="black">1020. &lt;LI&gt;SERVER_ROOT</font>
+<font color="black">1021. &lt;LI&gt;SERVER_SOFTWARE</font>
+<font color="black">1022. &lt;/UL&gt;</font>
+<font color="black">1023. In addition, HTTP headers sent by the server may be passed in the</font>
+<font color="black">1024. environment as well.  Here are some common variable names:</font>
+<font color="black">1025. &lt;UL&gt;</font>
+<font color="black">1026. &lt;LI&gt;HTTP_ACCEPT</font>
+<font color="black">1027. &lt;LI&gt;HTTP_CONNECTION</font>
+<font color="black">1028. &lt;LI&gt;HTTP_HOST</font>
+<font color="black">1029. &lt;LI&gt;HTTP_PRAGMA</font>
+<font color="black">1030. &lt;LI&gt;HTTP_REFERER</font>
+<font color="black">1031. &lt;LI&gt;HTTP_USER_AGENT</font>
+<font color="black">1032. &lt;/UL&gt;</font>
+<font color="red">1033. &quot;&quot;&quot;</font>
+<font color="black">1034. </font>
+<font color="black">1035. </font>
+<font color="black">1036. # Utilities</font>
+<font color="black">1037. # =========</font>
+<font color="black">1038. </font>
+<font color="green">1039. def escape(s, quote=None):</font>
+<font color="black">1040.     '''Replace special characters &quot;&amp;&quot;, &quot;&lt;&quot; and &quot;&gt;&quot; to HTML-safe sequences.</font>
+<font color="black">1041.     If the optional flag quote is true, the quotation mark character (&quot;)</font>
+<font color="black">1042.     is also translated.'''</font>
+<font color="red">1043.     s = s.replace(&quot;&amp;&quot;, &quot;&amp;amp;&quot;) # Must be done first!</font>
+<font color="red">1044.     s = s.replace(&quot;&lt;&quot;, &quot;&amp;lt;&quot;)</font>
+<font color="red">1045.     s = s.replace(&quot;&gt;&quot;, &quot;&amp;gt;&quot;)</font>
+<font color="red">1046.     if quote:</font>
+<font color="red">1047.         s = s.replace('&quot;', &quot;&amp;quot;&quot;)</font>
+<font color="red">1048.     return s</font>
+<font color="black">1049. </font>
+<font color="green">1050. def valid_boundary(s, _vb_pattern=&quot;^[ -~]{0,200}[!-~]$&quot;):</font>
+<font color="red">1051.     import re</font>
+<font color="red">1052.     return re.match(_vb_pattern, s)</font>
+<font color="black">1053. </font>
+<font color="black">1054. # Invoke mainline</font>
+<font color="black">1055. # ===============</font>
+<font color="black">1056. </font>
+<font color="black">1057. # Call test() when this file is run as a script (not imported as a module)</font>
+<font color="green">1058. if __name__ == '__main__':</font>
+<font color="red">1059.     test()</font>
+</pre>
+

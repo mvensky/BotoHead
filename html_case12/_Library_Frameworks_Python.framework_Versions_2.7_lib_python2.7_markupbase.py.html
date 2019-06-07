@@ -1,0 +1,403 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/markupbase.py</b><br>
+
+
+file stats: <b>283 lines, 26 executed: 9.2% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Shared support for scanning document type declarations in HTML and XHTML.</font>
+<font color="black">   2. </font>
+<font color="black">   3. This module is used as a foundation for the HTMLParser and sgmllib</font>
+<font color="black">   4. modules (indirectly, for htmllib as well).  It has no documented</font>
+<font color="black">   5. public API and should not be used directly.</font>
+<font color="black">   6. </font>
+<font color="green">   7. &quot;&quot;&quot;</font>
+<font color="black">   8. </font>
+<font color="green">   9. import re</font>
+<font color="black">  10. </font>
+<font color="green">  11. _declname_match = re.compile(r'[a-zA-Z][-_.a-zA-Z0-9]*\s*').match</font>
+<font color="green">  12. _declstringlit_match = re.compile(r'(\'[^\']*\'|&quot;[^&quot;]*&quot;)\s*').match</font>
+<font color="green">  13. _commentclose = re.compile(r'--\s*&gt;')</font>
+<font color="green">  14. _markedsectionclose = re.compile(r']\s*]\s*&gt;')</font>
+<font color="black">  15. </font>
+<font color="black">  16. # An analysis of the MS-Word extensions is available at</font>
+<font color="black">  17. # http://www.planetpublish.com/xmlarena/xap/Thursday/WordtoXML.pdf</font>
+<font color="black">  18. </font>
+<font color="green">  19. _msmarkedsectionclose = re.compile(r']\s*&gt;')</font>
+<font color="black">  20. </font>
+<font color="green">  21. del re</font>
+<font color="black">  22. </font>
+<font color="black">  23. </font>
+<font color="green">  24. class ParserBase:</font>
+<font color="black">  25.     &quot;&quot;&quot;Parser base class which provides some common support methods used</font>
+<font color="green">  26.     by the SGML/HTML and XHTML parsers.&quot;&quot;&quot;</font>
+<font color="black">  27. </font>
+<font color="green">  28.     def __init__(self):</font>
+<font color="red">  29.         if self.__class__ is ParserBase:</font>
+<font color="red">  30.             raise RuntimeError(</font>
+<font color="red">  31.                 &quot;markupbase.ParserBase must be subclassed&quot;)</font>
+<font color="black">  32. </font>
+<font color="green">  33.     def error(self, message):</font>
+<font color="red">  34.         raise NotImplementedError(</font>
+<font color="red">  35.             &quot;subclasses of ParserBase must override error()&quot;)</font>
+<font color="black">  36. </font>
+<font color="green">  37.     def reset(self):</font>
+<font color="red">  38.         self.lineno = 1</font>
+<font color="red">  39.         self.offset = 0</font>
+<font color="black">  40. </font>
+<font color="green">  41.     def getpos(self):</font>
+<font color="black">  42.         &quot;&quot;&quot;Return current line number and offset.&quot;&quot;&quot;</font>
+<font color="red">  43.         return self.lineno, self.offset</font>
+<font color="black">  44. </font>
+<font color="black">  45.     # Internal -- update line number and offset.  This should be</font>
+<font color="black">  46.     # called for each piece of data exactly once, in order -- in other</font>
+<font color="black">  47.     # words the concatenation of all the input strings to this</font>
+<font color="black">  48.     # function should be exactly the entire input.</font>
+<font color="green">  49.     def updatepos(self, i, j):</font>
+<font color="red">  50.         if i &gt;= j:</font>
+<font color="red">  51.             return j</font>
+<font color="red">  52.         rawdata = self.rawdata</font>
+<font color="red">  53.         nlines = rawdata.count(&quot;\n&quot;, i, j)</font>
+<font color="red">  54.         if nlines:</font>
+<font color="red">  55.             self.lineno = self.lineno + nlines</font>
+<font color="red">  56.             pos = rawdata.rindex(&quot;\n&quot;, i, j) # Should not fail</font>
+<font color="red">  57.             self.offset = j-(pos+1)</font>
+<font color="black">  58.         else:</font>
+<font color="red">  59.             self.offset = self.offset + j-i</font>
+<font color="red">  60.         return j</font>
+<font color="black">  61. </font>
+<font color="green">  62.     _decl_otherchars = ''</font>
+<font color="black">  63. </font>
+<font color="black">  64.     # Internal -- parse declaration (for use by subclasses).</font>
+<font color="green">  65.     def parse_declaration(self, i):</font>
+<font color="black">  66.         # This is some sort of declaration; in &quot;HTML as</font>
+<font color="black">  67.         # deployed,&quot; this should only be the document type</font>
+<font color="black">  68.         # declaration (&quot;&lt;!DOCTYPE html...&gt;&quot;).</font>
+<font color="black">  69.         # ISO 8879:1986, however, has more complex</font>
+<font color="black">  70.         # declaration syntax for elements in &lt;!...&gt;, including:</font>
+<font color="black">  71.         # --comment--</font>
+<font color="black">  72.         # [marked section]</font>
+<font color="black">  73.         # name in the following list: ENTITY, DOCTYPE, ELEMENT,</font>
+<font color="black">  74.         # ATTLIST, NOTATION, SHORTREF, USEMAP,</font>
+<font color="black">  75.         # LINKTYPE, LINK, IDLINK, USELINK, SYSTEM</font>
+<font color="red">  76.         rawdata = self.rawdata</font>
+<font color="red">  77.         j = i + 2</font>
+<font color="red">  78.         assert rawdata[i:j] == &quot;&lt;!&quot;, &quot;unexpected call to parse_declaration&quot;</font>
+<font color="red">  79.         if rawdata[j:j+1] == &quot;&gt;&quot;:</font>
+<font color="black">  80.             # the empty comment &lt;!&gt;</font>
+<font color="red">  81.             return j + 1</font>
+<font color="red">  82.         if rawdata[j:j+1] in (&quot;-&quot;, &quot;&quot;):</font>
+<font color="black">  83.             # Start of comment followed by buffer boundary,</font>
+<font color="black">  84.             # or just a buffer boundary.</font>
+<font color="red">  85.             return -1</font>
+<font color="black">  86.         # A simple, practical version could look like: ((name|stringlit) S*) + '&gt;'</font>
+<font color="red">  87.         n = len(rawdata)</font>
+<font color="red">  88.         if rawdata[j:j+2] == '--': #comment</font>
+<font color="black">  89.             # Locate --.*-- as the body of the comment</font>
+<font color="red">  90.             return self.parse_comment(i)</font>
+<font color="red">  91.         elif rawdata[j] == '[': #marked section</font>
+<font color="black">  92.             # Locate [statusWord [...arbitrary SGML...]] as the body of the marked section</font>
+<font color="black">  93.             # Where statusWord is one of TEMP, CDATA, IGNORE, INCLUDE, RCDATA</font>
+<font color="black">  94.             # Note that this is extended by Microsoft Office &quot;Save as Web&quot; function</font>
+<font color="black">  95.             # to include [if...] and [endif].</font>
+<font color="red">  96.             return self.parse_marked_section(i)</font>
+<font color="black">  97.         else: #all other declaration elements</font>
+<font color="red">  98.             decltype, j = self._scan_name(j, i)</font>
+<font color="red">  99.         if j &lt; 0:</font>
+<font color="red"> 100.             return j</font>
+<font color="red"> 101.         if decltype == &quot;doctype&quot;:</font>
+<font color="red"> 102.             self._decl_otherchars = ''</font>
+<font color="red"> 103.         while j &lt; n:</font>
+<font color="red"> 104.             c = rawdata[j]</font>
+<font color="red"> 105.             if c == &quot;&gt;&quot;:</font>
+<font color="black"> 106.                 # end of declaration syntax</font>
+<font color="red"> 107.                 data = rawdata[i+2:j]</font>
+<font color="red"> 108.                 if decltype == &quot;doctype&quot;:</font>
+<font color="red"> 109.                     self.handle_decl(data)</font>
+<font color="black"> 110.                 else:</font>
+<font color="black"> 111.                     # According to the HTML5 specs sections &quot;8.2.4.44 Bogus</font>
+<font color="black"> 112.                     # comment state&quot; and &quot;8.2.4.45 Markup declaration open</font>
+<font color="black"> 113.                     # state&quot;, a comment token should be emitted.</font>
+<font color="black"> 114.                     # Calling unknown_decl provides more flexibility though.</font>
+<font color="red"> 115.                     self.unknown_decl(data)</font>
+<font color="red"> 116.                 return j + 1</font>
+<font color="red"> 117.             if c in &quot;\&quot;'&quot;:</font>
+<font color="red"> 118.                 m = _declstringlit_match(rawdata, j)</font>
+<font color="red"> 119.                 if not m:</font>
+<font color="red"> 120.                     return -1 # incomplete</font>
+<font color="red"> 121.                 j = m.end()</font>
+<font color="red"> 122.             elif c in &quot;abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ&quot;:</font>
+<font color="red"> 123.                 name, j = self._scan_name(j, i)</font>
+<font color="red"> 124.             elif c in self._decl_otherchars:</font>
+<font color="red"> 125.                 j = j + 1</font>
+<font color="red"> 126.             elif c == &quot;[&quot;:</font>
+<font color="black"> 127.                 # this could be handled in a separate doctype parser</font>
+<font color="red"> 128.                 if decltype == &quot;doctype&quot;:</font>
+<font color="red"> 129.                     j = self._parse_doctype_subset(j + 1, i)</font>
+<font color="red"> 130.                 elif decltype in (&quot;attlist&quot;, &quot;linktype&quot;, &quot;link&quot;, &quot;element&quot;):</font>
+<font color="black"> 131.                     # must tolerate []'d groups in a content model in an element declaration</font>
+<font color="black"> 132.                     # also in data attribute specifications of attlist declaration</font>
+<font color="black"> 133.                     # also link type declaration subsets in linktype declarations</font>
+<font color="black"> 134.                     # also link attribute specification lists in link declarations</font>
+<font color="red"> 135.                     self.error(&quot;unsupported '[' char in %s declaration&quot; % decltype)</font>
+<font color="black"> 136.                 else:</font>
+<font color="red"> 137.                     self.error(&quot;unexpected '[' char in declaration&quot;)</font>
+<font color="black"> 138.             else:</font>
+<font color="red"> 139.                 self.error(</font>
+<font color="red"> 140.                     &quot;unexpected %r char in declaration&quot; % rawdata[j])</font>
+<font color="red"> 141.             if j &lt; 0:</font>
+<font color="red"> 142.                 return j</font>
+<font color="red"> 143.         return -1 # incomplete</font>
+<font color="black"> 144. </font>
+<font color="black"> 145.     # Internal -- parse a marked section</font>
+<font color="black"> 146.     # Override this to handle MS-word extension syntax &lt;![if word]&gt;content&lt;![endif]&gt;</font>
+<font color="green"> 147.     def parse_marked_section(self, i, report=1):</font>
+<font color="red"> 148.         rawdata= self.rawdata</font>
+<font color="red"> 149.         assert rawdata[i:i+3] == '&lt;![', &quot;unexpected call to parse_marked_section()&quot;</font>
+<font color="red"> 150.         sectName, j = self._scan_name( i+3, i )</font>
+<font color="red"> 151.         if j &lt; 0:</font>
+<font color="red"> 152.             return j</font>
+<font color="red"> 153.         if sectName in (&quot;temp&quot;, &quot;cdata&quot;, &quot;ignore&quot;, &quot;include&quot;, &quot;rcdata&quot;):</font>
+<font color="black"> 154.             # look for standard ]]&gt; ending</font>
+<font color="red"> 155.             match= _markedsectionclose.search(rawdata, i+3)</font>
+<font color="red"> 156.         elif sectName in (&quot;if&quot;, &quot;else&quot;, &quot;endif&quot;):</font>
+<font color="black"> 157.             # look for MS Office ]&gt; ending</font>
+<font color="red"> 158.             match= _msmarkedsectionclose.search(rawdata, i+3)</font>
+<font color="black"> 159.         else:</font>
+<font color="red"> 160.             self.error('unknown status keyword %r in marked section' % rawdata[i+3:j])</font>
+<font color="red"> 161.         if not match:</font>
+<font color="red"> 162.             return -1</font>
+<font color="red"> 163.         if report:</font>
+<font color="red"> 164.             j = match.start(0)</font>
+<font color="red"> 165.             self.unknown_decl(rawdata[i+3: j])</font>
+<font color="red"> 166.         return match.end(0)</font>
+<font color="black"> 167. </font>
+<font color="black"> 168.     # Internal -- parse comment, return length or -1 if not terminated</font>
+<font color="green"> 169.     def parse_comment(self, i, report=1):</font>
+<font color="red"> 170.         rawdata = self.rawdata</font>
+<font color="red"> 171.         if rawdata[i:i+4] != '&lt;!--':</font>
+<font color="red"> 172.             self.error('unexpected call to parse_comment()')</font>
+<font color="red"> 173.         match = _commentclose.search(rawdata, i+4)</font>
+<font color="red"> 174.         if not match:</font>
+<font color="red"> 175.             return -1</font>
+<font color="red"> 176.         if report:</font>
+<font color="red"> 177.             j = match.start(0)</font>
+<font color="red"> 178.             self.handle_comment(rawdata[i+4: j])</font>
+<font color="red"> 179.         return match.end(0)</font>
+<font color="black"> 180. </font>
+<font color="black"> 181.     # Internal -- scan past the internal subset in a &lt;!DOCTYPE declaration,</font>
+<font color="black"> 182.     # returning the index just past any whitespace following the trailing ']'.</font>
+<font color="green"> 183.     def _parse_doctype_subset(self, i, declstartpos):</font>
+<font color="red"> 184.         rawdata = self.rawdata</font>
+<font color="red"> 185.         n = len(rawdata)</font>
+<font color="red"> 186.         j = i</font>
+<font color="red"> 187.         while j &lt; n:</font>
+<font color="red"> 188.             c = rawdata[j]</font>
+<font color="red"> 189.             if c == &quot;&lt;&quot;:</font>
+<font color="red"> 190.                 s = rawdata[j:j+2]</font>
+<font color="red"> 191.                 if s == &quot;&lt;&quot;:</font>
+<font color="black"> 192.                     # end of buffer; incomplete</font>
+<font color="red"> 193.                     return -1</font>
+<font color="red"> 194.                 if s != &quot;&lt;!&quot;:</font>
+<font color="red"> 195.                     self.updatepos(declstartpos, j + 1)</font>
+<font color="red"> 196.                     self.error(&quot;unexpected char in internal subset (in %r)&quot; % s)</font>
+<font color="red"> 197.                 if (j + 2) == n:</font>
+<font color="black"> 198.                     # end of buffer; incomplete</font>
+<font color="red"> 199.                     return -1</font>
+<font color="red"> 200.                 if (j + 4) &gt; n:</font>
+<font color="black"> 201.                     # end of buffer; incomplete</font>
+<font color="red"> 202.                     return -1</font>
+<font color="red"> 203.                 if rawdata[j:j+4] == &quot;&lt;!--&quot;:</font>
+<font color="red"> 204.                     j = self.parse_comment(j, report=0)</font>
+<font color="red"> 205.                     if j &lt; 0:</font>
+<font color="red"> 206.                         return j</font>
+<font color="red"> 207.                     continue</font>
+<font color="red"> 208.                 name, j = self._scan_name(j + 2, declstartpos)</font>
+<font color="red"> 209.                 if j == -1:</font>
+<font color="red"> 210.                     return -1</font>
+<font color="red"> 211.                 if name not in (&quot;attlist&quot;, &quot;element&quot;, &quot;entity&quot;, &quot;notation&quot;):</font>
+<font color="red"> 212.                     self.updatepos(declstartpos, j + 2)</font>
+<font color="red"> 213.                     self.error(</font>
+<font color="red"> 214.                         &quot;unknown declaration %r in internal subset&quot; % name)</font>
+<font color="black"> 215.                 # handle the individual names</font>
+<font color="red"> 216.                 meth = getattr(self, &quot;_parse_doctype_&quot; + name)</font>
+<font color="red"> 217.                 j = meth(j, declstartpos)</font>
+<font color="red"> 218.                 if j &lt; 0:</font>
+<font color="red"> 219.                     return j</font>
+<font color="red"> 220.             elif c == &quot;%&quot;:</font>
+<font color="black"> 221.                 # parameter entity reference</font>
+<font color="red"> 222.                 if (j + 1) == n:</font>
+<font color="black"> 223.                     # end of buffer; incomplete</font>
+<font color="red"> 224.                     return -1</font>
+<font color="red"> 225.                 s, j = self._scan_name(j + 1, declstartpos)</font>
+<font color="red"> 226.                 if j &lt; 0:</font>
+<font color="red"> 227.                     return j</font>
+<font color="red"> 228.                 if rawdata[j] == &quot;;&quot;:</font>
+<font color="red"> 229.                     j = j + 1</font>
+<font color="red"> 230.             elif c == &quot;]&quot;:</font>
+<font color="red"> 231.                 j = j + 1</font>
+<font color="red"> 232.                 while j &lt; n and rawdata[j].isspace():</font>
+<font color="red"> 233.                     j = j + 1</font>
+<font color="red"> 234.                 if j &lt; n:</font>
+<font color="red"> 235.                     if rawdata[j] == &quot;&gt;&quot;:</font>
+<font color="red"> 236.                         return j</font>
+<font color="red"> 237.                     self.updatepos(declstartpos, j)</font>
+<font color="red"> 238.                     self.error(&quot;unexpected char after internal subset&quot;)</font>
+<font color="black"> 239.                 else:</font>
+<font color="red"> 240.                     return -1</font>
+<font color="red"> 241.             elif c.isspace():</font>
+<font color="red"> 242.                 j = j + 1</font>
+<font color="black"> 243.             else:</font>
+<font color="red"> 244.                 self.updatepos(declstartpos, j)</font>
+<font color="red"> 245.                 self.error(&quot;unexpected char %r in internal subset&quot; % c)</font>
+<font color="black"> 246.         # end of buffer reached</font>
+<font color="red"> 247.         return -1</font>
+<font color="black"> 248. </font>
+<font color="black"> 249.     # Internal -- scan past &lt;!ELEMENT declarations</font>
+<font color="green"> 250.     def _parse_doctype_element(self, i, declstartpos):</font>
+<font color="red"> 251.         name, j = self._scan_name(i, declstartpos)</font>
+<font color="red"> 252.         if j == -1:</font>
+<font color="red"> 253.             return -1</font>
+<font color="black"> 254.         # style content model; just skip until '&gt;'</font>
+<font color="red"> 255.         rawdata = self.rawdata</font>
+<font color="red"> 256.         if '&gt;' in rawdata[j:]:</font>
+<font color="red"> 257.             return rawdata.find(&quot;&gt;&quot;, j) + 1</font>
+<font color="red"> 258.         return -1</font>
+<font color="black"> 259. </font>
+<font color="black"> 260.     # Internal -- scan past &lt;!ATTLIST declarations</font>
+<font color="green"> 261.     def _parse_doctype_attlist(self, i, declstartpos):</font>
+<font color="red"> 262.         rawdata = self.rawdata</font>
+<font color="red"> 263.         name, j = self._scan_name(i, declstartpos)</font>
+<font color="red"> 264.         c = rawdata[j:j+1]</font>
+<font color="red"> 265.         if c == &quot;&quot;:</font>
+<font color="red"> 266.             return -1</font>
+<font color="red"> 267.         if c == &quot;&gt;&quot;:</font>
+<font color="red"> 268.             return j + 1</font>
+<font color="red"> 269.         while 1:</font>
+<font color="black"> 270.             # scan a series of attribute descriptions; simplified:</font>
+<font color="black"> 271.             #   name type [value] [#constraint]</font>
+<font color="red"> 272.             name, j = self._scan_name(j, declstartpos)</font>
+<font color="red"> 273.             if j &lt; 0:</font>
+<font color="red"> 274.                 return j</font>
+<font color="red"> 275.             c = rawdata[j:j+1]</font>
+<font color="red"> 276.             if c == &quot;&quot;:</font>
+<font color="red"> 277.                 return -1</font>
+<font color="red"> 278.             if c == &quot;(&quot;:</font>
+<font color="black"> 279.                 # an enumerated type; look for ')'</font>
+<font color="red"> 280.                 if &quot;)&quot; in rawdata[j:]:</font>
+<font color="red"> 281.                     j = rawdata.find(&quot;)&quot;, j) + 1</font>
+<font color="black"> 282.                 else:</font>
+<font color="red"> 283.                     return -1</font>
+<font color="red"> 284.                 while rawdata[j:j+1].isspace():</font>
+<font color="red"> 285.                     j = j + 1</font>
+<font color="red"> 286.                 if not rawdata[j:]:</font>
+<font color="black"> 287.                     # end of buffer, incomplete</font>
+<font color="red"> 288.                     return -1</font>
+<font color="black"> 289.             else:</font>
+<font color="red"> 290.                 name, j = self._scan_name(j, declstartpos)</font>
+<font color="red"> 291.             c = rawdata[j:j+1]</font>
+<font color="red"> 292.             if not c:</font>
+<font color="red"> 293.                 return -1</font>
+<font color="red"> 294.             if c in &quot;'\&quot;&quot;:</font>
+<font color="red"> 295.                 m = _declstringlit_match(rawdata, j)</font>
+<font color="red"> 296.                 if m:</font>
+<font color="red"> 297.                     j = m.end()</font>
+<font color="black"> 298.                 else:</font>
+<font color="red"> 299.                     return -1</font>
+<font color="red"> 300.                 c = rawdata[j:j+1]</font>
+<font color="red"> 301.                 if not c:</font>
+<font color="red"> 302.                     return -1</font>
+<font color="red"> 303.             if c == &quot;#&quot;:</font>
+<font color="red"> 304.                 if rawdata[j:] == &quot;#&quot;:</font>
+<font color="black"> 305.                     # end of buffer</font>
+<font color="red"> 306.                     return -1</font>
+<font color="red"> 307.                 name, j = self._scan_name(j + 1, declstartpos)</font>
+<font color="red"> 308.                 if j &lt; 0:</font>
+<font color="red"> 309.                     return j</font>
+<font color="red"> 310.                 c = rawdata[j:j+1]</font>
+<font color="red"> 311.                 if not c:</font>
+<font color="red"> 312.                     return -1</font>
+<font color="red"> 313.             if c == '&gt;':</font>
+<font color="black"> 314.                 # all done</font>
+<font color="red"> 315.                 return j + 1</font>
+<font color="black"> 316. </font>
+<font color="black"> 317.     # Internal -- scan past &lt;!NOTATION declarations</font>
+<font color="green"> 318.     def _parse_doctype_notation(self, i, declstartpos):</font>
+<font color="red"> 319.         name, j = self._scan_name(i, declstartpos)</font>
+<font color="red"> 320.         if j &lt; 0:</font>
+<font color="red"> 321.             return j</font>
+<font color="red"> 322.         rawdata = self.rawdata</font>
+<font color="red"> 323.         while 1:</font>
+<font color="red"> 324.             c = rawdata[j:j+1]</font>
+<font color="red"> 325.             if not c:</font>
+<font color="black"> 326.                 # end of buffer; incomplete</font>
+<font color="red"> 327.                 return -1</font>
+<font color="red"> 328.             if c == '&gt;':</font>
+<font color="red"> 329.                 return j + 1</font>
+<font color="red"> 330.             if c in &quot;'\&quot;&quot;:</font>
+<font color="red"> 331.                 m = _declstringlit_match(rawdata, j)</font>
+<font color="red"> 332.                 if not m:</font>
+<font color="red"> 333.                     return -1</font>
+<font color="red"> 334.                 j = m.end()</font>
+<font color="black"> 335.             else:</font>
+<font color="red"> 336.                 name, j = self._scan_name(j, declstartpos)</font>
+<font color="red"> 337.                 if j &lt; 0:</font>
+<font color="red"> 338.                     return j</font>
+<font color="black"> 339. </font>
+<font color="black"> 340.     # Internal -- scan past &lt;!ENTITY declarations</font>
+<font color="green"> 341.     def _parse_doctype_entity(self, i, declstartpos):</font>
+<font color="red"> 342.         rawdata = self.rawdata</font>
+<font color="red"> 343.         if rawdata[i:i+1] == &quot;%&quot;:</font>
+<font color="red"> 344.             j = i + 1</font>
+<font color="red"> 345.             while 1:</font>
+<font color="red"> 346.                 c = rawdata[j:j+1]</font>
+<font color="red"> 347.                 if not c:</font>
+<font color="red"> 348.                     return -1</font>
+<font color="red"> 349.                 if c.isspace():</font>
+<font color="red"> 350.                     j = j + 1</font>
+<font color="black"> 351.                 else:</font>
+<font color="red"> 352.                     break</font>
+<font color="black"> 353.         else:</font>
+<font color="red"> 354.             j = i</font>
+<font color="red"> 355.         name, j = self._scan_name(j, declstartpos)</font>
+<font color="red"> 356.         if j &lt; 0:</font>
+<font color="red"> 357.             return j</font>
+<font color="red"> 358.         while 1:</font>
+<font color="red"> 359.             c = self.rawdata[j:j+1]</font>
+<font color="red"> 360.             if not c:</font>
+<font color="red"> 361.                 return -1</font>
+<font color="red"> 362.             if c in &quot;'\&quot;&quot;:</font>
+<font color="red"> 363.                 m = _declstringlit_match(rawdata, j)</font>
+<font color="red"> 364.                 if m:</font>
+<font color="red"> 365.                     j = m.end()</font>
+<font color="black"> 366.                 else:</font>
+<font color="red"> 367.                     return -1    # incomplete</font>
+<font color="red"> 368.             elif c == &quot;&gt;&quot;:</font>
+<font color="red"> 369.                 return j + 1</font>
+<font color="black"> 370.             else:</font>
+<font color="red"> 371.                 name, j = self._scan_name(j, declstartpos)</font>
+<font color="red"> 372.                 if j &lt; 0:</font>
+<font color="red"> 373.                     return j</font>
+<font color="black"> 374. </font>
+<font color="black"> 375.     # Internal -- scan a name token and the new position and the token, or</font>
+<font color="black"> 376.     # return -1 if we've reached the end of the buffer.</font>
+<font color="green"> 377.     def _scan_name(self, i, declstartpos):</font>
+<font color="red"> 378.         rawdata = self.rawdata</font>
+<font color="red"> 379.         n = len(rawdata)</font>
+<font color="red"> 380.         if i == n:</font>
+<font color="red"> 381.             return None, -1</font>
+<font color="red"> 382.         m = _declname_match(rawdata, i)</font>
+<font color="red"> 383.         if m:</font>
+<font color="red"> 384.             s = m.group()</font>
+<font color="red"> 385.             name = s.strip()</font>
+<font color="red"> 386.             if (i + len(s)) == n:</font>
+<font color="red"> 387.                 return None, -1  # end of buffer</font>
+<font color="red"> 388.             return name.lower(), m.end()</font>
+<font color="black"> 389.         else:</font>
+<font color="red"> 390.             self.updatepos(declstartpos, i)</font>
+<font color="red"> 391.             self.error(&quot;expected name token at %r&quot;</font>
+<font color="red"> 392.                        % rawdata[declstartpos:declstartpos+20])</font>
+<font color="black"> 393. </font>
+<font color="black"> 394.     # To be overridden -- handlers for unknown objects</font>
+<font color="green"> 395.     def unknown_decl(self, data):</font>
+<font color="red"> 396.         pass</font>
+</pre>
+

@@ -1,0 +1,156 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/_MozillaCookieJar.py</b><br>
+
+
+file stats: <b>86 lines, 9 executed: 10.5% covered</b>
+<pre>
+<font color="green">   1. &quot;&quot;&quot;Mozilla / Netscape cookie loading / saving.&quot;&quot;&quot;</font>
+<font color="black">   2. </font>
+<font color="green">   3. import re, time</font>
+<font color="black">   4. </font>
+<font color="green">   5. from cookielib import (_warn_unhandled_exception, FileCookieJar, LoadError,</font>
+<font color="black">   6.                        Cookie, MISSING_FILENAME_TEXT)</font>
+<font color="black">   7. </font>
+<font color="green">   8. class MozillaCookieJar(FileCookieJar):</font>
+<font color="black">   9.     &quot;&quot;&quot;</font>
+<font color="black">  10. </font>
+<font color="black">  11.     WARNING: you may want to backup your browser's cookies file if you use</font>
+<font color="black">  12.     this class to save cookies.  I *think* it works, but there have been</font>
+<font color="black">  13.     bugs in the past!</font>
+<font color="black">  14. </font>
+<font color="black">  15.     This class differs from CookieJar only in the format it uses to save and</font>
+<font color="black">  16.     load cookies to and from a file.  This class uses the Mozilla/Netscape</font>
+<font color="black">  17.     `cookies.txt' format.  lynx uses this file format, too.</font>
+<font color="black">  18. </font>
+<font color="black">  19.     Don't expect cookies saved while the browser is running to be noticed by</font>
+<font color="black">  20.     the browser (in fact, Mozilla on unix will overwrite your saved cookies if</font>
+<font color="black">  21.     you change them on disk while it's running; on Windows, you probably can't</font>
+<font color="black">  22.     save at all while the browser is running).</font>
+<font color="black">  23. </font>
+<font color="black">  24.     Note that the Mozilla/Netscape format will downgrade RFC2965 cookies to</font>
+<font color="black">  25.     Netscape cookies on saving.</font>
+<font color="black">  26. </font>
+<font color="black">  27.     In particular, the cookie version and port number information is lost,</font>
+<font color="black">  28.     together with information about whether or not Path, Port and Discard were</font>
+<font color="black">  29.     specified by the Set-Cookie2 (or Set-Cookie) header, and whether or not the</font>
+<font color="black">  30.     domain as set in the HTTP header started with a dot (yes, I'm aware some</font>
+<font color="black">  31.     domains in Netscape files start with a dot and some don't -- trust me, you</font>
+<font color="black">  32.     really don't want to know any more about this).</font>
+<font color="black">  33. </font>
+<font color="black">  34.     Note that though Mozilla and Netscape use the same format, they use</font>
+<font color="black">  35.     slightly different headers.  The class saves cookies using the Netscape</font>
+<font color="black">  36.     header by default (Mozilla can cope with that).</font>
+<font color="black">  37. </font>
+<font color="green">  38.     &quot;&quot;&quot;</font>
+<font color="green">  39.     magic_re = &quot;#( Netscape)? HTTP Cookie File&quot;</font>
+<font color="black">  40.     header = &quot;&quot;&quot;\</font>
+<font color="black">  41. # Netscape HTTP Cookie File</font>
+<font color="black">  42. # http://curl.haxx.se/rfc/cookie_spec.html</font>
+<font color="black">  43. # This is a generated file!  Do not edit.</font>
+<font color="black">  44. </font>
+<font color="green">  45. &quot;&quot;&quot;</font>
+<font color="black">  46. </font>
+<font color="green">  47.     def _really_load(self, f, filename, ignore_discard, ignore_expires):</font>
+<font color="red">  48.         now = time.time()</font>
+<font color="black">  49. </font>
+<font color="red">  50.         magic = f.readline()</font>
+<font color="red">  51.         if not re.search(self.magic_re, magic):</font>
+<font color="red">  52.             f.close()</font>
+<font color="red">  53.             raise LoadError(</font>
+<font color="red">  54.                 &quot;%r does not look like a Netscape format cookies file&quot; %</font>
+<font color="red">  55.                 filename)</font>
+<font color="black">  56. </font>
+<font color="red">  57.         try:</font>
+<font color="red">  58.             while 1:</font>
+<font color="red">  59.                 line = f.readline()</font>
+<font color="red">  60.                 if line == &quot;&quot;: break</font>
+<font color="black">  61. </font>
+<font color="black">  62.                 # last field may be absent, so keep any trailing tab</font>
+<font color="red">  63.                 if line.endswith(&quot;\n&quot;): line = line[:-1]</font>
+<font color="black">  64. </font>
+<font color="black">  65.                 # skip comments and blank lines XXX what is $ for?</font>
+<font color="red">  66.                 if (line.strip().startswith((&quot;#&quot;, &quot;$&quot;)) or</font>
+<font color="red">  67.                     line.strip() == &quot;&quot;):</font>
+<font color="red">  68.                     continue</font>
+<font color="black">  69. </font>
+<font color="black">  70.                 domain, domain_specified, path, secure, expires, name, value = \</font>
+<font color="red">  71.                         line.split(&quot;\t&quot;)</font>
+<font color="red">  72.                 secure = (secure == &quot;TRUE&quot;)</font>
+<font color="red">  73.                 domain_specified = (domain_specified == &quot;TRUE&quot;)</font>
+<font color="red">  74.                 if name == &quot;&quot;:</font>
+<font color="black">  75.                     # cookies.txt regards 'Set-Cookie: foo' as a cookie</font>
+<font color="black">  76.                     # with no name, whereas cookielib regards it as a</font>
+<font color="black">  77.                     # cookie with no value.</font>
+<font color="red">  78.                     name = value</font>
+<font color="red">  79.                     value = None</font>
+<font color="black">  80. </font>
+<font color="red">  81.                 initial_dot = domain.startswith(&quot;.&quot;)</font>
+<font color="red">  82.                 assert domain_specified == initial_dot</font>
+<font color="black">  83. </font>
+<font color="red">  84.                 discard = False</font>
+<font color="red">  85.                 if expires == &quot;&quot;:</font>
+<font color="red">  86.                     expires = None</font>
+<font color="red">  87.                     discard = True</font>
+<font color="black">  88. </font>
+<font color="black">  89.                 # assume path_specified is false</font>
+<font color="red">  90.                 c = Cookie(0, name, value,</font>
+<font color="red">  91.                            None, False,</font>
+<font color="red">  92.                            domain, domain_specified, initial_dot,</font>
+<font color="red">  93.                            path, False,</font>
+<font color="red">  94.                            secure,</font>
+<font color="red">  95.                            expires,</font>
+<font color="red">  96.                            discard,</font>
+<font color="red">  97.                            None,</font>
+<font color="red">  98.                            None,</font>
+<font color="red">  99.                            {})</font>
+<font color="red"> 100.                 if not ignore_discard and c.discard:</font>
+<font color="red"> 101.                     continue</font>
+<font color="red"> 102.                 if not ignore_expires and c.is_expired(now):</font>
+<font color="red"> 103.                     continue</font>
+<font color="red"> 104.                 self.set_cookie(c)</font>
+<font color="black"> 105. </font>
+<font color="red"> 106.         except IOError:</font>
+<font color="red"> 107.             raise</font>
+<font color="red"> 108.         except Exception:</font>
+<font color="red"> 109.             _warn_unhandled_exception()</font>
+<font color="red"> 110.             raise LoadError(&quot;invalid Netscape format cookies file %r: %r&quot; %</font>
+<font color="red"> 111.                             (filename, line))</font>
+<font color="black"> 112. </font>
+<font color="green"> 113.     def save(self, filename=None, ignore_discard=False, ignore_expires=False):</font>
+<font color="red"> 114.         if filename is None:</font>
+<font color="red"> 115.             if self.filename is not None: filename = self.filename</font>
+<font color="red"> 116.             else: raise ValueError(MISSING_FILENAME_TEXT)</font>
+<font color="black"> 117. </font>
+<font color="red"> 118.         f = open(filename, &quot;w&quot;)</font>
+<font color="red"> 119.         try:</font>
+<font color="red"> 120.             f.write(self.header)</font>
+<font color="red"> 121.             now = time.time()</font>
+<font color="red"> 122.             for cookie in self:</font>
+<font color="red"> 123.                 if not ignore_discard and cookie.discard:</font>
+<font color="red"> 124.                     continue</font>
+<font color="red"> 125.                 if not ignore_expires and cookie.is_expired(now):</font>
+<font color="red"> 126.                     continue</font>
+<font color="red"> 127.                 if cookie.secure: secure = &quot;TRUE&quot;</font>
+<font color="red"> 128.                 else: secure = &quot;FALSE&quot;</font>
+<font color="red"> 129.                 if cookie.domain.startswith(&quot;.&quot;): initial_dot = &quot;TRUE&quot;</font>
+<font color="red"> 130.                 else: initial_dot = &quot;FALSE&quot;</font>
+<font color="red"> 131.                 if cookie.expires is not None:</font>
+<font color="red"> 132.                     expires = str(cookie.expires)</font>
+<font color="black"> 133.                 else:</font>
+<font color="red"> 134.                     expires = &quot;&quot;</font>
+<font color="red"> 135.                 if cookie.value is None:</font>
+<font color="black"> 136.                     # cookies.txt regards 'Set-Cookie: foo' as a cookie</font>
+<font color="black"> 137.                     # with no name, whereas cookielib regards it as a</font>
+<font color="black"> 138.                     # cookie with no value.</font>
+<font color="red"> 139.                     name = &quot;&quot;</font>
+<font color="red"> 140.                     value = cookie.name</font>
+<font color="black"> 141.                 else:</font>
+<font color="red"> 142.                     name = cookie.name</font>
+<font color="red"> 143.                     value = cookie.value</font>
+<font color="red"> 144.                 f.write(</font>
+<font color="red"> 145.                     &quot;\t&quot;.join([cookie.domain, initial_dot, cookie.path,</font>
+<font color="red"> 146.                                secure, expires, name, value])+</font>
+<font color="red"> 147.                     &quot;\n&quot;)</font>
+<font color="black"> 148.         finally:</font>
+<font color="red"> 149.             f.close()</font>
+</pre>
+

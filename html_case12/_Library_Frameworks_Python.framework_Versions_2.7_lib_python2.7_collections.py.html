@@ -1,0 +1,749 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/collections.py</b><br>
+
+
+file stats: <b>340 lines, 74 executed: 21.8% covered</b>
+<pre>
+<font color="black">   1. '''This module implements specialized container datatypes providing</font>
+<font color="black">   2. alternatives to Python's general purpose built-in containers, dict,</font>
+<font color="black">   3. list, set, and tuple.</font>
+<font color="black">   4. </font>
+<font color="black">   5. * namedtuple   factory function for creating tuple subclasses with named fields</font>
+<font color="black">   6. * deque        list-like container with fast appends and pops on either end</font>
+<font color="black">   7. * Counter      dict subclass for counting hashable objects</font>
+<font color="black">   8. * OrderedDict  dict subclass that remembers the order entries were added</font>
+<font color="black">   9. * defaultdict  dict subclass that calls a factory function to supply missing values</font>
+<font color="black">  10. </font>
+<font color="red">  11. '''</font>
+<font color="black">  12. </font>
+<font color="red">  13. __all__ = ['Counter', 'deque', 'defaultdict', 'namedtuple', 'OrderedDict']</font>
+<font color="black">  14. # For bootstrapping reasons, the collection ABCs are defined in _abcoll.py.</font>
+<font color="black">  15. # They should however be considered an integral part of collections.py.</font>
+<font color="red">  16. from _abcoll import *</font>
+<font color="red">  17. import _abcoll</font>
+<font color="red">  18. __all__ += _abcoll.__all__</font>
+<font color="black">  19. </font>
+<font color="red">  20. from _collections import deque, defaultdict</font>
+<font color="red">  21. from operator import itemgetter as _itemgetter, eq as _eq</font>
+<font color="red">  22. from keyword import iskeyword as _iskeyword</font>
+<font color="red">  23. import sys as _sys</font>
+<font color="red">  24. import heapq as _heapq</font>
+<font color="red">  25. from itertools import repeat as _repeat, chain as _chain, starmap as _starmap</font>
+<font color="red">  26. from itertools import imap as _imap</font>
+<font color="black">  27. </font>
+<font color="red">  28. try:</font>
+<font color="red">  29.     from thread import get_ident as _get_ident</font>
+<font color="red">  30. except ImportError:</font>
+<font color="red">  31.     from dummy_thread import get_ident as _get_ident</font>
+<font color="black">  32. </font>
+<font color="black">  33. </font>
+<font color="black">  34. ################################################################################</font>
+<font color="black">  35. ### OrderedDict</font>
+<font color="black">  36. ################################################################################</font>
+<font color="black">  37. </font>
+<font color="red">  38. class OrderedDict(dict):</font>
+<font color="red">  39.     'Dictionary that remembers insertion order'</font>
+<font color="black">  40.     # An inherited dict maps keys to values.</font>
+<font color="black">  41.     # The inherited dict provides __getitem__, __len__, __contains__, and get.</font>
+<font color="black">  42.     # The remaining methods are order-aware.</font>
+<font color="black">  43.     # Big-O running times for all methods are the same as regular dictionaries.</font>
+<font color="black">  44. </font>
+<font color="black">  45.     # The internal self.__map dict maps keys to links in a doubly linked list.</font>
+<font color="black">  46.     # The circular doubly linked list starts and ends with a sentinel element.</font>
+<font color="black">  47.     # The sentinel element never gets deleted (this simplifies the algorithm).</font>
+<font color="black">  48.     # Each link is stored as a list of length three:  [PREV, NEXT, KEY].</font>
+<font color="black">  49. </font>
+<font color="red">  50.     def __init__(*args, **kwds):</font>
+<font color="black">  51.         '''Initialize an ordered dictionary.  The signature is the same as</font>
+<font color="black">  52.         regular dictionaries, but keyword arguments are not recommended because</font>
+<font color="black">  53.         their insertion order is arbitrary.</font>
+<font color="black">  54. </font>
+<font color="black">  55.         '''</font>
+<font color="green">  56.         if not args:</font>
+<font color="red">  57.             raise TypeError(&quot;descriptor '__init__' of 'OrderedDict' object &quot;</font>
+<font color="black">  58.                             &quot;needs an argument&quot;)</font>
+<font color="green">  59.         self = args[0]</font>
+<font color="green">  60.         args = args[1:]</font>
+<font color="green">  61.         if len(args) &gt; 1:</font>
+<font color="red">  62.             raise TypeError('expected at most 1 arguments, got %d' % len(args))</font>
+<font color="green">  63.         try:</font>
+<font color="green">  64.             self.__root</font>
+<font color="green">  65.         except AttributeError:</font>
+<font color="green">  66.             self.__root = root = []                     # sentinel node</font>
+<font color="green">  67.             root[:] = [root, root, None]</font>
+<font color="green">  68.             self.__map = {}</font>
+<font color="green">  69.         self.__update(*args, **kwds)</font>
+<font color="black">  70. </font>
+<font color="red">  71.     def __setitem__(self, key, value, dict_setitem=dict.__setitem__):</font>
+<font color="black">  72.         'od.__setitem__(i, y) &lt;==&gt; od[i]=y'</font>
+<font color="black">  73.         # Setting a new item creates a new link at the end of the linked list,</font>
+<font color="black">  74.         # and the inherited dictionary is updated with the new key/value pair.</font>
+<font color="green">  75.         if key not in self:</font>
+<font color="green">  76.             root = self.__root</font>
+<font color="green">  77.             last = root[0]</font>
+<font color="green">  78.             last[1] = root[0] = self.__map[key] = [last, root, key]</font>
+<font color="green">  79.         return dict_setitem(self, key, value)</font>
+<font color="black">  80. </font>
+<font color="red">  81.     def __delitem__(self, key, dict_delitem=dict.__delitem__):</font>
+<font color="black">  82.         'od.__delitem__(y) &lt;==&gt; del od[y]'</font>
+<font color="black">  83.         # Deleting an existing item uses self.__map to find the link which gets</font>
+<font color="black">  84.         # removed by updating the links in the predecessor and successor nodes.</font>
+<font color="green">  85.         dict_delitem(self, key)</font>
+<font color="green">  86.         link_prev, link_next, _ = self.__map.pop(key)</font>
+<font color="green">  87.         link_prev[1] = link_next                        # update link_prev[NEXT]</font>
+<font color="green">  88.         link_next[0] = link_prev                        # update link_next[PREV]</font>
+<font color="black">  89. </font>
+<font color="red">  90.     def __iter__(self):</font>
+<font color="black">  91.         'od.__iter__() &lt;==&gt; iter(od)'</font>
+<font color="black">  92.         # Traverse the linked list in order.</font>
+<font color="green">  93.         root = self.__root</font>
+<font color="green">  94.         curr = root[1]                                  # start at the first node</font>
+<font color="green">  95.         while curr is not root:</font>
+<font color="green">  96.             yield curr[2]                               # yield the curr[KEY]</font>
+<font color="green">  97.             curr = curr[1]                              # move to next node</font>
+<font color="black">  98. </font>
+<font color="red">  99.     def __reversed__(self):</font>
+<font color="black"> 100.         'od.__reversed__() &lt;==&gt; reversed(od)'</font>
+<font color="black"> 101.         # Traverse the linked list in reverse order.</font>
+<font color="red"> 102.         root = self.__root</font>
+<font color="red"> 103.         curr = root[0]                                  # start at the last node</font>
+<font color="red"> 104.         while curr is not root:</font>
+<font color="red"> 105.             yield curr[2]                               # yield the curr[KEY]</font>
+<font color="red"> 106.             curr = curr[0]                              # move to previous node</font>
+<font color="black"> 107. </font>
+<font color="red"> 108.     def clear(self):</font>
+<font color="black"> 109.         'od.clear() -&gt; None.  Remove all items from od.'</font>
+<font color="red"> 110.         root = self.__root</font>
+<font color="red"> 111.         root[:] = [root, root, None]</font>
+<font color="red"> 112.         self.__map.clear()</font>
+<font color="red"> 113.         dict.clear(self)</font>
+<font color="black"> 114. </font>
+<font color="black"> 115.     # -- the following methods do not depend on the internal structure --</font>
+<font color="black"> 116. </font>
+<font color="red"> 117.     def keys(self):</font>
+<font color="black"> 118.         'od.keys() -&gt; list of keys in od'</font>
+<font color="green"> 119.         return list(self)</font>
+<font color="black"> 120. </font>
+<font color="red"> 121.     def values(self):</font>
+<font color="black"> 122.         'od.values() -&gt; list of values in od'</font>
+<font color="green"> 123.         return [self[key] for key in self]</font>
+<font color="black"> 124. </font>
+<font color="red"> 125.     def items(self):</font>
+<font color="black"> 126.         'od.items() -&gt; list of (key, value) pairs in od'</font>
+<font color="green"> 127.         return [(key, self[key]) for key in self]</font>
+<font color="black"> 128. </font>
+<font color="red"> 129.     def iterkeys(self):</font>
+<font color="black"> 130.         'od.iterkeys() -&gt; an iterator over the keys in od'</font>
+<font color="red"> 131.         return iter(self)</font>
+<font color="black"> 132. </font>
+<font color="red"> 133.     def itervalues(self):</font>
+<font color="black"> 134.         'od.itervalues -&gt; an iterator over the values in od'</font>
+<font color="red"> 135.         for k in self:</font>
+<font color="red"> 136.             yield self[k]</font>
+<font color="black"> 137. </font>
+<font color="red"> 138.     def iteritems(self):</font>
+<font color="black"> 139.         'od.iteritems -&gt; an iterator over the (key, value) pairs in od'</font>
+<font color="red"> 140.         for k in self:</font>
+<font color="red"> 141.             yield (k, self[k])</font>
+<font color="black"> 142. </font>
+<font color="red"> 143.     update = MutableMapping.update</font>
+<font color="black"> 144. </font>
+<font color="red"> 145.     __update = update # let subclasses override update without breaking __init__</font>
+<font color="black"> 146. </font>
+<font color="red"> 147.     __marker = object()</font>
+<font color="black"> 148. </font>
+<font color="red"> 149.     def pop(self, key, default=__marker):</font>
+<font color="black"> 150.         '''od.pop(k[,d]) -&gt; v, remove specified key and return the corresponding</font>
+<font color="black"> 151.         value.  If key is not found, d is returned if given, otherwise KeyError</font>
+<font color="black"> 152.         is raised.</font>
+<font color="black"> 153. </font>
+<font color="black"> 154.         '''</font>
+<font color="green"> 155.         if key in self:</font>
+<font color="green"> 156.             result = self[key]</font>
+<font color="green"> 157.             del self[key]</font>
+<font color="green"> 158.             return result</font>
+<font color="green"> 159.         if default is self.__marker:</font>
+<font color="green"> 160.             raise KeyError(key)</font>
+<font color="red"> 161.         return default</font>
+<font color="black"> 162. </font>
+<font color="red"> 163.     def setdefault(self, key, default=None):</font>
+<font color="black"> 164.         'od.setdefault(k[,d]) -&gt; od.get(k,d), also set od[k]=d if k not in od'</font>
+<font color="red"> 165.         if key in self:</font>
+<font color="red"> 166.             return self[key]</font>
+<font color="red"> 167.         self[key] = default</font>
+<font color="red"> 168.         return default</font>
+<font color="black"> 169. </font>
+<font color="red"> 170.     def popitem(self, last=True):</font>
+<font color="black"> 171.         '''od.popitem() -&gt; (k, v), return and remove a (key, value) pair.</font>
+<font color="black"> 172.         Pairs are returned in LIFO order if last is true or FIFO order if false.</font>
+<font color="black"> 173. </font>
+<font color="black"> 174.         '''</font>
+<font color="red"> 175.         if not self:</font>
+<font color="red"> 176.             raise KeyError('dictionary is empty')</font>
+<font color="red"> 177.         key = next(reversed(self) if last else iter(self))</font>
+<font color="red"> 178.         value = self.pop(key)</font>
+<font color="red"> 179.         return key, value</font>
+<font color="black"> 180. </font>
+<font color="red"> 181.     def __repr__(self, _repr_running={}):</font>
+<font color="black"> 182.         'od.__repr__() &lt;==&gt; repr(od)'</font>
+<font color="red"> 183.         call_key = id(self), _get_ident()</font>
+<font color="red"> 184.         if call_key in _repr_running:</font>
+<font color="red"> 185.             return '...'</font>
+<font color="red"> 186.         _repr_running[call_key] = 1</font>
+<font color="red"> 187.         try:</font>
+<font color="red"> 188.             if not self:</font>
+<font color="red"> 189.                 return '%s()' % (self.__class__.__name__,)</font>
+<font color="red"> 190.             return '%s(%r)' % (self.__class__.__name__, self.items())</font>
+<font color="black"> 191.         finally:</font>
+<font color="red"> 192.             del _repr_running[call_key]</font>
+<font color="black"> 193. </font>
+<font color="red"> 194.     def __reduce__(self):</font>
+<font color="black"> 195.         'Return state information for pickling'</font>
+<font color="green"> 196.         items = [[k, self[k]] for k in self]</font>
+<font color="green"> 197.         inst_dict = vars(self).copy()</font>
+<font color="green"> 198.         for k in vars(OrderedDict()):</font>
+<font color="green"> 199.             inst_dict.pop(k, None)</font>
+<font color="green"> 200.         if inst_dict:</font>
+<font color="red"> 201.             return (self.__class__, (items,), inst_dict)</font>
+<font color="green"> 202.         return self.__class__, (items,)</font>
+<font color="black"> 203. </font>
+<font color="red"> 204.     def copy(self):</font>
+<font color="black"> 205.         'od.copy() -&gt; a shallow copy of od'</font>
+<font color="green"> 206.         return self.__class__(self)</font>
+<font color="black"> 207. </font>
+<font color="red"> 208.     @classmethod</font>
+<font color="red"> 209.     def fromkeys(cls, iterable, value=None):</font>
+<font color="black"> 210.         '''OD.fromkeys(S[, v]) -&gt; New ordered dictionary with keys from S.</font>
+<font color="black"> 211.         If not specified, the value defaults to None.</font>
+<font color="black"> 212. </font>
+<font color="black"> 213.         '''</font>
+<font color="red"> 214.         self = cls()</font>
+<font color="red"> 215.         for key in iterable:</font>
+<font color="red"> 216.             self[key] = value</font>
+<font color="red"> 217.         return self</font>
+<font color="black"> 218. </font>
+<font color="red"> 219.     def __eq__(self, other):</font>
+<font color="black"> 220.         '''od.__eq__(y) &lt;==&gt; od==y.  Comparison to another OD is order-sensitive</font>
+<font color="black"> 221.         while comparison to a regular mapping is order-insensitive.</font>
+<font color="black"> 222. </font>
+<font color="black"> 223.         '''</font>
+<font color="red"> 224.         if isinstance(other, OrderedDict):</font>
+<font color="red"> 225.             return dict.__eq__(self, other) and all(_imap(_eq, self, other))</font>
+<font color="red"> 226.         return dict.__eq__(self, other)</font>
+<font color="black"> 227. </font>
+<font color="red"> 228.     def __ne__(self, other):</font>
+<font color="black"> 229.         'od.__ne__(y) &lt;==&gt; od!=y'</font>
+<font color="red"> 230.         return not self == other</font>
+<font color="black"> 231. </font>
+<font color="black"> 232.     # -- the following methods support python 3.x style dictionary views --</font>
+<font color="black"> 233. </font>
+<font color="red"> 234.     def viewkeys(self):</font>
+<font color="black"> 235.         &quot;od.viewkeys() -&gt; a set-like object providing a view on od's keys&quot;</font>
+<font color="red"> 236.         return KeysView(self)</font>
+<font color="black"> 237. </font>
+<font color="red"> 238.     def viewvalues(self):</font>
+<font color="black"> 239.         &quot;od.viewvalues() -&gt; an object providing a view on od's values&quot;</font>
+<font color="red"> 240.         return ValuesView(self)</font>
+<font color="black"> 241. </font>
+<font color="red"> 242.     def viewitems(self):</font>
+<font color="black"> 243.         &quot;od.viewitems() -&gt; a set-like object providing a view on od's items&quot;</font>
+<font color="red"> 244.         return ItemsView(self)</font>
+<font color="black"> 245. </font>
+<font color="black"> 246. </font>
+<font color="black"> 247. ################################################################################</font>
+<font color="black"> 248. ### namedtuple</font>
+<font color="black"> 249. ################################################################################</font>
+<font color="black"> 250. </font>
+<font color="black"> 251. _class_template = '''\</font>
+<font color="black"> 252. class {typename}(tuple):</font>
+<font color="black"> 253.     '{typename}({arg_list})'</font>
+<font color="black"> 254. </font>
+<font color="black"> 255.     __slots__ = ()</font>
+<font color="black"> 256. </font>
+<font color="black"> 257.     _fields = {field_names!r}</font>
+<font color="black"> 258. </font>
+<font color="black"> 259.     def __new__(_cls, {arg_list}):</font>
+<font color="black"> 260.         'Create new instance of {typename}({arg_list})'</font>
+<font color="black"> 261.         return _tuple.__new__(_cls, ({arg_list}))</font>
+<font color="black"> 262. </font>
+<font color="black"> 263.     @classmethod</font>
+<font color="black"> 264.     def _make(cls, iterable, new=tuple.__new__, len=len):</font>
+<font color="black"> 265.         'Make a new {typename} object from a sequence or iterable'</font>
+<font color="black"> 266.         result = new(cls, iterable)</font>
+<font color="black"> 267.         if len(result) != {num_fields:d}:</font>
+<font color="black"> 268.             raise TypeError('Expected {num_fields:d} arguments, got %d' % len(result))</font>
+<font color="black"> 269.         return result</font>
+<font color="black"> 270. </font>
+<font color="black"> 271.     def __repr__(self):</font>
+<font color="black"> 272.         'Return a nicely formatted representation string'</font>
+<font color="black"> 273.         return '{typename}({repr_fmt})' % self</font>
+<font color="black"> 274. </font>
+<font color="black"> 275.     def _asdict(self):</font>
+<font color="black"> 276.         'Return a new OrderedDict which maps field names to their values'</font>
+<font color="black"> 277.         return OrderedDict(zip(self._fields, self))</font>
+<font color="black"> 278. </font>
+<font color="black"> 279.     def _replace(_self, **kwds):</font>
+<font color="black"> 280.         'Return a new {typename} object replacing specified fields with new values'</font>
+<font color="black"> 281.         result = _self._make(map(kwds.pop, {field_names!r}, _self))</font>
+<font color="black"> 282.         if kwds:</font>
+<font color="black"> 283.             raise ValueError('Got unexpected field names: %r' % kwds.keys())</font>
+<font color="black"> 284.         return result</font>
+<font color="black"> 285. </font>
+<font color="black"> 286.     def __getnewargs__(self):</font>
+<font color="black"> 287.         'Return self as a plain tuple.  Used by copy and pickle.'</font>
+<font color="black"> 288.         return tuple(self)</font>
+<font color="black"> 289. </font>
+<font color="black"> 290.     __dict__ = _property(_asdict)</font>
+<font color="black"> 291. </font>
+<font color="black"> 292.     def __getstate__(self):</font>
+<font color="black"> 293.         'Exclude the OrderedDict from pickling'</font>
+<font color="black"> 294.         pass</font>
+<font color="black"> 295. </font>
+<font color="black"> 296. {field_defs}</font>
+<font color="red"> 297. '''</font>
+<font color="black"> 298. </font>
+<font color="red"> 299. _repr_template = '{name}=%r'</font>
+<font color="black"> 300. </font>
+<font color="black"> 301. _field_template = '''\</font>
+<font color="black"> 302.     {name} = _property(_itemgetter({index:d}), doc='Alias for field number {index:d}')</font>
+<font color="red"> 303. '''</font>
+<font color="black"> 304. </font>
+<font color="red"> 305. def namedtuple(typename, field_names, verbose=False, rename=False):</font>
+<font color="black"> 306.     &quot;&quot;&quot;Returns a new subclass of tuple with named fields.</font>
+<font color="black"> 307. </font>
+<font color="black"> 308.     &gt;&gt;&gt; Point = namedtuple('Point', ['x', 'y'])</font>
+<font color="black"> 309.     &gt;&gt;&gt; Point.__doc__                   # docstring for the new class</font>
+<font color="black"> 310.     'Point(x, y)'</font>
+<font color="black"> 311.     &gt;&gt;&gt; p = Point(11, y=22)             # instantiate with positional args or keywords</font>
+<font color="black"> 312.     &gt;&gt;&gt; p[0] + p[1]                     # indexable like a plain tuple</font>
+<font color="black"> 313.     33</font>
+<font color="black"> 314.     &gt;&gt;&gt; x, y = p                        # unpack like a regular tuple</font>
+<font color="black"> 315.     &gt;&gt;&gt; x, y</font>
+<font color="black"> 316.     (11, 22)</font>
+<font color="black"> 317.     &gt;&gt;&gt; p.x + p.y                       # fields also accessible by name</font>
+<font color="black"> 318.     33</font>
+<font color="black"> 319.     &gt;&gt;&gt; d = p._asdict()                 # convert to a dictionary</font>
+<font color="black"> 320.     &gt;&gt;&gt; d['x']</font>
+<font color="black"> 321.     11</font>
+<font color="black"> 322.     &gt;&gt;&gt; Point(**d)                      # convert from a dictionary</font>
+<font color="black"> 323.     Point(x=11, y=22)</font>
+<font color="black"> 324.     &gt;&gt;&gt; p._replace(x=100)               # _replace() is like str.replace() but targets named fields</font>
+<font color="black"> 325.     Point(x=100, y=22)</font>
+<font color="black"> 326. </font>
+<font color="black"> 327.     &quot;&quot;&quot;</font>
+<font color="black"> 328. </font>
+<font color="black"> 329.     # Validate the field names.  At the user's option, either generate an error</font>
+<font color="black"> 330.     # message or automatically replace the field name with a valid name.</font>
+<font color="green"> 331.     if isinstance(field_names, basestring):</font>
+<font color="green"> 332.         field_names = field_names.replace(',', ' ').split()</font>
+<font color="green"> 333.     field_names = map(str, field_names)</font>
+<font color="green"> 334.     typename = str(typename)</font>
+<font color="green"> 335.     if rename:</font>
+<font color="red"> 336.         seen = set()</font>
+<font color="red"> 337.         for index, name in enumerate(field_names):</font>
+<font color="red"> 338.             if (not all(c.isalnum() or c=='_' for c in name)</font>
+<font color="red"> 339.                 or _iskeyword(name)</font>
+<font color="red"> 340.                 or not name</font>
+<font color="red"> 341.                 or name[0].isdigit()</font>
+<font color="red"> 342.                 or name.startswith('_')</font>
+<font color="red"> 343.                 or name in seen):</font>
+<font color="red"> 344.                 field_names[index] = '_%d' % index</font>
+<font color="red"> 345.             seen.add(name)</font>
+<font color="green"> 346.     for name in [typename] + field_names:</font>
+<font color="green"> 347.         if type(name) != str:</font>
+<font color="red"> 348.             raise TypeError('Type names and field names must be strings')</font>
+<font color="green"> 349.         if not all(c.isalnum() or c=='_' for c in name):</font>
+<font color="red"> 350.             raise ValueError('Type names and field names can only contain '</font>
+<font color="red"> 351.                              'alphanumeric characters and underscores: %r' % name)</font>
+<font color="green"> 352.         if _iskeyword(name):</font>
+<font color="red"> 353.             raise ValueError('Type names and field names cannot be a '</font>
+<font color="red"> 354.                              'keyword: %r' % name)</font>
+<font color="green"> 355.         if name[0].isdigit():</font>
+<font color="red"> 356.             raise ValueError('Type names and field names cannot start with '</font>
+<font color="red"> 357.                              'a number: %r' % name)</font>
+<font color="green"> 358.     seen = set()</font>
+<font color="green"> 359.     for name in field_names:</font>
+<font color="green"> 360.         if name.startswith('_') and not rename:</font>
+<font color="red"> 361.             raise ValueError('Field names cannot start with an underscore: '</font>
+<font color="red"> 362.                              '%r' % name)</font>
+<font color="green"> 363.         if name in seen:</font>
+<font color="red"> 364.             raise ValueError('Encountered duplicate field name: %r' % name)</font>
+<font color="green"> 365.         seen.add(name)</font>
+<font color="black"> 366. </font>
+<font color="black"> 367.     # Fill-in the class template</font>
+<font color="green"> 368.     class_definition = _class_template.format(</font>
+<font color="green"> 369.         typename = typename,</font>
+<font color="green"> 370.         field_names = tuple(field_names),</font>
+<font color="green"> 371.         num_fields = len(field_names),</font>
+<font color="green"> 372.         arg_list = repr(tuple(field_names)).replace(&quot;'&quot;, &quot;&quot;)[1:-1],</font>
+<font color="green"> 373.         repr_fmt = ', '.join(_repr_template.format(name=name)</font>
+<font color="green"> 374.                              for name in field_names),</font>
+<font color="green"> 375.         field_defs = '\n'.join(_field_template.format(index=index, name=name)</font>
+<font color="green"> 376.                                for index, name in enumerate(field_names))</font>
+<font color="black"> 377.     )</font>
+<font color="green"> 378.     if verbose:</font>
+<font color="red"> 379.         print class_definition</font>
+<font color="black"> 380. </font>
+<font color="black"> 381.     # Execute the template string in a temporary namespace and support</font>
+<font color="black"> 382.     # tracing utilities by setting a value for frame.f_globals['__name__']</font>
+<font color="green"> 383.     namespace = dict(_itemgetter=_itemgetter, __name__='namedtuple_%s' % typename,</font>
+<font color="green"> 384.                      OrderedDict=OrderedDict, _property=property, _tuple=tuple)</font>
+<font color="green"> 385.     try:</font>
+<font color="green"> 386.         exec class_definition in namespace</font>
+<font color="red"> 387.     except SyntaxError as e:</font>
+<font color="red"> 388.         raise SyntaxError(e.message + ':\n' + class_definition)</font>
+<font color="green"> 389.     result = namespace[typename]</font>
+<font color="black"> 390. </font>
+<font color="black"> 391.     # For pickling to work, the __module__ variable needs to be set to the frame</font>
+<font color="black"> 392.     # where the named tuple is created.  Bypass this step in environments where</font>
+<font color="black"> 393.     # sys._getframe is not defined (Jython for example) or sys._getframe is not</font>
+<font color="black"> 394.     # defined for arguments greater than 0 (IronPython).</font>
+<font color="green"> 395.     try:</font>
+<font color="green"> 396.         result.__module__ = _sys._getframe(1).f_globals.get('__name__', '__main__')</font>
+<font color="red"> 397.     except (AttributeError, ValueError):</font>
+<font color="red"> 398.         pass</font>
+<font color="black"> 399. </font>
+<font color="green"> 400.     return result</font>
+<font color="black"> 401. </font>
+<font color="black"> 402. </font>
+<font color="black"> 403. ########################################################################</font>
+<font color="black"> 404. ###  Counter</font>
+<font color="black"> 405. ########################################################################</font>
+<font color="black"> 406. </font>
+<font color="red"> 407. class Counter(dict):</font>
+<font color="black"> 408.     '''Dict subclass for counting hashable items.  Sometimes called a bag</font>
+<font color="black"> 409.     or multiset.  Elements are stored as dictionary keys and their counts</font>
+<font color="black"> 410.     are stored as dictionary values.</font>
+<font color="black"> 411. </font>
+<font color="black"> 412.     &gt;&gt;&gt; c = Counter('abcdeabcdabcaba')  # count elements from a string</font>
+<font color="black"> 413. </font>
+<font color="black"> 414.     &gt;&gt;&gt; c.most_common(3)                # three most common elements</font>
+<font color="black"> 415.     [('a', 5), ('b', 4), ('c', 3)]</font>
+<font color="black"> 416.     &gt;&gt;&gt; sorted(c)                       # list all unique elements</font>
+<font color="black"> 417.     ['a', 'b', 'c', 'd', 'e']</font>
+<font color="black"> 418.     &gt;&gt;&gt; ''.join(sorted(c.elements()))   # list elements with repetitions</font>
+<font color="black"> 419.     'aaaaabbbbcccdde'</font>
+<font color="black"> 420.     &gt;&gt;&gt; sum(c.values())                 # total of all counts</font>
+<font color="black"> 421.     15</font>
+<font color="black"> 422. </font>
+<font color="black"> 423.     &gt;&gt;&gt; c['a']                          # count of letter 'a'</font>
+<font color="black"> 424.     5</font>
+<font color="black"> 425.     &gt;&gt;&gt; for elem in 'shazam':           # update counts from an iterable</font>
+<font color="black"> 426.     ...     c[elem] += 1                # by adding 1 to each element's count</font>
+<font color="black"> 427.     &gt;&gt;&gt; c['a']                          # now there are seven 'a'</font>
+<font color="black"> 428.     7</font>
+<font color="black"> 429.     &gt;&gt;&gt; del c['b']                      # remove all 'b'</font>
+<font color="black"> 430.     &gt;&gt;&gt; c['b']                          # now there are zero 'b'</font>
+<font color="black"> 431.     0</font>
+<font color="black"> 432. </font>
+<font color="black"> 433.     &gt;&gt;&gt; d = Counter('simsalabim')       # make another counter</font>
+<font color="black"> 434.     &gt;&gt;&gt; c.update(d)                     # add in the second counter</font>
+<font color="black"> 435.     &gt;&gt;&gt; c['a']                          # now there are nine 'a'</font>
+<font color="black"> 436.     9</font>
+<font color="black"> 437. </font>
+<font color="black"> 438.     &gt;&gt;&gt; c.clear()                       # empty the counter</font>
+<font color="black"> 439.     &gt;&gt;&gt; c</font>
+<font color="black"> 440.     Counter()</font>
+<font color="black"> 441. </font>
+<font color="black"> 442.     Note:  If a count is set to zero or reduced to zero, it will remain</font>
+<font color="black"> 443.     in the counter until the entry is deleted or the counter is cleared:</font>
+<font color="black"> 444. </font>
+<font color="black"> 445.     &gt;&gt;&gt; c = Counter('aaabbc')</font>
+<font color="black"> 446.     &gt;&gt;&gt; c['b'] -= 2                     # reduce the count of 'b' by two</font>
+<font color="black"> 447.     &gt;&gt;&gt; c.most_common()                 # 'b' is still in, but its count is zero</font>
+<font color="black"> 448.     [('a', 3), ('c', 1), ('b', 0)]</font>
+<font color="black"> 449. </font>
+<font color="red"> 450.     '''</font>
+<font color="black"> 451.     # References:</font>
+<font color="black"> 452.     #   http://en.wikipedia.org/wiki/Multiset</font>
+<font color="black"> 453.     #   http://www.gnu.org/software/smalltalk/manual-base/html_node/Bag.html</font>
+<font color="black"> 454.     #   http://www.demo2s.com/Tutorial/Cpp/0380__set-multiset/Catalog0380__set-multiset.htm</font>
+<font color="black"> 455.     #   http://code.activestate.com/recipes/259174/</font>
+<font color="black"> 456.     #   Knuth, TAOCP Vol. II section 4.6.3</font>
+<font color="black"> 457. </font>
+<font color="red"> 458.     def __init__(*args, **kwds):</font>
+<font color="black"> 459.         '''Create a new, empty Counter object.  And if given, count elements</font>
+<font color="black"> 460.         from an input iterable.  Or, initialize the count from another mapping</font>
+<font color="black"> 461.         of elements to their counts.</font>
+<font color="black"> 462. </font>
+<font color="black"> 463.         &gt;&gt;&gt; c = Counter()                           # a new, empty counter</font>
+<font color="black"> 464.         &gt;&gt;&gt; c = Counter('gallahad')                 # a new counter from an iterable</font>
+<font color="black"> 465.         &gt;&gt;&gt; c = Counter({'a': 4, 'b': 2})           # a new counter from a mapping</font>
+<font color="black"> 466.         &gt;&gt;&gt; c = Counter(a=4, b=2)                   # a new counter from keyword args</font>
+<font color="black"> 467. </font>
+<font color="black"> 468.         '''</font>
+<font color="red"> 469.         if not args:</font>
+<font color="red"> 470.             raise TypeError(&quot;descriptor '__init__' of 'Counter' object &quot;</font>
+<font color="black"> 471.                             &quot;needs an argument&quot;)</font>
+<font color="red"> 472.         self = args[0]</font>
+<font color="red"> 473.         args = args[1:]</font>
+<font color="red"> 474.         if len(args) &gt; 1:</font>
+<font color="red"> 475.             raise TypeError('expected at most 1 arguments, got %d' % len(args))</font>
+<font color="red"> 476.         super(Counter, self).__init__()</font>
+<font color="red"> 477.         self.update(*args, **kwds)</font>
+<font color="black"> 478. </font>
+<font color="red"> 479.     def __missing__(self, key):</font>
+<font color="black"> 480.         'The count of elements not in the Counter is zero.'</font>
+<font color="black"> 481.         # Needed so that self[missing_item] does not raise KeyError</font>
+<font color="red"> 482.         return 0</font>
+<font color="black"> 483. </font>
+<font color="red"> 484.     def most_common(self, n=None):</font>
+<font color="black"> 485.         '''List the n most common elements and their counts from the most</font>
+<font color="black"> 486.         common to the least.  If n is None, then list all element counts.</font>
+<font color="black"> 487. </font>
+<font color="black"> 488.         &gt;&gt;&gt; Counter('abcdeabcdabcaba').most_common(3)</font>
+<font color="black"> 489.         [('a', 5), ('b', 4), ('c', 3)]</font>
+<font color="black"> 490. </font>
+<font color="black"> 491.         '''</font>
+<font color="black"> 492.         # Emulate Bag.sortedByCount from Smalltalk</font>
+<font color="red"> 493.         if n is None:</font>
+<font color="red"> 494.             return sorted(self.iteritems(), key=_itemgetter(1), reverse=True)</font>
+<font color="red"> 495.         return _heapq.nlargest(n, self.iteritems(), key=_itemgetter(1))</font>
+<font color="black"> 496. </font>
+<font color="red"> 497.     def elements(self):</font>
+<font color="black"> 498.         '''Iterator over elements repeating each as many times as its count.</font>
+<font color="black"> 499. </font>
+<font color="black"> 500.         &gt;&gt;&gt; c = Counter('ABCABC')</font>
+<font color="black"> 501.         &gt;&gt;&gt; sorted(c.elements())</font>
+<font color="black"> 502.         ['A', 'A', 'B', 'B', 'C', 'C']</font>
+<font color="black"> 503. </font>
+<font color="black"> 504.         # Knuth's example for prime factors of 1836:  2**2 * 3**3 * 17**1</font>
+<font color="black"> 505.         &gt;&gt;&gt; prime_factors = Counter({2: 2, 3: 3, 17: 1})</font>
+<font color="black"> 506.         &gt;&gt;&gt; product = 1</font>
+<font color="black"> 507.         &gt;&gt;&gt; for factor in prime_factors.elements():     # loop over factors</font>
+<font color="black"> 508.         ...     product *= factor                       # and multiply them</font>
+<font color="black"> 509.         &gt;&gt;&gt; product</font>
+<font color="black"> 510.         1836</font>
+<font color="black"> 511. </font>
+<font color="black"> 512.         Note, if an element's count has been set to zero or is a negative</font>
+<font color="black"> 513.         number, elements() will ignore it.</font>
+<font color="black"> 514. </font>
+<font color="black"> 515.         '''</font>
+<font color="black"> 516.         # Emulate Bag.do from Smalltalk and Multiset.begin from C++.</font>
+<font color="red"> 517.         return _chain.from_iterable(_starmap(_repeat, self.iteritems()))</font>
+<font color="black"> 518. </font>
+<font color="black"> 519.     # Override dict methods where necessary</font>
+<font color="black"> 520. </font>
+<font color="red"> 521.     @classmethod</font>
+<font color="red"> 522.     def fromkeys(cls, iterable, v=None):</font>
+<font color="black"> 523.         # There is no equivalent method for counters because setting v=1</font>
+<font color="black"> 524.         # means that no element can have a count greater than one.</font>
+<font color="red"> 525.         raise NotImplementedError(</font>
+<font color="red"> 526.             'Counter.fromkeys() is undefined.  Use Counter(iterable) instead.')</font>
+<font color="black"> 527. </font>
+<font color="red"> 528.     def update(*args, **kwds):</font>
+<font color="black"> 529.         '''Like dict.update() but add counts instead of replacing them.</font>
+<font color="black"> 530. </font>
+<font color="black"> 531.         Source can be an iterable, a dictionary, or another Counter instance.</font>
+<font color="black"> 532. </font>
+<font color="black"> 533.         &gt;&gt;&gt; c = Counter('which')</font>
+<font color="black"> 534.         &gt;&gt;&gt; c.update('witch')           # add elements from another iterable</font>
+<font color="black"> 535.         &gt;&gt;&gt; d = Counter('watch')</font>
+<font color="black"> 536.         &gt;&gt;&gt; c.update(d)                 # add elements from another counter</font>
+<font color="black"> 537.         &gt;&gt;&gt; c['h']                      # four 'h' in which, witch, and watch</font>
+<font color="black"> 538.         4</font>
+<font color="black"> 539. </font>
+<font color="black"> 540.         '''</font>
+<font color="black"> 541.         # The regular dict.update() operation makes no sense here because the</font>
+<font color="black"> 542.         # replace behavior results in the some of original untouched counts</font>
+<font color="black"> 543.         # being mixed-in with all of the other counts for a mismash that</font>
+<font color="black"> 544.         # doesn't have a straight-forward interpretation in most counting</font>
+<font color="black"> 545.         # contexts.  Instead, we implement straight-addition.  Both the inputs</font>
+<font color="black"> 546.         # and outputs are allowed to contain zero and negative counts.</font>
+<font color="black"> 547. </font>
+<font color="red"> 548.         if not args:</font>
+<font color="red"> 549.             raise TypeError(&quot;descriptor 'update' of 'Counter' object &quot;</font>
+<font color="black"> 550.                             &quot;needs an argument&quot;)</font>
+<font color="red"> 551.         self = args[0]</font>
+<font color="red"> 552.         args = args[1:]</font>
+<font color="red"> 553.         if len(args) &gt; 1:</font>
+<font color="red"> 554.             raise TypeError('expected at most 1 arguments, got %d' % len(args))</font>
+<font color="red"> 555.         iterable = args[0] if args else None</font>
+<font color="red"> 556.         if iterable is not None:</font>
+<font color="red"> 557.             if isinstance(iterable, Mapping):</font>
+<font color="red"> 558.                 if self:</font>
+<font color="red"> 559.                     self_get = self.get</font>
+<font color="red"> 560.                     for elem, count in iterable.iteritems():</font>
+<font color="red"> 561.                         self[elem] = self_get(elem, 0) + count</font>
+<font color="black"> 562.                 else:</font>
+<font color="red"> 563.                     super(Counter, self).update(iterable) # fast path when counter is empty</font>
+<font color="black"> 564.             else:</font>
+<font color="red"> 565.                 self_get = self.get</font>
+<font color="red"> 566.                 for elem in iterable:</font>
+<font color="red"> 567.                     self[elem] = self_get(elem, 0) + 1</font>
+<font color="red"> 568.         if kwds:</font>
+<font color="red"> 569.             self.update(kwds)</font>
+<font color="black"> 570. </font>
+<font color="red"> 571.     def subtract(*args, **kwds):</font>
+<font color="black"> 572.         '''Like dict.update() but subtracts counts instead of replacing them.</font>
+<font color="black"> 573.         Counts can be reduced below zero.  Both the inputs and outputs are</font>
+<font color="black"> 574.         allowed to contain zero and negative counts.</font>
+<font color="black"> 575. </font>
+<font color="black"> 576.         Source can be an iterable, a dictionary, or another Counter instance.</font>
+<font color="black"> 577. </font>
+<font color="black"> 578.         &gt;&gt;&gt; c = Counter('which')</font>
+<font color="black"> 579.         &gt;&gt;&gt; c.subtract('witch')             # subtract elements from another iterable</font>
+<font color="black"> 580.         &gt;&gt;&gt; c.subtract(Counter('watch'))    # subtract elements from another counter</font>
+<font color="black"> 581.         &gt;&gt;&gt; c['h']                          # 2 in which, minus 1 in witch, minus 1 in watch</font>
+<font color="black"> 582.         0</font>
+<font color="black"> 583.         &gt;&gt;&gt; c['w']                          # 1 in which, minus 1 in witch, minus 1 in watch</font>
+<font color="black"> 584.         -1</font>
+<font color="black"> 585. </font>
+<font color="black"> 586.         '''</font>
+<font color="red"> 587.         if not args:</font>
+<font color="red"> 588.             raise TypeError(&quot;descriptor 'subtract' of 'Counter' object &quot;</font>
+<font color="black"> 589.                             &quot;needs an argument&quot;)</font>
+<font color="red"> 590.         self = args[0]</font>
+<font color="red"> 591.         args = args[1:]</font>
+<font color="red"> 592.         if len(args) &gt; 1:</font>
+<font color="red"> 593.             raise TypeError('expected at most 1 arguments, got %d' % len(args))</font>
+<font color="red"> 594.         iterable = args[0] if args else None</font>
+<font color="red"> 595.         if iterable is not None:</font>
+<font color="red"> 596.             self_get = self.get</font>
+<font color="red"> 597.             if isinstance(iterable, Mapping):</font>
+<font color="red"> 598.                 for elem, count in iterable.items():</font>
+<font color="red"> 599.                     self[elem] = self_get(elem, 0) - count</font>
+<font color="black"> 600.             else:</font>
+<font color="red"> 601.                 for elem in iterable:</font>
+<font color="red"> 602.                     self[elem] = self_get(elem, 0) - 1</font>
+<font color="red"> 603.         if kwds:</font>
+<font color="red"> 604.             self.subtract(kwds)</font>
+<font color="black"> 605. </font>
+<font color="red"> 606.     def copy(self):</font>
+<font color="black"> 607.         'Return a shallow copy.'</font>
+<font color="red"> 608.         return self.__class__(self)</font>
+<font color="black"> 609. </font>
+<font color="red"> 610.     def __reduce__(self):</font>
+<font color="red"> 611.         return self.__class__, (dict(self),)</font>
+<font color="black"> 612. </font>
+<font color="red"> 613.     def __delitem__(self, elem):</font>
+<font color="black"> 614.         'Like dict.__delitem__() but does not raise KeyError for missing values.'</font>
+<font color="red"> 615.         if elem in self:</font>
+<font color="red"> 616.             super(Counter, self).__delitem__(elem)</font>
+<font color="black"> 617. </font>
+<font color="red"> 618.     def __repr__(self):</font>
+<font color="red"> 619.         if not self:</font>
+<font color="red"> 620.             return '%s()' % self.__class__.__name__</font>
+<font color="red"> 621.         items = ', '.join(map('%r: %r'.__mod__, self.most_common()))</font>
+<font color="red"> 622.         return '%s({%s})' % (self.__class__.__name__, items)</font>
+<font color="black"> 623. </font>
+<font color="black"> 624.     # Multiset-style mathematical operations discussed in:</font>
+<font color="black"> 625.     #       Knuth TAOCP Volume II section 4.6.3 exercise 19</font>
+<font color="black"> 626.     #       and at http://en.wikipedia.org/wiki/Multiset</font>
+<font color="black"> 627.     #</font>
+<font color="black"> 628.     # Outputs guaranteed to only include positive counts.</font>
+<font color="black"> 629.     #</font>
+<font color="black"> 630.     # To strip negative and zero counts, add-in an empty counter:</font>
+<font color="black"> 631.     #       c += Counter()</font>
+<font color="black"> 632. </font>
+<font color="red"> 633.     def __add__(self, other):</font>
+<font color="black"> 634.         '''Add counts from two counters.</font>
+<font color="black"> 635. </font>
+<font color="black"> 636.         &gt;&gt;&gt; Counter('abbb') + Counter('bcc')</font>
+<font color="black"> 637.         Counter({'b': 4, 'c': 2, 'a': 1})</font>
+<font color="black"> 638. </font>
+<font color="black"> 639.         '''</font>
+<font color="red"> 640.         if not isinstance(other, Counter):</font>
+<font color="red"> 641.             return NotImplemented</font>
+<font color="red"> 642.         result = Counter()</font>
+<font color="red"> 643.         for elem, count in self.items():</font>
+<font color="red"> 644.             newcount = count + other[elem]</font>
+<font color="red"> 645.             if newcount &gt; 0:</font>
+<font color="red"> 646.                 result[elem] = newcount</font>
+<font color="red"> 647.         for elem, count in other.items():</font>
+<font color="red"> 648.             if elem not in self and count &gt; 0:</font>
+<font color="red"> 649.                 result[elem] = count</font>
+<font color="red"> 650.         return result</font>
+<font color="black"> 651. </font>
+<font color="red"> 652.     def __sub__(self, other):</font>
+<font color="black"> 653.         ''' Subtract count, but keep only results with positive counts.</font>
+<font color="black"> 654. </font>
+<font color="black"> 655.         &gt;&gt;&gt; Counter('abbbc') - Counter('bccd')</font>
+<font color="black"> 656.         Counter({'b': 2, 'a': 1})</font>
+<font color="black"> 657. </font>
+<font color="black"> 658.         '''</font>
+<font color="red"> 659.         if not isinstance(other, Counter):</font>
+<font color="red"> 660.             return NotImplemented</font>
+<font color="red"> 661.         result = Counter()</font>
+<font color="red"> 662.         for elem, count in self.items():</font>
+<font color="red"> 663.             newcount = count - other[elem]</font>
+<font color="red"> 664.             if newcount &gt; 0:</font>
+<font color="red"> 665.                 result[elem] = newcount</font>
+<font color="red"> 666.         for elem, count in other.items():</font>
+<font color="red"> 667.             if elem not in self and count &lt; 0:</font>
+<font color="red"> 668.                 result[elem] = 0 - count</font>
+<font color="red"> 669.         return result</font>
+<font color="black"> 670. </font>
+<font color="red"> 671.     def __or__(self, other):</font>
+<font color="black"> 672.         '''Union is the maximum of value in either of the input counters.</font>
+<font color="black"> 673. </font>
+<font color="black"> 674.         &gt;&gt;&gt; Counter('abbb') | Counter('bcc')</font>
+<font color="black"> 675.         Counter({'b': 3, 'c': 2, 'a': 1})</font>
+<font color="black"> 676. </font>
+<font color="black"> 677.         '''</font>
+<font color="red"> 678.         if not isinstance(other, Counter):</font>
+<font color="red"> 679.             return NotImplemented</font>
+<font color="red"> 680.         result = Counter()</font>
+<font color="red"> 681.         for elem, count in self.items():</font>
+<font color="red"> 682.             other_count = other[elem]</font>
+<font color="red"> 683.             newcount = other_count if count &lt; other_count else count</font>
+<font color="red"> 684.             if newcount &gt; 0:</font>
+<font color="red"> 685.                 result[elem] = newcount</font>
+<font color="red"> 686.         for elem, count in other.items():</font>
+<font color="red"> 687.             if elem not in self and count &gt; 0:</font>
+<font color="red"> 688.                 result[elem] = count</font>
+<font color="red"> 689.         return result</font>
+<font color="black"> 690. </font>
+<font color="red"> 691.     def __and__(self, other):</font>
+<font color="black"> 692.         ''' Intersection is the minimum of corresponding counts.</font>
+<font color="black"> 693. </font>
+<font color="black"> 694.         &gt;&gt;&gt; Counter('abbb') &amp; Counter('bcc')</font>
+<font color="black"> 695.         Counter({'b': 1})</font>
+<font color="black"> 696. </font>
+<font color="black"> 697.         '''</font>
+<font color="red"> 698.         if not isinstance(other, Counter):</font>
+<font color="red"> 699.             return NotImplemented</font>
+<font color="red"> 700.         result = Counter()</font>
+<font color="red"> 701.         for elem, count in self.items():</font>
+<font color="red"> 702.             other_count = other[elem]</font>
+<font color="red"> 703.             newcount = count if count &lt; other_count else other_count</font>
+<font color="red"> 704.             if newcount &gt; 0:</font>
+<font color="red"> 705.                 result[elem] = newcount</font>
+<font color="red"> 706.         return result</font>
+<font color="black"> 707. </font>
+<font color="black"> 708. </font>
+<font color="red"> 709. if __name__ == '__main__':</font>
+<font color="black"> 710.     # verify that instances can be pickled</font>
+<font color="red"> 711.     from cPickle import loads, dumps</font>
+<font color="red"> 712.     Point = namedtuple('Point', 'x, y', True)</font>
+<font color="red"> 713.     p = Point(x=10, y=20)</font>
+<font color="red"> 714.     assert p == loads(dumps(p))</font>
+<font color="black"> 715. </font>
+<font color="black"> 716.     # test and demonstrate ability to override methods</font>
+<font color="red"> 717.     class Point(namedtuple('Point', 'x y')):</font>
+<font color="red"> 718.         __slots__ = ()</font>
+<font color="red"> 719.         @property</font>
+<font color="black"> 720.         def hypot(self):</font>
+<font color="red"> 721.             return (self.x ** 2 + self.y ** 2) ** 0.5</font>
+<font color="red"> 722.         def __str__(self):</font>
+<font color="red"> 723.             return 'Point: x=%6.3f  y=%6.3f  hypot=%6.3f' % (self.x, self.y, self.hypot)</font>
+<font color="black"> 724. </font>
+<font color="red"> 725.     for p in Point(3, 4), Point(14, 5/7.):</font>
+<font color="red"> 726.         print p</font>
+<font color="black"> 727. </font>
+<font color="red"> 728.     class Point(namedtuple('Point', 'x y')):</font>
+<font color="red"> 729.         'Point class with optimized _make() and _replace() without error-checking'</font>
+<font color="red"> 730.         __slots__ = ()</font>
+<font color="red"> 731.         _make = classmethod(tuple.__new__)</font>
+<font color="red"> 732.         def _replace(self, _map=map, **kwds):</font>
+<font color="red"> 733.             return self._make(_map(kwds.get, ('x', 'y'), self))</font>
+<font color="black"> 734. </font>
+<font color="red"> 735.     print Point(11, 22)._replace(x=100)</font>
+<font color="black"> 736. </font>
+<font color="red"> 737.     Point3D = namedtuple('Point3D', Point._fields + ('z',))</font>
+<font color="red"> 738.     print Point3D.__doc__</font>
+<font color="black"> 739. </font>
+<font color="red"> 740.     import doctest</font>
+<font color="red"> 741.     TestResults = namedtuple('TestResults', 'failed attempted')</font>
+<font color="red"> 742.     print TestResults(*doctest.testmod())</font>
+</pre>
+

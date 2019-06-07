@@ -1,0 +1,211 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/_weakrefset.py</b><br>
+
+
+file stats: <b>153 lines, 30 executed: 19.6% covered</b>
+<pre>
+<font color="black">   1. # Access WeakSet through the weakref module.</font>
+<font color="black">   2. # This code is separated-out because it is needed</font>
+<font color="black">   3. # by abc.py to load everything else at startup.</font>
+<font color="black">   4. </font>
+<font color="red">   5. from _weakref import ref</font>
+<font color="black">   6. </font>
+<font color="red">   7. __all__ = ['WeakSet']</font>
+<font color="black">   8. </font>
+<font color="black">   9. </font>
+<font color="red">  10. class _IterationGuard(object):</font>
+<font color="black">  11.     # This context manager registers itself in the current iterators of the</font>
+<font color="black">  12.     # weak container, such as to delay all removals until the context manager</font>
+<font color="black">  13.     # exits.</font>
+<font color="black">  14.     # This technique should be relatively thread-safe (since sets are).</font>
+<font color="black">  15. </font>
+<font color="red">  16.     def __init__(self, weakcontainer):</font>
+<font color="black">  17.         # Don't create cycles</font>
+<font color="green">  18.         self.weakcontainer = ref(weakcontainer)</font>
+<font color="black">  19. </font>
+<font color="red">  20.     def __enter__(self):</font>
+<font color="green">  21.         w = self.weakcontainer()</font>
+<font color="green">  22.         if w is not None:</font>
+<font color="green">  23.             w._iterating.add(self)</font>
+<font color="green">  24.         return self</font>
+<font color="black">  25. </font>
+<font color="red">  26.     def __exit__(self, e, t, b):</font>
+<font color="green">  27.         w = self.weakcontainer()</font>
+<font color="green">  28.         if w is not None:</font>
+<font color="green">  29.             s = w._iterating</font>
+<font color="green">  30.             s.remove(self)</font>
+<font color="green">  31.             if not s:</font>
+<font color="green">  32.                 w._commit_removals()</font>
+<font color="black">  33. </font>
+<font color="black">  34. </font>
+<font color="red">  35. class WeakSet(object):</font>
+<font color="red">  36.     def __init__(self, data=None):</font>
+<font color="green">  37.         self.data = set()</font>
+<font color="green">  38.         def _remove(item, selfref=ref(self)):</font>
+<font color="red">  39.             self = selfref()</font>
+<font color="red">  40.             if self is not None:</font>
+<font color="red">  41.                 if self._iterating:</font>
+<font color="red">  42.                     self._pending_removals.append(item)</font>
+<font color="black">  43.                 else:</font>
+<font color="red">  44.                     self.data.discard(item)</font>
+<font color="green">  45.         self._remove = _remove</font>
+<font color="black">  46.         # A list of keys to be removed</font>
+<font color="green">  47.         self._pending_removals = []</font>
+<font color="green">  48.         self._iterating = set()</font>
+<font color="green">  49.         if data is not None:</font>
+<font color="red">  50.             self.update(data)</font>
+<font color="black">  51. </font>
+<font color="red">  52.     def _commit_removals(self):</font>
+<font color="green">  53.         l = self._pending_removals</font>
+<font color="green">  54.         discard = self.data.discard</font>
+<font color="green">  55.         while l:</font>
+<font color="red">  56.             discard(l.pop())</font>
+<font color="black">  57. </font>
+<font color="red">  58.     def __iter__(self):</font>
+<font color="green">  59.         with _IterationGuard(self):</font>
+<font color="green">  60.             for itemref in self.data:</font>
+<font color="green">  61.                 item = itemref()</font>
+<font color="green">  62.                 if item is not None:</font>
+<font color="black">  63.                     # Caveat: the iterator will keep a strong reference to</font>
+<font color="black">  64.                     # `item` until it is resumed or closed.</font>
+<font color="green">  65.                     yield item</font>
+<font color="black">  66. </font>
+<font color="red">  67.     def __len__(self):</font>
+<font color="red">  68.         return len(self.data) - len(self._pending_removals)</font>
+<font color="black">  69. </font>
+<font color="red">  70.     def __contains__(self, item):</font>
+<font color="green">  71.         try:</font>
+<font color="green">  72.             wr = ref(item)</font>
+<font color="red">  73.         except TypeError:</font>
+<font color="red">  74.             return False</font>
+<font color="green">  75.         return wr in self.data</font>
+<font color="black">  76. </font>
+<font color="red">  77.     def __reduce__(self):</font>
+<font color="red">  78.         return (self.__class__, (list(self),),</font>
+<font color="red">  79.                 getattr(self, '__dict__', None))</font>
+<font color="black">  80. </font>
+<font color="red">  81.     __hash__ = None</font>
+<font color="black">  82. </font>
+<font color="red">  83.     def add(self, item):</font>
+<font color="green">  84.         if self._pending_removals:</font>
+<font color="red">  85.             self._commit_removals()</font>
+<font color="green">  86.         self.data.add(ref(item, self._remove))</font>
+<font color="black">  87. </font>
+<font color="red">  88.     def clear(self):</font>
+<font color="red">  89.         if self._pending_removals:</font>
+<font color="red">  90.             self._commit_removals()</font>
+<font color="red">  91.         self.data.clear()</font>
+<font color="black">  92. </font>
+<font color="red">  93.     def copy(self):</font>
+<font color="red">  94.         return self.__class__(self)</font>
+<font color="black">  95. </font>
+<font color="red">  96.     def pop(self):</font>
+<font color="red">  97.         if self._pending_removals:</font>
+<font color="red">  98.             self._commit_removals()</font>
+<font color="red">  99.         while True:</font>
+<font color="red"> 100.             try:</font>
+<font color="red"> 101.                 itemref = self.data.pop()</font>
+<font color="red"> 102.             except KeyError:</font>
+<font color="red"> 103.                 raise KeyError('pop from empty WeakSet')</font>
+<font color="red"> 104.             item = itemref()</font>
+<font color="red"> 105.             if item is not None:</font>
+<font color="red"> 106.                 return item</font>
+<font color="black"> 107. </font>
+<font color="red"> 108.     def remove(self, item):</font>
+<font color="red"> 109.         if self._pending_removals:</font>
+<font color="red"> 110.             self._commit_removals()</font>
+<font color="red"> 111.         self.data.remove(ref(item))</font>
+<font color="black"> 112. </font>
+<font color="red"> 113.     def discard(self, item):</font>
+<font color="red"> 114.         if self._pending_removals:</font>
+<font color="red"> 115.             self._commit_removals()</font>
+<font color="red"> 116.         self.data.discard(ref(item))</font>
+<font color="black"> 117. </font>
+<font color="red"> 118.     def update(self, other):</font>
+<font color="red"> 119.         if self._pending_removals:</font>
+<font color="red"> 120.             self._commit_removals()</font>
+<font color="red"> 121.         for element in other:</font>
+<font color="red"> 122.             self.add(element)</font>
+<font color="black"> 123. </font>
+<font color="red"> 124.     def __ior__(self, other):</font>
+<font color="red"> 125.         self.update(other)</font>
+<font color="red"> 126.         return self</font>
+<font color="black"> 127. </font>
+<font color="red"> 128.     def difference(self, other):</font>
+<font color="red"> 129.         newset = self.copy()</font>
+<font color="red"> 130.         newset.difference_update(other)</font>
+<font color="red"> 131.         return newset</font>
+<font color="red"> 132.     __sub__ = difference</font>
+<font color="black"> 133. </font>
+<font color="red"> 134.     def difference_update(self, other):</font>
+<font color="red"> 135.         self.__isub__(other)</font>
+<font color="red"> 136.     def __isub__(self, other):</font>
+<font color="red"> 137.         if self._pending_removals:</font>
+<font color="red"> 138.             self._commit_removals()</font>
+<font color="red"> 139.         if self is other:</font>
+<font color="red"> 140.             self.data.clear()</font>
+<font color="black"> 141.         else:</font>
+<font color="red"> 142.             self.data.difference_update(ref(item) for item in other)</font>
+<font color="red"> 143.         return self</font>
+<font color="black"> 144. </font>
+<font color="red"> 145.     def intersection(self, other):</font>
+<font color="red"> 146.         return self.__class__(item for item in other if item in self)</font>
+<font color="red"> 147.     __and__ = intersection</font>
+<font color="black"> 148. </font>
+<font color="red"> 149.     def intersection_update(self, other):</font>
+<font color="red"> 150.         self.__iand__(other)</font>
+<font color="red"> 151.     def __iand__(self, other):</font>
+<font color="red"> 152.         if self._pending_removals:</font>
+<font color="red"> 153.             self._commit_removals()</font>
+<font color="red"> 154.         self.data.intersection_update(ref(item) for item in other)</font>
+<font color="red"> 155.         return self</font>
+<font color="black"> 156. </font>
+<font color="red"> 157.     def issubset(self, other):</font>
+<font color="red"> 158.         return self.data.issubset(ref(item) for item in other)</font>
+<font color="red"> 159.     __le__ = issubset</font>
+<font color="black"> 160. </font>
+<font color="red"> 161.     def __lt__(self, other):</font>
+<font color="red"> 162.         return self.data &lt; set(ref(item) for item in other)</font>
+<font color="black"> 163. </font>
+<font color="red"> 164.     def issuperset(self, other):</font>
+<font color="red"> 165.         return self.data.issuperset(ref(item) for item in other)</font>
+<font color="red"> 166.     __ge__ = issuperset</font>
+<font color="black"> 167. </font>
+<font color="red"> 168.     def __gt__(self, other):</font>
+<font color="red"> 169.         return self.data &gt; set(ref(item) for item in other)</font>
+<font color="black"> 170. </font>
+<font color="red"> 171.     def __eq__(self, other):</font>
+<font color="red"> 172.         if not isinstance(other, self.__class__):</font>
+<font color="red"> 173.             return NotImplemented</font>
+<font color="red"> 174.         return self.data == set(ref(item) for item in other)</font>
+<font color="black"> 175. </font>
+<font color="red"> 176.     def __ne__(self, other):</font>
+<font color="red"> 177.         opposite = self.__eq__(other)</font>
+<font color="red"> 178.         if opposite is NotImplemented:</font>
+<font color="red"> 179.             return NotImplemented</font>
+<font color="red"> 180.         return not opposite</font>
+<font color="black"> 181. </font>
+<font color="red"> 182.     def symmetric_difference(self, other):</font>
+<font color="red"> 183.         newset = self.copy()</font>
+<font color="red"> 184.         newset.symmetric_difference_update(other)</font>
+<font color="red"> 185.         return newset</font>
+<font color="red"> 186.     __xor__ = symmetric_difference</font>
+<font color="black"> 187. </font>
+<font color="red"> 188.     def symmetric_difference_update(self, other):</font>
+<font color="red"> 189.         self.__ixor__(other)</font>
+<font color="red"> 190.     def __ixor__(self, other):</font>
+<font color="red"> 191.         if self._pending_removals:</font>
+<font color="red"> 192.             self._commit_removals()</font>
+<font color="red"> 193.         if self is other:</font>
+<font color="red"> 194.             self.data.clear()</font>
+<font color="black"> 195.         else:</font>
+<font color="red"> 196.             self.data.symmetric_difference_update(ref(item, self._remove) for item in other)</font>
+<font color="red"> 197.         return self</font>
+<font color="black"> 198. </font>
+<font color="red"> 199.     def union(self, other):</font>
+<font color="red"> 200.         return self.__class__(e for s in (self, other) for e in s)</font>
+<font color="red"> 201.     __or__ = union</font>
+<font color="black"> 202. </font>
+<font color="red"> 203.     def isdisjoint(self, other):</font>
+<font color="red"> 204.         return len(self.intersection(other)) == 0</font>
+</pre>
+

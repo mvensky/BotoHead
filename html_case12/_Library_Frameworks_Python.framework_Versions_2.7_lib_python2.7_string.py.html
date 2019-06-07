@@ -1,0 +1,663 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/string.py</b><br>
+
+
+file stats: <b>242 lines, 2 executed: 0.8% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;A collection of string operations (most are no longer used).</font>
+<font color="black">   2. </font>
+<font color="black">   3. Warning: most of the code you see here isn't normally used nowadays.</font>
+<font color="black">   4. Beginning with Python 1.6, many of these functions are implemented as</font>
+<font color="black">   5. methods on the standard string object. They used to be implemented by</font>
+<font color="black">   6. a built-in module called strop, but strop is now obsolete itself.</font>
+<font color="black">   7. </font>
+<font color="black">   8. Public module variables:</font>
+<font color="black">   9. </font>
+<font color="black">  10. whitespace -- a string containing all characters considered whitespace</font>
+<font color="black">  11. lowercase -- a string containing all characters considered lowercase letters</font>
+<font color="black">  12. uppercase -- a string containing all characters considered uppercase letters</font>
+<font color="black">  13. letters -- a string containing all characters considered letters</font>
+<font color="black">  14. digits -- a string containing all characters considered decimal digits</font>
+<font color="black">  15. hexdigits -- a string containing all characters considered hexadecimal digits</font>
+<font color="black">  16. octdigits -- a string containing all characters considered octal digits</font>
+<font color="black">  17. punctuation -- a string containing all characters considered punctuation</font>
+<font color="black">  18. printable -- a string containing all characters considered printable</font>
+<font color="black">  19. </font>
+<font color="red">  20. &quot;&quot;&quot;</font>
+<font color="black">  21. </font>
+<font color="black">  22. # Some strings for ctype-style character classification</font>
+<font color="red">  23. whitespace = ' \t\n\r\v\f'</font>
+<font color="red">  24. lowercase = 'abcdefghijklmnopqrstuvwxyz'</font>
+<font color="red">  25. uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'</font>
+<font color="red">  26. letters = lowercase + uppercase</font>
+<font color="red">  27. ascii_lowercase = lowercase</font>
+<font color="red">  28. ascii_uppercase = uppercase</font>
+<font color="red">  29. ascii_letters = ascii_lowercase + ascii_uppercase</font>
+<font color="red">  30. digits = '0123456789'</font>
+<font color="red">  31. hexdigits = digits + 'abcdef' + 'ABCDEF'</font>
+<font color="red">  32. octdigits = '01234567'</font>
+<font color="red">  33. punctuation = &quot;&quot;&quot;!&quot;#$%&amp;'()*+,-./:;&lt;=&gt;?@[\]^_`{|}~&quot;&quot;&quot;</font>
+<font color="red">  34. printable = digits + letters + punctuation + whitespace</font>
+<font color="black">  35. </font>
+<font color="black">  36. # Case conversion helpers</font>
+<font color="black">  37. # Use str to convert Unicode literal in case of -U</font>
+<font color="red">  38. l = map(chr, xrange(256))</font>
+<font color="red">  39. _idmap = str('').join(l)</font>
+<font color="red">  40. del l</font>
+<font color="black">  41. </font>
+<font color="black">  42. # Functions which aren't available as string methods.</font>
+<font color="black">  43. </font>
+<font color="black">  44. # Capitalize the words in a string, e.g. &quot; aBc  dEf &quot; -&gt; &quot;Abc Def&quot;.</font>
+<font color="red">  45. def capwords(s, sep=None):</font>
+<font color="black">  46.     &quot;&quot;&quot;capwords(s [,sep]) -&gt; string</font>
+<font color="black">  47. </font>
+<font color="black">  48.     Split the argument into words using split, capitalize each</font>
+<font color="black">  49.     word using capitalize, and join the capitalized words using</font>
+<font color="black">  50.     join.  If the optional second argument sep is absent or None,</font>
+<font color="black">  51.     runs of whitespace characters are replaced by a single space</font>
+<font color="black">  52.     and leading and trailing whitespace are removed, otherwise</font>
+<font color="black">  53.     sep is used to split and join the words.</font>
+<font color="black">  54. </font>
+<font color="black">  55.     &quot;&quot;&quot;</font>
+<font color="red">  56.     return (sep or ' ').join(x.capitalize() for x in s.split(sep))</font>
+<font color="black">  57. </font>
+<font color="black">  58. </font>
+<font color="black">  59. # Construct a translation string</font>
+<font color="red">  60. _idmapL = None</font>
+<font color="red">  61. def maketrans(fromstr, tostr):</font>
+<font color="black">  62.     &quot;&quot;&quot;maketrans(frm, to) -&gt; string</font>
+<font color="black">  63. </font>
+<font color="black">  64.     Return a translation table (a string of 256 bytes long)</font>
+<font color="black">  65.     suitable for use in string.translate.  The strings frm and to</font>
+<font color="black">  66.     must be of the same length.</font>
+<font color="black">  67. </font>
+<font color="black">  68.     &quot;&quot;&quot;</font>
+<font color="red">  69.     if len(fromstr) != len(tostr):</font>
+<font color="red">  70.         raise ValueError, &quot;maketrans arguments must have same length&quot;</font>
+<font color="black">  71.     global _idmapL</font>
+<font color="red">  72.     if not _idmapL:</font>
+<font color="red">  73.         _idmapL = list(_idmap)</font>
+<font color="red">  74.     L = _idmapL[:]</font>
+<font color="red">  75.     fromstr = map(ord, fromstr)</font>
+<font color="red">  76.     for i in range(len(fromstr)):</font>
+<font color="red">  77.         L[fromstr[i]] = tostr[i]</font>
+<font color="red">  78.     return ''.join(L)</font>
+<font color="black">  79. </font>
+<font color="black">  80. </font>
+<font color="black">  81. </font>
+<font color="black">  82. ####################################################################</font>
+<font color="red">  83. import re as _re</font>
+<font color="black">  84. </font>
+<font color="red">  85. class _multimap:</font>
+<font color="black">  86.     &quot;&quot;&quot;Helper class for combining multiple mappings.</font>
+<font color="black">  87. </font>
+<font color="black">  88.     Used by .{safe_,}substitute() to combine the mapping and keyword</font>
+<font color="black">  89.     arguments.</font>
+<font color="red">  90.     &quot;&quot;&quot;</font>
+<font color="red">  91.     def __init__(self, primary, secondary):</font>
+<font color="red">  92.         self._primary = primary</font>
+<font color="red">  93.         self._secondary = secondary</font>
+<font color="black">  94. </font>
+<font color="red">  95.     def __getitem__(self, key):</font>
+<font color="red">  96.         try:</font>
+<font color="red">  97.             return self._primary[key]</font>
+<font color="red">  98.         except KeyError:</font>
+<font color="red">  99.             return self._secondary[key]</font>
+<font color="black"> 100. </font>
+<font color="black"> 101. </font>
+<font color="red"> 102. class _TemplateMetaclass(type):</font>
+<font color="black"> 103.     pattern = r&quot;&quot;&quot;</font>
+<font color="black"> 104.     %(delim)s(?:</font>
+<font color="black"> 105.       (?P&lt;escaped&gt;%(delim)s) |   # Escape sequence of two delimiters</font>
+<font color="black"> 106.       (?P&lt;named&gt;%(id)s)      |   # delimiter and a Python identifier</font>
+<font color="black"> 107.       {(?P&lt;braced&gt;%(id)s)}   |   # delimiter and a braced identifier</font>
+<font color="black"> 108.       (?P&lt;invalid&gt;)              # Other ill-formed delimiter exprs</font>
+<font color="black"> 109.     )</font>
+<font color="red"> 110.     &quot;&quot;&quot;</font>
+<font color="black"> 111. </font>
+<font color="red"> 112.     def __init__(cls, name, bases, dct):</font>
+<font color="red"> 113.         super(_TemplateMetaclass, cls).__init__(name, bases, dct)</font>
+<font color="red"> 114.         if 'pattern' in dct:</font>
+<font color="red"> 115.             pattern = cls.pattern</font>
+<font color="black"> 116.         else:</font>
+<font color="red"> 117.             pattern = _TemplateMetaclass.pattern % {</font>
+<font color="red"> 118.                 'delim' : _re.escape(cls.delimiter),</font>
+<font color="red"> 119.                 'id'    : cls.idpattern,</font>
+<font color="black"> 120.                 }</font>
+<font color="red"> 121.         cls.pattern = _re.compile(pattern, _re.IGNORECASE | _re.VERBOSE)</font>
+<font color="black"> 122. </font>
+<font color="black"> 123. </font>
+<font color="red"> 124. class Template:</font>
+<font color="red"> 125.     &quot;&quot;&quot;A string class for supporting $-substitutions.&quot;&quot;&quot;</font>
+<font color="red"> 126.     __metaclass__ = _TemplateMetaclass</font>
+<font color="black"> 127. </font>
+<font color="red"> 128.     delimiter = '$'</font>
+<font color="red"> 129.     idpattern = r'[_a-z][_a-z0-9]*'</font>
+<font color="black"> 130. </font>
+<font color="red"> 131.     def __init__(self, template):</font>
+<font color="red"> 132.         self.template = template</font>
+<font color="black"> 133. </font>
+<font color="black"> 134.     # Search for $$, $identifier, ${identifier}, and any bare $'s</font>
+<font color="black"> 135. </font>
+<font color="red"> 136.     def _invalid(self, mo):</font>
+<font color="red"> 137.         i = mo.start('invalid')</font>
+<font color="red"> 138.         lines = self.template[:i].splitlines(True)</font>
+<font color="red"> 139.         if not lines:</font>
+<font color="red"> 140.             colno = 1</font>
+<font color="red"> 141.             lineno = 1</font>
+<font color="black"> 142.         else:</font>
+<font color="red"> 143.             colno = i - len(''.join(lines[:-1]))</font>
+<font color="red"> 144.             lineno = len(lines)</font>
+<font color="red"> 145.         raise ValueError('Invalid placeholder in string: line %d, col %d' %</font>
+<font color="red"> 146.                          (lineno, colno))</font>
+<font color="black"> 147. </font>
+<font color="red"> 148.     def substitute(*args, **kws):</font>
+<font color="red"> 149.         if not args:</font>
+<font color="red"> 150.             raise TypeError(&quot;descriptor 'substitute' of 'Template' object &quot;</font>
+<font color="black"> 151.                             &quot;needs an argument&quot;)</font>
+<font color="red"> 152.         self, args = args[0], args[1:]  # allow the &quot;self&quot; keyword be passed</font>
+<font color="red"> 153.         if len(args) &gt; 1:</font>
+<font color="red"> 154.             raise TypeError('Too many positional arguments')</font>
+<font color="red"> 155.         if not args:</font>
+<font color="red"> 156.             mapping = kws</font>
+<font color="red"> 157.         elif kws:</font>
+<font color="red"> 158.             mapping = _multimap(kws, args[0])</font>
+<font color="black"> 159.         else:</font>
+<font color="red"> 160.             mapping = args[0]</font>
+<font color="black"> 161.         # Helper function for .sub()</font>
+<font color="red"> 162.         def convert(mo):</font>
+<font color="black"> 163.             # Check the most common path first.</font>
+<font color="red"> 164.             named = mo.group('named') or mo.group('braced')</font>
+<font color="red"> 165.             if named is not None:</font>
+<font color="red"> 166.                 val = mapping[named]</font>
+<font color="black"> 167.                 # We use this idiom instead of str() because the latter will</font>
+<font color="black"> 168.                 # fail if val is a Unicode containing non-ASCII characters.</font>
+<font color="red"> 169.                 return '%s' % (val,)</font>
+<font color="red"> 170.             if mo.group('escaped') is not None:</font>
+<font color="red"> 171.                 return self.delimiter</font>
+<font color="red"> 172.             if mo.group('invalid') is not None:</font>
+<font color="red"> 173.                 self._invalid(mo)</font>
+<font color="red"> 174.             raise ValueError('Unrecognized named group in pattern',</font>
+<font color="red"> 175.                              self.pattern)</font>
+<font color="red"> 176.         return self.pattern.sub(convert, self.template)</font>
+<font color="black"> 177. </font>
+<font color="red"> 178.     def safe_substitute(*args, **kws):</font>
+<font color="red"> 179.         if not args:</font>
+<font color="red"> 180.             raise TypeError(&quot;descriptor 'safe_substitute' of 'Template' object &quot;</font>
+<font color="black"> 181.                             &quot;needs an argument&quot;)</font>
+<font color="red"> 182.         self, args = args[0], args[1:]  # allow the &quot;self&quot; keyword be passed</font>
+<font color="red"> 183.         if len(args) &gt; 1:</font>
+<font color="red"> 184.             raise TypeError('Too many positional arguments')</font>
+<font color="red"> 185.         if not args:</font>
+<font color="red"> 186.             mapping = kws</font>
+<font color="red"> 187.         elif kws:</font>
+<font color="red"> 188.             mapping = _multimap(kws, args[0])</font>
+<font color="black"> 189.         else:</font>
+<font color="red"> 190.             mapping = args[0]</font>
+<font color="black"> 191.         # Helper function for .sub()</font>
+<font color="red"> 192.         def convert(mo):</font>
+<font color="red"> 193.             named = mo.group('named') or mo.group('braced')</font>
+<font color="red"> 194.             if named is not None:</font>
+<font color="red"> 195.                 try:</font>
+<font color="black"> 196.                     # We use this idiom instead of str() because the latter</font>
+<font color="black"> 197.                     # will fail if val is a Unicode containing non-ASCII</font>
+<font color="red"> 198.                     return '%s' % (mapping[named],)</font>
+<font color="red"> 199.                 except KeyError:</font>
+<font color="red"> 200.                     return mo.group()</font>
+<font color="red"> 201.             if mo.group('escaped') is not None:</font>
+<font color="red"> 202.                 return self.delimiter</font>
+<font color="red"> 203.             if mo.group('invalid') is not None:</font>
+<font color="red"> 204.                 return mo.group()</font>
+<font color="red"> 205.             raise ValueError('Unrecognized named group in pattern',</font>
+<font color="red"> 206.                              self.pattern)</font>
+<font color="red"> 207.         return self.pattern.sub(convert, self.template)</font>
+<font color="black"> 208. </font>
+<font color="black"> 209. </font>
+<font color="black"> 210. </font>
+<font color="black"> 211. ####################################################################</font>
+<font color="black"> 212. # NOTE: Everything below here is deprecated.  Use string methods instead.</font>
+<font color="black"> 213. # This stuff will go away in Python 3.0.</font>
+<font color="black"> 214. </font>
+<font color="black"> 215. # Backward compatible names for exceptions</font>
+<font color="red"> 216. index_error = ValueError</font>
+<font color="red"> 217. atoi_error = ValueError</font>
+<font color="red"> 218. atof_error = ValueError</font>
+<font color="red"> 219. atol_error = ValueError</font>
+<font color="black"> 220. </font>
+<font color="black"> 221. # convert UPPER CASE letters to lower case</font>
+<font color="red"> 222. def lower(s):</font>
+<font color="black"> 223.     &quot;&quot;&quot;lower(s) -&gt; string</font>
+<font color="black"> 224. </font>
+<font color="black"> 225.     Return a copy of the string s converted to lowercase.</font>
+<font color="black"> 226. </font>
+<font color="black"> 227.     &quot;&quot;&quot;</font>
+<font color="red"> 228.     return s.lower()</font>
+<font color="black"> 229. </font>
+<font color="black"> 230. # Convert lower case letters to UPPER CASE</font>
+<font color="red"> 231. def upper(s):</font>
+<font color="black"> 232.     &quot;&quot;&quot;upper(s) -&gt; string</font>
+<font color="black"> 233. </font>
+<font color="black"> 234.     Return a copy of the string s converted to uppercase.</font>
+<font color="black"> 235. </font>
+<font color="black"> 236.     &quot;&quot;&quot;</font>
+<font color="red"> 237.     return s.upper()</font>
+<font color="black"> 238. </font>
+<font color="black"> 239. # Swap lower case letters and UPPER CASE</font>
+<font color="red"> 240. def swapcase(s):</font>
+<font color="black"> 241.     &quot;&quot;&quot;swapcase(s) -&gt; string</font>
+<font color="black"> 242. </font>
+<font color="black"> 243.     Return a copy of the string s with upper case characters</font>
+<font color="black"> 244.     converted to lowercase and vice versa.</font>
+<font color="black"> 245. </font>
+<font color="black"> 246.     &quot;&quot;&quot;</font>
+<font color="red"> 247.     return s.swapcase()</font>
+<font color="black"> 248. </font>
+<font color="black"> 249. # Strip leading and trailing tabs and spaces</font>
+<font color="red"> 250. def strip(s, chars=None):</font>
+<font color="black"> 251.     &quot;&quot;&quot;strip(s [,chars]) -&gt; string</font>
+<font color="black"> 252. </font>
+<font color="black"> 253.     Return a copy of the string s with leading and trailing</font>
+<font color="black"> 254.     whitespace removed.</font>
+<font color="black"> 255.     If chars is given and not None, remove characters in chars instead.</font>
+<font color="black"> 256.     If chars is unicode, S will be converted to unicode before stripping.</font>
+<font color="black"> 257. </font>
+<font color="black"> 258.     &quot;&quot;&quot;</font>
+<font color="green"> 259.     return s.strip(chars)</font>
+<font color="black"> 260. </font>
+<font color="black"> 261. # Strip leading tabs and spaces</font>
+<font color="red"> 262. def lstrip(s, chars=None):</font>
+<font color="black"> 263.     &quot;&quot;&quot;lstrip(s [,chars]) -&gt; string</font>
+<font color="black"> 264. </font>
+<font color="black"> 265.     Return a copy of the string s with leading whitespace removed.</font>
+<font color="black"> 266.     If chars is given and not None, remove characters in chars instead.</font>
+<font color="black"> 267. </font>
+<font color="black"> 268.     &quot;&quot;&quot;</font>
+<font color="red"> 269.     return s.lstrip(chars)</font>
+<font color="black"> 270. </font>
+<font color="black"> 271. # Strip trailing tabs and spaces</font>
+<font color="red"> 272. def rstrip(s, chars=None):</font>
+<font color="black"> 273.     &quot;&quot;&quot;rstrip(s [,chars]) -&gt; string</font>
+<font color="black"> 274. </font>
+<font color="black"> 275.     Return a copy of the string s with trailing whitespace removed.</font>
+<font color="black"> 276.     If chars is given and not None, remove characters in chars instead.</font>
+<font color="black"> 277. </font>
+<font color="black"> 278.     &quot;&quot;&quot;</font>
+<font color="red"> 279.     return s.rstrip(chars)</font>
+<font color="black"> 280. </font>
+<font color="black"> 281. </font>
+<font color="black"> 282. # Split a string into a list of space/tab-separated words</font>
+<font color="red"> 283. def split(s, sep=None, maxsplit=-1):</font>
+<font color="black"> 284.     &quot;&quot;&quot;split(s [,sep [,maxsplit]]) -&gt; list of strings</font>
+<font color="black"> 285. </font>
+<font color="black"> 286.     Return a list of the words in the string s, using sep as the</font>
+<font color="black"> 287.     delimiter string.  If maxsplit is given, splits at no more than</font>
+<font color="black"> 288.     maxsplit places (resulting in at most maxsplit+1 words).  If sep</font>
+<font color="black"> 289.     is not specified or is None, any whitespace string is a separator.</font>
+<font color="black"> 290. </font>
+<font color="black"> 291.     (split and splitfields are synonymous)</font>
+<font color="black"> 292. </font>
+<font color="black"> 293.     &quot;&quot;&quot;</font>
+<font color="green"> 294.     return s.split(sep, maxsplit)</font>
+<font color="red"> 295. splitfields = split</font>
+<font color="black"> 296. </font>
+<font color="black"> 297. # Split a string into a list of space/tab-separated words</font>
+<font color="red"> 298. def rsplit(s, sep=None, maxsplit=-1):</font>
+<font color="black"> 299.     &quot;&quot;&quot;rsplit(s [,sep [,maxsplit]]) -&gt; list of strings</font>
+<font color="black"> 300. </font>
+<font color="black"> 301.     Return a list of the words in the string s, using sep as the</font>
+<font color="black"> 302.     delimiter string, starting at the end of the string and working</font>
+<font color="black"> 303.     to the front.  If maxsplit is given, at most maxsplit splits are</font>
+<font color="black"> 304.     done. If sep is not specified or is None, any whitespace string</font>
+<font color="black"> 305.     is a separator.</font>
+<font color="black"> 306.     &quot;&quot;&quot;</font>
+<font color="red"> 307.     return s.rsplit(sep, maxsplit)</font>
+<font color="black"> 308. </font>
+<font color="black"> 309. # Join fields with optional separator</font>
+<font color="red"> 310. def join(words, sep = ' '):</font>
+<font color="black"> 311.     &quot;&quot;&quot;join(list [,sep]) -&gt; string</font>
+<font color="black"> 312. </font>
+<font color="black"> 313.     Return a string composed of the words in list, with</font>
+<font color="black"> 314.     intervening occurrences of sep.  The default separator is a</font>
+<font color="black"> 315.     single space.</font>
+<font color="black"> 316. </font>
+<font color="black"> 317.     (joinfields and join are synonymous)</font>
+<font color="black"> 318. </font>
+<font color="black"> 319.     &quot;&quot;&quot;</font>
+<font color="red"> 320.     return sep.join(words)</font>
+<font color="red"> 321. joinfields = join</font>
+<font color="black"> 322. </font>
+<font color="black"> 323. # Find substring, raise exception if not found</font>
+<font color="red"> 324. def index(s, *args):</font>
+<font color="black"> 325.     &quot;&quot;&quot;index(s, sub [,start [,end]]) -&gt; int</font>
+<font color="black"> 326. </font>
+<font color="black"> 327.     Like find but raises ValueError when the substring is not found.</font>
+<font color="black"> 328. </font>
+<font color="black"> 329.     &quot;&quot;&quot;</font>
+<font color="red"> 330.     return s.index(*args)</font>
+<font color="black"> 331. </font>
+<font color="black"> 332. # Find last substring, raise exception if not found</font>
+<font color="red"> 333. def rindex(s, *args):</font>
+<font color="black"> 334.     &quot;&quot;&quot;rindex(s, sub [,start [,end]]) -&gt; int</font>
+<font color="black"> 335. </font>
+<font color="black"> 336.     Like rfind but raises ValueError when the substring is not found.</font>
+<font color="black"> 337. </font>
+<font color="black"> 338.     &quot;&quot;&quot;</font>
+<font color="red"> 339.     return s.rindex(*args)</font>
+<font color="black"> 340. </font>
+<font color="black"> 341. # Count non-overlapping occurrences of substring</font>
+<font color="red"> 342. def count(s, *args):</font>
+<font color="black"> 343.     &quot;&quot;&quot;count(s, sub[, start[,end]]) -&gt; int</font>
+<font color="black"> 344. </font>
+<font color="black"> 345.     Return the number of occurrences of substring sub in string</font>
+<font color="black"> 346.     s[start:end].  Optional arguments start and end are</font>
+<font color="black"> 347.     interpreted as in slice notation.</font>
+<font color="black"> 348. </font>
+<font color="black"> 349.     &quot;&quot;&quot;</font>
+<font color="red"> 350.     return s.count(*args)</font>
+<font color="black"> 351. </font>
+<font color="black"> 352. # Find substring, return -1 if not found</font>
+<font color="red"> 353. def find(s, *args):</font>
+<font color="black"> 354.     &quot;&quot;&quot;find(s, sub [,start [,end]]) -&gt; in</font>
+<font color="black"> 355. </font>
+<font color="black"> 356.     Return the lowest index in s where substring sub is found,</font>
+<font color="black"> 357.     such that sub is contained within s[start,end].  Optional</font>
+<font color="black"> 358.     arguments start and end are interpreted as in slice notation.</font>
+<font color="black"> 359. </font>
+<font color="black"> 360.     Return -1 on failure.</font>
+<font color="black"> 361. </font>
+<font color="black"> 362.     &quot;&quot;&quot;</font>
+<font color="red"> 363.     return s.find(*args)</font>
+<font color="black"> 364. </font>
+<font color="black"> 365. # Find last substring, return -1 if not found</font>
+<font color="red"> 366. def rfind(s, *args):</font>
+<font color="black"> 367.     &quot;&quot;&quot;rfind(s, sub [,start [,end]]) -&gt; int</font>
+<font color="black"> 368. </font>
+<font color="black"> 369.     Return the highest index in s where substring sub is found,</font>
+<font color="black"> 370.     such that sub is contained within s[start,end].  Optional</font>
+<font color="black"> 371.     arguments start and end are interpreted as in slice notation.</font>
+<font color="black"> 372. </font>
+<font color="black"> 373.     Return -1 on failure.</font>
+<font color="black"> 374. </font>
+<font color="black"> 375.     &quot;&quot;&quot;</font>
+<font color="red"> 376.     return s.rfind(*args)</font>
+<font color="black"> 377. </font>
+<font color="black"> 378. # for a bit of speed</font>
+<font color="red"> 379. _float = float</font>
+<font color="red"> 380. _int = int</font>
+<font color="red"> 381. _long = long</font>
+<font color="black"> 382. </font>
+<font color="black"> 383. # Convert string to float</font>
+<font color="red"> 384. def atof(s):</font>
+<font color="black"> 385.     &quot;&quot;&quot;atof(s) -&gt; float</font>
+<font color="black"> 386. </font>
+<font color="black"> 387.     Return the floating point number represented by the string s.</font>
+<font color="black"> 388. </font>
+<font color="black"> 389.     &quot;&quot;&quot;</font>
+<font color="red"> 390.     return _float(s)</font>
+<font color="black"> 391. </font>
+<font color="black"> 392. </font>
+<font color="black"> 393. # Convert string to integer</font>
+<font color="red"> 394. def atoi(s , base=10):</font>
+<font color="black"> 395.     &quot;&quot;&quot;atoi(s [,base]) -&gt; int</font>
+<font color="black"> 396. </font>
+<font color="black"> 397.     Return the integer represented by the string s in the given</font>
+<font color="black"> 398.     base, which defaults to 10.  The string s must consist of one</font>
+<font color="black"> 399.     or more digits, possibly preceded by a sign.  If base is 0, it</font>
+<font color="black"> 400.     is chosen from the leading characters of s, 0 for octal, 0x or</font>
+<font color="black"> 401.     0X for hexadecimal.  If base is 16, a preceding 0x or 0X is</font>
+<font color="black"> 402.     accepted.</font>
+<font color="black"> 403. </font>
+<font color="black"> 404.     &quot;&quot;&quot;</font>
+<font color="red"> 405.     return _int(s, base)</font>
+<font color="black"> 406. </font>
+<font color="black"> 407. </font>
+<font color="black"> 408. # Convert string to long integer</font>
+<font color="red"> 409. def atol(s, base=10):</font>
+<font color="black"> 410.     &quot;&quot;&quot;atol(s [,base]) -&gt; long</font>
+<font color="black"> 411. </font>
+<font color="black"> 412.     Return the long integer represented by the string s in the</font>
+<font color="black"> 413.     given base, which defaults to 10.  The string s must consist</font>
+<font color="black"> 414.     of one or more digits, possibly preceded by a sign.  If base</font>
+<font color="black"> 415.     is 0, it is chosen from the leading characters of s, 0 for</font>
+<font color="black"> 416.     octal, 0x or 0X for hexadecimal.  If base is 16, a preceding</font>
+<font color="black"> 417.     0x or 0X is accepted.  A trailing L or l is not accepted,</font>
+<font color="black"> 418.     unless base is 0.</font>
+<font color="black"> 419. </font>
+<font color="black"> 420.     &quot;&quot;&quot;</font>
+<font color="red"> 421.     return _long(s, base)</font>
+<font color="black"> 422. </font>
+<font color="black"> 423. </font>
+<font color="black"> 424. # Left-justify a string</font>
+<font color="red"> 425. def ljust(s, width, *args):</font>
+<font color="black"> 426.     &quot;&quot;&quot;ljust(s, width[, fillchar]) -&gt; string</font>
+<font color="black"> 427. </font>
+<font color="black"> 428.     Return a left-justified version of s, in a field of the</font>
+<font color="black"> 429.     specified width, padded with spaces as needed.  The string is</font>
+<font color="black"> 430.     never truncated.  If specified the fillchar is used instead of spaces.</font>
+<font color="black"> 431. </font>
+<font color="black"> 432.     &quot;&quot;&quot;</font>
+<font color="red"> 433.     return s.ljust(width, *args)</font>
+<font color="black"> 434. </font>
+<font color="black"> 435. # Right-justify a string</font>
+<font color="red"> 436. def rjust(s, width, *args):</font>
+<font color="black"> 437.     &quot;&quot;&quot;rjust(s, width[, fillchar]) -&gt; string</font>
+<font color="black"> 438. </font>
+<font color="black"> 439.     Return a right-justified version of s, in a field of the</font>
+<font color="black"> 440.     specified width, padded with spaces as needed.  The string is</font>
+<font color="black"> 441.     never truncated.  If specified the fillchar is used instead of spaces.</font>
+<font color="black"> 442. </font>
+<font color="black"> 443.     &quot;&quot;&quot;</font>
+<font color="red"> 444.     return s.rjust(width, *args)</font>
+<font color="black"> 445. </font>
+<font color="black"> 446. # Center a string</font>
+<font color="red"> 447. def center(s, width, *args):</font>
+<font color="black"> 448.     &quot;&quot;&quot;center(s, width[, fillchar]) -&gt; string</font>
+<font color="black"> 449. </font>
+<font color="black"> 450.     Return a center version of s, in a field of the specified</font>
+<font color="black"> 451.     width. padded with spaces as needed.  The string is never</font>
+<font color="black"> 452.     truncated.  If specified the fillchar is used instead of spaces.</font>
+<font color="black"> 453. </font>
+<font color="black"> 454.     &quot;&quot;&quot;</font>
+<font color="red"> 455.     return s.center(width, *args)</font>
+<font color="black"> 456. </font>
+<font color="black"> 457. # Zero-fill a number, e.g., (12, 3) --&gt; '012' and (-3, 3) --&gt; '-03'</font>
+<font color="black"> 458. # Decadent feature: the argument may be a string or a number</font>
+<font color="black"> 459. # (Use of this is deprecated; it should be a string as with ljust c.s.)</font>
+<font color="red"> 460. def zfill(x, width):</font>
+<font color="black"> 461.     &quot;&quot;&quot;zfill(x, width) -&gt; string</font>
+<font color="black"> 462. </font>
+<font color="black"> 463.     Pad a numeric string x with zeros on the left, to fill a field</font>
+<font color="black"> 464.     of the specified width.  The string x is never truncated.</font>
+<font color="black"> 465. </font>
+<font color="black"> 466.     &quot;&quot;&quot;</font>
+<font color="red"> 467.     if not isinstance(x, basestring):</font>
+<font color="red"> 468.         x = repr(x)</font>
+<font color="red"> 469.     return x.zfill(width)</font>
+<font color="black"> 470. </font>
+<font color="black"> 471. # Expand tabs in a string.</font>
+<font color="black"> 472. # Doesn't take non-printing chars into account, but does understand \n.</font>
+<font color="red"> 473. def expandtabs(s, tabsize=8):</font>
+<font color="black"> 474.     &quot;&quot;&quot;expandtabs(s [,tabsize]) -&gt; string</font>
+<font color="black"> 475. </font>
+<font color="black"> 476.     Return a copy of the string s with all tab characters replaced</font>
+<font color="black"> 477.     by the appropriate number of spaces, depending on the current</font>
+<font color="black"> 478.     column, and the tabsize (default 8).</font>
+<font color="black"> 479. </font>
+<font color="black"> 480.     &quot;&quot;&quot;</font>
+<font color="red"> 481.     return s.expandtabs(tabsize)</font>
+<font color="black"> 482. </font>
+<font color="black"> 483. # Character translation through look-up table.</font>
+<font color="red"> 484. def translate(s, table, deletions=&quot;&quot;):</font>
+<font color="black"> 485.     &quot;&quot;&quot;translate(s,table [,deletions]) -&gt; string</font>
+<font color="black"> 486. </font>
+<font color="black"> 487.     Return a copy of the string s, where all characters occurring</font>
+<font color="black"> 488.     in the optional argument deletions are removed, and the</font>
+<font color="black"> 489.     remaining characters have been mapped through the given</font>
+<font color="black"> 490.     translation table, which must be a string of length 256.  The</font>
+<font color="black"> 491.     deletions argument is not allowed for Unicode strings.</font>
+<font color="black"> 492. </font>
+<font color="black"> 493.     &quot;&quot;&quot;</font>
+<font color="red"> 494.     if deletions or table is None:</font>
+<font color="red"> 495.         return s.translate(table, deletions)</font>
+<font color="black"> 496.     else:</font>
+<font color="black"> 497.         # Add s[:0] so that if s is Unicode and table is an 8-bit string,</font>
+<font color="black"> 498.         # table is converted to Unicode.  This means that table *cannot*</font>
+<font color="black"> 499.         # be a dictionary -- for that feature, use u.translate() directly.</font>
+<font color="red"> 500.         return s.translate(table + s[:0])</font>
+<font color="black"> 501. </font>
+<font color="black"> 502. # Capitalize a string, e.g. &quot;aBc  dEf&quot; -&gt; &quot;Abc  def&quot;.</font>
+<font color="red"> 503. def capitalize(s):</font>
+<font color="black"> 504.     &quot;&quot;&quot;capitalize(s) -&gt; string</font>
+<font color="black"> 505. </font>
+<font color="black"> 506.     Return a copy of the string s with only its first character</font>
+<font color="black"> 507.     capitalized.</font>
+<font color="black"> 508. </font>
+<font color="black"> 509.     &quot;&quot;&quot;</font>
+<font color="red"> 510.     return s.capitalize()</font>
+<font color="black"> 511. </font>
+<font color="black"> 512. # Substring replacement (global)</font>
+<font color="red"> 513. def replace(s, old, new, maxreplace=-1):</font>
+<font color="black"> 514.     &quot;&quot;&quot;replace (str, old, new[, maxreplace]) -&gt; string</font>
+<font color="black"> 515. </font>
+<font color="black"> 516.     Return a copy of string str with all occurrences of substring</font>
+<font color="black"> 517.     old replaced by new. If the optional argument maxreplace is</font>
+<font color="black"> 518.     given, only the first maxreplace occurrences are replaced.</font>
+<font color="black"> 519. </font>
+<font color="black"> 520.     &quot;&quot;&quot;</font>
+<font color="red"> 521.     return s.replace(old, new, maxreplace)</font>
+<font color="black"> 522. </font>
+<font color="black"> 523. </font>
+<font color="black"> 524. # Try importing optional built-in module &quot;strop&quot; -- if it exists,</font>
+<font color="black"> 525. # it redefines some string operations that are 100-1000 times faster.</font>
+<font color="black"> 526. # It also defines values for whitespace, lowercase and uppercase</font>
+<font color="black"> 527. # that match &lt;ctype.h&gt;'s definitions.</font>
+<font color="black"> 528. </font>
+<font color="red"> 529. try:</font>
+<font color="red"> 530.     from strop import maketrans, lowercase, uppercase, whitespace</font>
+<font color="red"> 531.     letters = lowercase + uppercase</font>
+<font color="red"> 532. except ImportError:</font>
+<font color="red"> 533.     pass                                          # Use the original versions</font>
+<font color="black"> 534. </font>
+<font color="black"> 535. ########################################################################</font>
+<font color="black"> 536. # the Formatter class</font>
+<font color="black"> 537. # see PEP 3101 for details and purpose of this class</font>
+<font color="black"> 538. </font>
+<font color="black"> 539. # The hard parts are reused from the C implementation.  They're exposed as &quot;_&quot;</font>
+<font color="black"> 540. # prefixed methods of str and unicode.</font>
+<font color="black"> 541. </font>
+<font color="black"> 542. # The overall parser is implemented in str._formatter_parser.</font>
+<font color="black"> 543. # The field name parser is implemented in str._formatter_field_name_split</font>
+<font color="black"> 544. </font>
+<font color="red"> 545. class Formatter(object):</font>
+<font color="red"> 546.     def format(*args, **kwargs):</font>
+<font color="red"> 547.         if not args:</font>
+<font color="red"> 548.             raise TypeError(&quot;descriptor 'format' of 'Formatter' object &quot;</font>
+<font color="black"> 549.                             &quot;needs an argument&quot;)</font>
+<font color="red"> 550.         self, args = args[0], args[1:]  # allow the &quot;self&quot; keyword be passed</font>
+<font color="red"> 551.         try:</font>
+<font color="red"> 552.             format_string, args = args[0], args[1:] # allow the &quot;format_string&quot; keyword be passed</font>
+<font color="red"> 553.         except IndexError:</font>
+<font color="red"> 554.             if 'format_string' in kwargs:</font>
+<font color="red"> 555.                 format_string = kwargs.pop('format_string')</font>
+<font color="black"> 556.             else:</font>
+<font color="red"> 557.                 raise TypeError(&quot;format() missing 1 required positional &quot;</font>
+<font color="black"> 558.                                 &quot;argument: 'format_string'&quot;)</font>
+<font color="red"> 559.         return self.vformat(format_string, args, kwargs)</font>
+<font color="black"> 560. </font>
+<font color="red"> 561.     def vformat(self, format_string, args, kwargs):</font>
+<font color="red"> 562.         used_args = set()</font>
+<font color="red"> 563.         result = self._vformat(format_string, args, kwargs, used_args, 2)</font>
+<font color="red"> 564.         self.check_unused_args(used_args, args, kwargs)</font>
+<font color="red"> 565.         return result</font>
+<font color="black"> 566. </font>
+<font color="red"> 567.     def _vformat(self, format_string, args, kwargs, used_args, recursion_depth):</font>
+<font color="red"> 568.         if recursion_depth &lt; 0:</font>
+<font color="red"> 569.             raise ValueError('Max string recursion exceeded')</font>
+<font color="red"> 570.         result = []</font>
+<font color="red"> 571.         for literal_text, field_name, format_spec, conversion in \</font>
+<font color="red"> 572.                 self.parse(format_string):</font>
+<font color="black"> 573. </font>
+<font color="black"> 574.             # output the literal text</font>
+<font color="red"> 575.             if literal_text:</font>
+<font color="red"> 576.                 result.append(literal_text)</font>
+<font color="black"> 577. </font>
+<font color="black"> 578.             # if there's a field, output it</font>
+<font color="red"> 579.             if field_name is not None:</font>
+<font color="black"> 580.                 # this is some markup, find the object and do</font>
+<font color="black"> 581.                 #  the formatting</font>
+<font color="black"> 582. </font>
+<font color="black"> 583.                 # given the field_name, find the object it references</font>
+<font color="black"> 584.                 #  and the argument it came from</font>
+<font color="red"> 585.                 obj, arg_used = self.get_field(field_name, args, kwargs)</font>
+<font color="red"> 586.                 used_args.add(arg_used)</font>
+<font color="black"> 587. </font>
+<font color="black"> 588.                 # do any conversion on the resulting object</font>
+<font color="red"> 589.                 obj = self.convert_field(obj, conversion)</font>
+<font color="black"> 590. </font>
+<font color="black"> 591.                 # expand the format spec, if needed</font>
+<font color="red"> 592.                 format_spec = self._vformat(format_spec, args, kwargs,</font>
+<font color="red"> 593.                                             used_args, recursion_depth-1)</font>
+<font color="black"> 594. </font>
+<font color="black"> 595.                 # format the object and append to the result</font>
+<font color="red"> 596.                 result.append(self.format_field(obj, format_spec))</font>
+<font color="black"> 597. </font>
+<font color="red"> 598.         return ''.join(result)</font>
+<font color="black"> 599. </font>
+<font color="black"> 600. </font>
+<font color="red"> 601.     def get_value(self, key, args, kwargs):</font>
+<font color="red"> 602.         if isinstance(key, (int, long)):</font>
+<font color="red"> 603.             return args[key]</font>
+<font color="black"> 604.         else:</font>
+<font color="red"> 605.             return kwargs[key]</font>
+<font color="black"> 606. </font>
+<font color="black"> 607. </font>
+<font color="red"> 608.     def check_unused_args(self, used_args, args, kwargs):</font>
+<font color="red"> 609.         pass</font>
+<font color="black"> 610. </font>
+<font color="black"> 611. </font>
+<font color="red"> 612.     def format_field(self, value, format_spec):</font>
+<font color="red"> 613.         return format(value, format_spec)</font>
+<font color="black"> 614. </font>
+<font color="black"> 615. </font>
+<font color="red"> 616.     def convert_field(self, value, conversion):</font>
+<font color="black"> 617.         # do any conversion on the resulting object</font>
+<font color="red"> 618.         if conversion is None:</font>
+<font color="red"> 619.             return value</font>
+<font color="red"> 620.         elif conversion == 's':</font>
+<font color="red"> 621.             return str(value)</font>
+<font color="red"> 622.         elif conversion == 'r':</font>
+<font color="red"> 623.             return repr(value)</font>
+<font color="red"> 624.         raise ValueError(&quot;Unknown conversion specifier {0!s}&quot;.format(conversion))</font>
+<font color="black"> 625. </font>
+<font color="black"> 626. </font>
+<font color="black"> 627.     # returns an iterable that contains tuples of the form:</font>
+<font color="black"> 628.     # (literal_text, field_name, format_spec, conversion)</font>
+<font color="black"> 629.     # literal_text can be zero length</font>
+<font color="black"> 630.     # field_name can be None, in which case there's no</font>
+<font color="black"> 631.     #  object to format and output</font>
+<font color="black"> 632.     # if field_name is not None, it is looked up, formatted</font>
+<font color="black"> 633.     #  with format_spec and conversion and then used</font>
+<font color="red"> 634.     def parse(self, format_string):</font>
+<font color="red"> 635.         return format_string._formatter_parser()</font>
+<font color="black"> 636. </font>
+<font color="black"> 637. </font>
+<font color="black"> 638.     # given a field_name, find the object it references.</font>
+<font color="black"> 639.     #  field_name:   the field being looked up, e.g. &quot;0.name&quot;</font>
+<font color="black"> 640.     #                 or &quot;lookup[3]&quot;</font>
+<font color="black"> 641.     #  used_args:    a set of which args have been used</font>
+<font color="black"> 642.     #  args, kwargs: as passed in to vformat</font>
+<font color="red"> 643.     def get_field(self, field_name, args, kwargs):</font>
+<font color="red"> 644.         first, rest = field_name._formatter_field_name_split()</font>
+<font color="black"> 645. </font>
+<font color="red"> 646.         obj = self.get_value(first, args, kwargs)</font>
+<font color="black"> 647. </font>
+<font color="black"> 648.         # loop through the rest of the field_name, doing</font>
+<font color="black"> 649.         #  getattr or getitem as needed</font>
+<font color="red"> 650.         for is_attr, i in rest:</font>
+<font color="red"> 651.             if is_attr:</font>
+<font color="red"> 652.                 obj = getattr(obj, i)</font>
+<font color="black"> 653.             else:</font>
+<font color="red"> 654.                 obj = obj[i]</font>
+<font color="black"> 655. </font>
+<font color="red"> 656.         return obj, first</font>
+</pre>
+

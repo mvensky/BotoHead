@@ -1,0 +1,674 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/gettext.py</b><br>
+
+
+file stats: <b>442 lines, 68 executed: 15.4% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Internationalization and localization support.</font>
+<font color="black">   2. </font>
+<font color="black">   3. This module provides internationalization (I18N) and localization (L10N)</font>
+<font color="black">   4. support for your Python programs by providing an interface to the GNU gettext</font>
+<font color="black">   5. message catalog library.</font>
+<font color="black">   6. </font>
+<font color="black">   7. I18N refers to the operation by which a program is made aware of multiple</font>
+<font color="black">   8. languages.  L10N refers to the adaptation of your program, once</font>
+<font color="black">   9. internationalized, to the local language and cultural habits.</font>
+<font color="black">  10. </font>
+<font color="red">  11. &quot;&quot;&quot;</font>
+<font color="black">  12. </font>
+<font color="black">  13. # This module represents the integration of work, contributions, feedback, and</font>
+<font color="black">  14. # suggestions from the following people:</font>
+<font color="black">  15. #</font>
+<font color="black">  16. # Martin von Loewis, who wrote the initial implementation of the underlying</font>
+<font color="black">  17. # C-based libintlmodule (later renamed _gettext), along with a skeletal</font>
+<font color="black">  18. # gettext.py implementation.</font>
+<font color="black">  19. #</font>
+<font color="black">  20. # Peter Funk, who wrote fintl.py, a fairly complete wrapper around intlmodule,</font>
+<font color="black">  21. # which also included a pure-Python implementation to read .mo files if</font>
+<font color="black">  22. # intlmodule wasn't available.</font>
+<font color="black">  23. #</font>
+<font color="black">  24. # James Henstridge, who also wrote a gettext.py module, which has some</font>
+<font color="black">  25. # interesting, but currently unsupported experimental features: the notion of</font>
+<font color="black">  26. # a Catalog class and instances, and the ability to add to a catalog file via</font>
+<font color="black">  27. # a Python API.</font>
+<font color="black">  28. #</font>
+<font color="black">  29. # Barry Warsaw integrated these modules, wrote the .install() API and code,</font>
+<font color="black">  30. # and conformed all C and Python code to Python's coding standards.</font>
+<font color="black">  31. #</font>
+<font color="black">  32. # Francois Pinard and Marc-Andre Lemburg also contributed valuably to this</font>
+<font color="black">  33. # module.</font>
+<font color="black">  34. #</font>
+<font color="black">  35. # J. David Ibanez implemented plural forms. Bruno Haible fixed some bugs.</font>
+<font color="black">  36. #</font>
+<font color="black">  37. # TODO:</font>
+<font color="black">  38. # - Lazy loading of .mo files.  Currently the entire catalog is loaded into</font>
+<font color="black">  39. #   memory, but that's probably bad for large translated programs.  Instead,</font>
+<font color="black">  40. #   the lexical sort of original strings in GNU .mo files should be exploited</font>
+<font color="black">  41. #   to do binary searches and lazy initializations.  Or you might want to use</font>
+<font color="black">  42. #   the undocumented double-hash algorithm for .mo files with hash tables, but</font>
+<font color="black">  43. #   you'll need to study the GNU gettext code to do this.</font>
+<font color="black">  44. #</font>
+<font color="black">  45. # - Support Solaris .mo file formats.  Unfortunately, we've been unable to</font>
+<font color="black">  46. #   find this format documented anywhere.</font>
+<font color="black">  47. </font>
+<font color="black">  48. </font>
+<font color="red">  49. import locale, copy, os, re, struct, sys</font>
+<font color="red">  50. from errno import ENOENT</font>
+<font color="black">  51. </font>
+<font color="black">  52. </font>
+<font color="red">  53. __all__ = ['NullTranslations', 'GNUTranslations', 'Catalog',</font>
+<font color="red">  54.            'find', 'translation', 'install', 'textdomain', 'bindtextdomain',</font>
+<font color="red">  55.            'bind_textdomain_codeset',</font>
+<font color="red">  56.            'dgettext', 'dngettext', 'gettext', 'lgettext', 'ldgettext',</font>
+<font color="red">  57.            'ldngettext', 'lngettext', 'ngettext',</font>
+<font color="black">  58.            ]</font>
+<font color="black">  59. </font>
+<font color="red">  60. _default_localedir = os.path.join(sys.prefix, 'share', 'locale')</font>
+<font color="black">  61. </font>
+<font color="black">  62. # Expression parsing for plural form selection.</font>
+<font color="black">  63. #</font>
+<font color="black">  64. # The gettext library supports a small subset of C syntax.  The only</font>
+<font color="black">  65. # incompatible difference is that integer literals starting with zero are</font>
+<font color="black">  66. # decimal.</font>
+<font color="black">  67. #</font>
+<font color="black">  68. # https://www.gnu.org/software/gettext/manual/gettext.html#Plural-forms</font>
+<font color="black">  69. # http://git.savannah.gnu.org/cgit/gettext.git/tree/gettext-runtime/intl/plural.y</font>
+<font color="black">  70. </font>
+<font color="red">  71. _token_pattern = re.compile(r&quot;&quot;&quot;</font>
+<font color="black">  72.         (?P&lt;WHITESPACES&gt;[ \t]+)                    | # spaces and horizontal tabs</font>
+<font color="black">  73.         (?P&lt;NUMBER&gt;[0-9]+\b)                       | # decimal integer</font>
+<font color="black">  74.         (?P&lt;NAME&gt;n\b)                              | # only n is allowed</font>
+<font color="black">  75.         (?P&lt;PARENTHESIS&gt;[()])                      |</font>
+<font color="black">  76.         (?P&lt;OPERATOR&gt;[-*/%+?:]|[&gt;&lt;!]=?|==|&amp;&amp;|\|\|) | # !, *, /, %, +, -, &lt;, &gt;,</font>
+<font color="black">  77.                                                      # &lt;=, &gt;=, ==, !=, &amp;&amp;, ||,</font>
+<font color="black">  78.                                                      # ? :</font>
+<font color="black">  79.                                                      # unary and bitwise ops</font>
+<font color="black">  80.                                                      # not allowed</font>
+<font color="black">  81.         (?P&lt;INVALID&gt;\w+|.)                           # invalid token</font>
+<font color="red">  82.     &quot;&quot;&quot;, re.VERBOSE|re.DOTALL)</font>
+<font color="black">  83. </font>
+<font color="red">  84. def _tokenize(plural):</font>
+<font color="red">  85.     for mo in re.finditer(_token_pattern, plural):</font>
+<font color="red">  86.         kind = mo.lastgroup</font>
+<font color="red">  87.         if kind == 'WHITESPACES':</font>
+<font color="red">  88.             continue</font>
+<font color="red">  89.         value = mo.group(kind)</font>
+<font color="red">  90.         if kind == 'INVALID':</font>
+<font color="red">  91.             raise ValueError('invalid token in plural form: %s' % value)</font>
+<font color="red">  92.         yield value</font>
+<font color="red">  93.     yield ''</font>
+<font color="black">  94. </font>
+<font color="red">  95. def _error(value):</font>
+<font color="red">  96.     if value:</font>
+<font color="red">  97.         return ValueError('unexpected token in plural form: %s' % value)</font>
+<font color="black">  98.     else:</font>
+<font color="red">  99.         return ValueError('unexpected end of plural form')</font>
+<font color="black"> 100. </font>
+<font color="black"> 101. _binary_ops = (</font>
+<font color="red"> 102.     ('||',),</font>
+<font color="red"> 103.     ('&amp;&amp;',),</font>
+<font color="red"> 104.     ('==', '!='),</font>
+<font color="red"> 105.     ('&lt;', '&gt;', '&lt;=', '&gt;='),</font>
+<font color="red"> 106.     ('+', '-'),</font>
+<font color="red"> 107.     ('*', '/', '%'),</font>
+<font color="black"> 108. )</font>
+<font color="red"> 109. _binary_ops = {op: i for i, ops in enumerate(_binary_ops, 1) for op in ops}</font>
+<font color="red"> 110. _c2py_ops = {'||': 'or', '&amp;&amp;': 'and', '/': '//'}</font>
+<font color="black"> 111. </font>
+<font color="red"> 112. def _parse(tokens, priority=-1):</font>
+<font color="red"> 113.     result = ''</font>
+<font color="red"> 114.     nexttok = next(tokens)</font>
+<font color="red"> 115.     while nexttok == '!':</font>
+<font color="red"> 116.         result += 'not '</font>
+<font color="red"> 117.         nexttok = next(tokens)</font>
+<font color="black"> 118. </font>
+<font color="red"> 119.     if nexttok == '(':</font>
+<font color="red"> 120.         sub, nexttok = _parse(tokens)</font>
+<font color="red"> 121.         result = '%s(%s)' % (result, sub)</font>
+<font color="red"> 122.         if nexttok != ')':</font>
+<font color="red"> 123.             raise ValueError('unbalanced parenthesis in plural form')</font>
+<font color="red"> 124.     elif nexttok == 'n':</font>
+<font color="red"> 125.         result = '%s%s' % (result, nexttok)</font>
+<font color="black"> 126.     else:</font>
+<font color="red"> 127.         try:</font>
+<font color="red"> 128.             value = int(nexttok, 10)</font>
+<font color="red"> 129.         except ValueError:</font>
+<font color="red"> 130.             raise _error(nexttok)</font>
+<font color="red"> 131.         result = '%s%d' % (result, value)</font>
+<font color="red"> 132.     nexttok = next(tokens)</font>
+<font color="black"> 133. </font>
+<font color="red"> 134.     j = 100</font>
+<font color="red"> 135.     while nexttok in _binary_ops:</font>
+<font color="red"> 136.         i = _binary_ops[nexttok]</font>
+<font color="red"> 137.         if i &lt; priority:</font>
+<font color="red"> 138.             break</font>
+<font color="black"> 139.         # Break chained comparisons</font>
+<font color="red"> 140.         if i in (3, 4) and j in (3, 4):  # '==', '!=', '&lt;', '&gt;', '&lt;=', '&gt;='</font>
+<font color="red"> 141.             result = '(%s)' % result</font>
+<font color="black"> 142.         # Replace some C operators by their Python equivalents</font>
+<font color="red"> 143.         op = _c2py_ops.get(nexttok, nexttok)</font>
+<font color="red"> 144.         right, nexttok = _parse(tokens, i + 1)</font>
+<font color="red"> 145.         result = '%s %s %s' % (result, op, right)</font>
+<font color="red"> 146.         j = i</font>
+<font color="red"> 147.     if j == priority == 4:  # '&lt;', '&gt;', '&lt;=', '&gt;='</font>
+<font color="red"> 148.         result = '(%s)' % result</font>
+<font color="black"> 149. </font>
+<font color="red"> 150.     if nexttok == '?' and priority &lt;= 0:</font>
+<font color="red"> 151.         if_true, nexttok = _parse(tokens, 0)</font>
+<font color="red"> 152.         if nexttok != ':':</font>
+<font color="red"> 153.             raise _error(nexttok)</font>
+<font color="red"> 154.         if_false, nexttok = _parse(tokens)</font>
+<font color="red"> 155.         result = '%s if %s else %s' % (if_true, result, if_false)</font>
+<font color="red"> 156.         if priority == 0:</font>
+<font color="red"> 157.             result = '(%s)' % result</font>
+<font color="black"> 158. </font>
+<font color="red"> 159.     return result, nexttok</font>
+<font color="black"> 160. </font>
+<font color="red"> 161. def _as_int(n):</font>
+<font color="red"> 162.     try:</font>
+<font color="red"> 163.         i = round(n)</font>
+<font color="red"> 164.     except TypeError:</font>
+<font color="red"> 165.         raise TypeError('Plural value must be an integer, got %s' %</font>
+<font color="red"> 166.                         (n.__class__.__name__,))</font>
+<font color="red"> 167.     return n</font>
+<font color="black"> 168. </font>
+<font color="red"> 169. def c2py(plural):</font>
+<font color="black"> 170.     &quot;&quot;&quot;Gets a C expression as used in PO files for plural forms and returns a</font>
+<font color="black"> 171.     Python function that implements an equivalent expression.</font>
+<font color="black"> 172.     &quot;&quot;&quot;</font>
+<font color="black"> 173. </font>
+<font color="red"> 174.     if len(plural) &gt; 1000:</font>
+<font color="red"> 175.         raise ValueError('plural form expression is too long')</font>
+<font color="red"> 176.     try:</font>
+<font color="red"> 177.         result, nexttok = _parse(_tokenize(plural))</font>
+<font color="red"> 178.         if nexttok:</font>
+<font color="red"> 179.             raise _error(nexttok)</font>
+<font color="black"> 180. </font>
+<font color="red"> 181.         depth = 0</font>
+<font color="red"> 182.         for c in result:</font>
+<font color="red"> 183.             if c == '(':</font>
+<font color="red"> 184.                 depth += 1</font>
+<font color="red"> 185.                 if depth &gt; 20:</font>
+<font color="black"> 186.                     # Python compiler limit is about 90.</font>
+<font color="black"> 187.                     # The most complex example has 2.</font>
+<font color="red"> 188.                     raise ValueError('plural form expression is too complex')</font>
+<font color="red"> 189.             elif c == ')':</font>
+<font color="red"> 190.                 depth -= 1</font>
+<font color="black"> 191. </font>
+<font color="red"> 192.         ns = {'_as_int': _as_int}</font>
+<font color="black"> 193.         exec('''if 1:</font>
+<font color="black"> 194.             def func(n):</font>
+<font color="black"> 195.                 if not isinstance(n, int):</font>
+<font color="black"> 196.                     n = _as_int(n)</font>
+<font color="black"> 197.                 return int(%s)</font>
+<font color="red"> 198.             ''' % result, ns)</font>
+<font color="red"> 199.         return ns['func']</font>
+<font color="red"> 200.     except RuntimeError:</font>
+<font color="black"> 201.         # Recursion error can be raised in _parse() or exec().</font>
+<font color="red"> 202.         raise ValueError('plural form expression is too complex')</font>
+<font color="black"> 203. </font>
+<font color="black"> 204. </font>
+<font color="red"> 205. def _expand_lang(locale):</font>
+<font color="green"> 206.     from locale import normalize</font>
+<font color="green"> 207.     locale = normalize(locale)</font>
+<font color="green"> 208.     COMPONENT_CODESET   = 1 &lt;&lt; 0</font>
+<font color="green"> 209.     COMPONENT_TERRITORY = 1 &lt;&lt; 1</font>
+<font color="green"> 210.     COMPONENT_MODIFIER  = 1 &lt;&lt; 2</font>
+<font color="black"> 211.     # split up the locale into its base components</font>
+<font color="green"> 212.     mask = 0</font>
+<font color="green"> 213.     pos = locale.find('@')</font>
+<font color="green"> 214.     if pos &gt;= 0:</font>
+<font color="red"> 215.         modifier = locale[pos:]</font>
+<font color="red"> 216.         locale = locale[:pos]</font>
+<font color="red"> 217.         mask |= COMPONENT_MODIFIER</font>
+<font color="black"> 218.     else:</font>
+<font color="green"> 219.         modifier = ''</font>
+<font color="green"> 220.     pos = locale.find('.')</font>
+<font color="green"> 221.     if pos &gt;= 0:</font>
+<font color="green"> 222.         codeset = locale[pos:]</font>
+<font color="green"> 223.         locale = locale[:pos]</font>
+<font color="green"> 224.         mask |= COMPONENT_CODESET</font>
+<font color="black"> 225.     else:</font>
+<font color="green"> 226.         codeset = ''</font>
+<font color="green"> 227.     pos = locale.find('_')</font>
+<font color="green"> 228.     if pos &gt;= 0:</font>
+<font color="green"> 229.         territory = locale[pos:]</font>
+<font color="green"> 230.         locale = locale[:pos]</font>
+<font color="green"> 231.         mask |= COMPONENT_TERRITORY</font>
+<font color="black"> 232.     else:</font>
+<font color="green"> 233.         territory = ''</font>
+<font color="green"> 234.     language = locale</font>
+<font color="green"> 235.     ret = []</font>
+<font color="green"> 236.     for i in range(mask+1):</font>
+<font color="green"> 237.         if not (i &amp; ~mask):  # if all components for this combo exist ...</font>
+<font color="green"> 238.             val = language</font>
+<font color="green"> 239.             if i &amp; COMPONENT_TERRITORY: val += territory</font>
+<font color="green"> 240.             if i &amp; COMPONENT_CODESET:   val += codeset</font>
+<font color="green"> 241.             if i &amp; COMPONENT_MODIFIER:  val += modifier</font>
+<font color="green"> 242.             ret.append(val)</font>
+<font color="green"> 243.     ret.reverse()</font>
+<font color="green"> 244.     return ret</font>
+<font color="black"> 245. </font>
+<font color="black"> 246. </font>
+<font color="black"> 247. </font>
+<font color="red"> 248. class NullTranslations:</font>
+<font color="red"> 249.     def __init__(self, fp=None):</font>
+<font color="red"> 250.         self._info = {}</font>
+<font color="red"> 251.         self._charset = None</font>
+<font color="red"> 252.         self._output_charset = None</font>
+<font color="red"> 253.         self._fallback = None</font>
+<font color="red"> 254.         if fp is not None:</font>
+<font color="red"> 255.             self._parse(fp)</font>
+<font color="black"> 256. </font>
+<font color="red"> 257.     def _parse(self, fp):</font>
+<font color="red"> 258.         pass</font>
+<font color="black"> 259. </font>
+<font color="red"> 260.     def add_fallback(self, fallback):</font>
+<font color="red"> 261.         if self._fallback:</font>
+<font color="red"> 262.             self._fallback.add_fallback(fallback)</font>
+<font color="black"> 263.         else:</font>
+<font color="red"> 264.             self._fallback = fallback</font>
+<font color="black"> 265. </font>
+<font color="red"> 266.     def gettext(self, message):</font>
+<font color="red"> 267.         if self._fallback:</font>
+<font color="red"> 268.             return self._fallback.gettext(message)</font>
+<font color="red"> 269.         return message</font>
+<font color="black"> 270. </font>
+<font color="red"> 271.     def lgettext(self, message):</font>
+<font color="red"> 272.         if self._fallback:</font>
+<font color="red"> 273.             return self._fallback.lgettext(message)</font>
+<font color="red"> 274.         return message</font>
+<font color="black"> 275. </font>
+<font color="red"> 276.     def ngettext(self, msgid1, msgid2, n):</font>
+<font color="red"> 277.         if self._fallback:</font>
+<font color="red"> 278.             return self._fallback.ngettext(msgid1, msgid2, n)</font>
+<font color="red"> 279.         if n == 1:</font>
+<font color="red"> 280.             return msgid1</font>
+<font color="black"> 281.         else:</font>
+<font color="red"> 282.             return msgid2</font>
+<font color="black"> 283. </font>
+<font color="red"> 284.     def lngettext(self, msgid1, msgid2, n):</font>
+<font color="red"> 285.         if self._fallback:</font>
+<font color="red"> 286.             return self._fallback.lngettext(msgid1, msgid2, n)</font>
+<font color="red"> 287.         if n == 1:</font>
+<font color="red"> 288.             return msgid1</font>
+<font color="black"> 289.         else:</font>
+<font color="red"> 290.             return msgid2</font>
+<font color="black"> 291. </font>
+<font color="red"> 292.     def ugettext(self, message):</font>
+<font color="red"> 293.         if self._fallback:</font>
+<font color="red"> 294.             return self._fallback.ugettext(message)</font>
+<font color="red"> 295.         return unicode(message)</font>
+<font color="black"> 296. </font>
+<font color="red"> 297.     def ungettext(self, msgid1, msgid2, n):</font>
+<font color="red"> 298.         if self._fallback:</font>
+<font color="red"> 299.             return self._fallback.ungettext(msgid1, msgid2, n)</font>
+<font color="red"> 300.         if n == 1:</font>
+<font color="red"> 301.             return unicode(msgid1)</font>
+<font color="black"> 302.         else:</font>
+<font color="red"> 303.             return unicode(msgid2)</font>
+<font color="black"> 304. </font>
+<font color="red"> 305.     def info(self):</font>
+<font color="red"> 306.         return self._info</font>
+<font color="black"> 307. </font>
+<font color="red"> 308.     def charset(self):</font>
+<font color="red"> 309.         return self._charset</font>
+<font color="black"> 310. </font>
+<font color="red"> 311.     def output_charset(self):</font>
+<font color="red"> 312.         return self._output_charset</font>
+<font color="black"> 313. </font>
+<font color="red"> 314.     def set_output_charset(self, charset):</font>
+<font color="red"> 315.         self._output_charset = charset</font>
+<font color="black"> 316. </font>
+<font color="red"> 317.     def install(self, unicode=False, names=None):</font>
+<font color="red"> 318.         import __builtin__</font>
+<font color="red"> 319.         __builtin__.__dict__['_'] = unicode and self.ugettext or self.gettext</font>
+<font color="red"> 320.         if hasattr(names, &quot;__contains__&quot;):</font>
+<font color="red"> 321.             if &quot;gettext&quot; in names:</font>
+<font color="red"> 322.                 __builtin__.__dict__['gettext'] = __builtin__.__dict__['_']</font>
+<font color="red"> 323.             if &quot;ngettext&quot; in names:</font>
+<font color="red"> 324.                 __builtin__.__dict__['ngettext'] = (unicode and self.ungettext</font>
+<font color="red"> 325.                                                              or self.ngettext)</font>
+<font color="red"> 326.             if &quot;lgettext&quot; in names:</font>
+<font color="red"> 327.                 __builtin__.__dict__['lgettext'] = self.lgettext</font>
+<font color="red"> 328.             if &quot;lngettext&quot; in names:</font>
+<font color="red"> 329.                 __builtin__.__dict__['lngettext'] = self.lngettext</font>
+<font color="black"> 330. </font>
+<font color="black"> 331. </font>
+<font color="red"> 332. class GNUTranslations(NullTranslations):</font>
+<font color="black"> 333.     # Magic number of .mo files</font>
+<font color="red"> 334.     LE_MAGIC = 0x950412deL</font>
+<font color="red"> 335.     BE_MAGIC = 0xde120495L</font>
+<font color="black"> 336. </font>
+<font color="red"> 337.     def _parse(self, fp):</font>
+<font color="black"> 338.         &quot;&quot;&quot;Override this method to support alternative .mo formats.&quot;&quot;&quot;</font>
+<font color="red"> 339.         unpack = struct.unpack</font>
+<font color="red"> 340.         filename = getattr(fp, 'name', '')</font>
+<font color="black"> 341.         # Parse the .mo file header, which consists of 5 little endian 32</font>
+<font color="black"> 342.         # bit words.</font>
+<font color="red"> 343.         self._catalog = catalog = {}</font>
+<font color="red"> 344.         self.plural = lambda n: int(n != 1) # germanic plural by default</font>
+<font color="red"> 345.         buf = fp.read()</font>
+<font color="red"> 346.         buflen = len(buf)</font>
+<font color="black"> 347.         # Are we big endian or little endian?</font>
+<font color="red"> 348.         magic = unpack('&lt;I', buf[:4])[0]</font>
+<font color="red"> 349.         if magic == self.LE_MAGIC:</font>
+<font color="red"> 350.             version, msgcount, masteridx, transidx = unpack('&lt;4I', buf[4:20])</font>
+<font color="red"> 351.             ii = '&lt;II'</font>
+<font color="red"> 352.         elif magic == self.BE_MAGIC:</font>
+<font color="red"> 353.             version, msgcount, masteridx, transidx = unpack('&gt;4I', buf[4:20])</font>
+<font color="red"> 354.             ii = '&gt;II'</font>
+<font color="black"> 355.         else:</font>
+<font color="red"> 356.             raise IOError(0, 'Bad magic number', filename)</font>
+<font color="black"> 357.         # Now put all messages from the .mo file buffer into the catalog</font>
+<font color="black"> 358.         # dictionary.</font>
+<font color="red"> 359.         for i in xrange(0, msgcount):</font>
+<font color="red"> 360.             mlen, moff = unpack(ii, buf[masteridx:masteridx+8])</font>
+<font color="red"> 361.             mend = moff + mlen</font>
+<font color="red"> 362.             tlen, toff = unpack(ii, buf[transidx:transidx+8])</font>
+<font color="red"> 363.             tend = toff + tlen</font>
+<font color="red"> 364.             if mend &lt; buflen and tend &lt; buflen:</font>
+<font color="red"> 365.                 msg = buf[moff:mend]</font>
+<font color="red"> 366.                 tmsg = buf[toff:tend]</font>
+<font color="black"> 367.             else:</font>
+<font color="red"> 368.                 raise IOError(0, 'File is corrupt', filename)</font>
+<font color="black"> 369.             # See if we're looking at GNU .mo conventions for metadata</font>
+<font color="red"> 370.             if mlen == 0:</font>
+<font color="black"> 371.                 # Catalog description</font>
+<font color="red"> 372.                 lastk = None</font>
+<font color="red"> 373.                 for item in tmsg.splitlines():</font>
+<font color="red"> 374.                     item = item.strip()</font>
+<font color="red"> 375.                     if not item:</font>
+<font color="red"> 376.                         continue</font>
+<font color="red"> 377.                     k = v = None</font>
+<font color="red"> 378.                     if ':' in item:</font>
+<font color="red"> 379.                         k, v = item.split(':', 1)</font>
+<font color="red"> 380.                         k = k.strip().lower()</font>
+<font color="red"> 381.                         v = v.strip()</font>
+<font color="red"> 382.                         self._info[k] = v</font>
+<font color="red"> 383.                         lastk = k</font>
+<font color="red"> 384.                     elif lastk:</font>
+<font color="red"> 385.                         self._info[lastk] += '\n' + item</font>
+<font color="red"> 386.                     if k == 'content-type':</font>
+<font color="red"> 387.                         self._charset = v.split('charset=')[1]</font>
+<font color="red"> 388.                     elif k == 'plural-forms':</font>
+<font color="red"> 389.                         v = v.split(';')</font>
+<font color="red"> 390.                         plural = v[1].split('plural=')[1]</font>
+<font color="red"> 391.                         self.plural = c2py(plural)</font>
+<font color="black"> 392.             # Note: we unconditionally convert both msgids and msgstrs to</font>
+<font color="black"> 393.             # Unicode using the character encoding specified in the charset</font>
+<font color="black"> 394.             # parameter of the Content-Type header.  The gettext documentation</font>
+<font color="black"> 395.             # strongly encourages msgids to be us-ascii, but some applications</font>
+<font color="black"> 396.             # require alternative encodings (e.g. Zope's ZCML and ZPT).  For</font>
+<font color="black"> 397.             # traditional gettext applications, the msgid conversion will</font>
+<font color="black"> 398.             # cause no problems since us-ascii should always be a subset of</font>
+<font color="black"> 399.             # the charset encoding.  We may want to fall back to 8-bit msgids</font>
+<font color="black"> 400.             # if the Unicode conversion fails.</font>
+<font color="red"> 401.             if '\x00' in msg:</font>
+<font color="black"> 402.                 # Plural forms</font>
+<font color="red"> 403.                 msgid1, msgid2 = msg.split('\x00')</font>
+<font color="red"> 404.                 tmsg = tmsg.split('\x00')</font>
+<font color="red"> 405.                 if self._charset:</font>
+<font color="red"> 406.                     msgid1 = unicode(msgid1, self._charset)</font>
+<font color="red"> 407.                     tmsg = [unicode(x, self._charset) for x in tmsg]</font>
+<font color="red"> 408.                 for i in range(len(tmsg)):</font>
+<font color="red"> 409.                     catalog[(msgid1, i)] = tmsg[i]</font>
+<font color="black"> 410.             else:</font>
+<font color="red"> 411.                 if self._charset:</font>
+<font color="red"> 412.                     msg = unicode(msg, self._charset)</font>
+<font color="red"> 413.                     tmsg = unicode(tmsg, self._charset)</font>
+<font color="red"> 414.                 catalog[msg] = tmsg</font>
+<font color="black"> 415.             # advance to next entry in the seek tables</font>
+<font color="red"> 416.             masteridx += 8</font>
+<font color="red"> 417.             transidx += 8</font>
+<font color="black"> 418. </font>
+<font color="red"> 419.     def gettext(self, message):</font>
+<font color="red"> 420.         missing = object()</font>
+<font color="red"> 421.         tmsg = self._catalog.get(message, missing)</font>
+<font color="red"> 422.         if tmsg is missing:</font>
+<font color="red"> 423.             if self._fallback:</font>
+<font color="red"> 424.                 return self._fallback.gettext(message)</font>
+<font color="red"> 425.             return message</font>
+<font color="black"> 426.         # Encode the Unicode tmsg back to an 8-bit string, if possible</font>
+<font color="red"> 427.         if self._output_charset:</font>
+<font color="red"> 428.             return tmsg.encode(self._output_charset)</font>
+<font color="red"> 429.         elif self._charset:</font>
+<font color="red"> 430.             return tmsg.encode(self._charset)</font>
+<font color="red"> 431.         return tmsg</font>
+<font color="black"> 432. </font>
+<font color="red"> 433.     def lgettext(self, message):</font>
+<font color="red"> 434.         missing = object()</font>
+<font color="red"> 435.         tmsg = self._catalog.get(message, missing)</font>
+<font color="red"> 436.         if tmsg is missing:</font>
+<font color="red"> 437.             if self._fallback:</font>
+<font color="red"> 438.                 return self._fallback.lgettext(message)</font>
+<font color="red"> 439.             return message</font>
+<font color="red"> 440.         if self._output_charset:</font>
+<font color="red"> 441.             return tmsg.encode(self._output_charset)</font>
+<font color="red"> 442.         return tmsg.encode(locale.getpreferredencoding())</font>
+<font color="black"> 443. </font>
+<font color="red"> 444.     def ngettext(self, msgid1, msgid2, n):</font>
+<font color="red"> 445.         try:</font>
+<font color="red"> 446.             tmsg = self._catalog[(msgid1, self.plural(n))]</font>
+<font color="red"> 447.             if self._output_charset:</font>
+<font color="red"> 448.                 return tmsg.encode(self._output_charset)</font>
+<font color="red"> 449.             elif self._charset:</font>
+<font color="red"> 450.                 return tmsg.encode(self._charset)</font>
+<font color="red"> 451.             return tmsg</font>
+<font color="red"> 452.         except KeyError:</font>
+<font color="red"> 453.             if self._fallback:</font>
+<font color="red"> 454.                 return self._fallback.ngettext(msgid1, msgid2, n)</font>
+<font color="red"> 455.             if n == 1:</font>
+<font color="red"> 456.                 return msgid1</font>
+<font color="black"> 457.             else:</font>
+<font color="red"> 458.                 return msgid2</font>
+<font color="black"> 459. </font>
+<font color="red"> 460.     def lngettext(self, msgid1, msgid2, n):</font>
+<font color="red"> 461.         try:</font>
+<font color="red"> 462.             tmsg = self._catalog[(msgid1, self.plural(n))]</font>
+<font color="red"> 463.             if self._output_charset:</font>
+<font color="red"> 464.                 return tmsg.encode(self._output_charset)</font>
+<font color="red"> 465.             return tmsg.encode(locale.getpreferredencoding())</font>
+<font color="red"> 466.         except KeyError:</font>
+<font color="red"> 467.             if self._fallback:</font>
+<font color="red"> 468.                 return self._fallback.lngettext(msgid1, msgid2, n)</font>
+<font color="red"> 469.             if n == 1:</font>
+<font color="red"> 470.                 return msgid1</font>
+<font color="black"> 471.             else:</font>
+<font color="red"> 472.                 return msgid2</font>
+<font color="black"> 473. </font>
+<font color="red"> 474.     def ugettext(self, message):</font>
+<font color="red"> 475.         missing = object()</font>
+<font color="red"> 476.         tmsg = self._catalog.get(message, missing)</font>
+<font color="red"> 477.         if tmsg is missing:</font>
+<font color="red"> 478.             if self._fallback:</font>
+<font color="red"> 479.                 return self._fallback.ugettext(message)</font>
+<font color="red"> 480.             return unicode(message)</font>
+<font color="red"> 481.         return tmsg</font>
+<font color="black"> 482. </font>
+<font color="red"> 483.     def ungettext(self, msgid1, msgid2, n):</font>
+<font color="red"> 484.         try:</font>
+<font color="red"> 485.             tmsg = self._catalog[(msgid1, self.plural(n))]</font>
+<font color="red"> 486.         except KeyError:</font>
+<font color="red"> 487.             if self._fallback:</font>
+<font color="red"> 488.                 return self._fallback.ungettext(msgid1, msgid2, n)</font>
+<font color="red"> 489.             if n == 1:</font>
+<font color="red"> 490.                 tmsg = unicode(msgid1)</font>
+<font color="black"> 491.             else:</font>
+<font color="red"> 492.                 tmsg = unicode(msgid2)</font>
+<font color="red"> 493.         return tmsg</font>
+<font color="black"> 494. </font>
+<font color="black"> 495. </font>
+<font color="black"> 496. # Locate a .mo file using the gettext strategy</font>
+<font color="red"> 497. def find(domain, localedir=None, languages=None, all=0):</font>
+<font color="black"> 498.     # Get some reasonable defaults for arguments that were not supplied</font>
+<font color="green"> 499.     if localedir is None:</font>
+<font color="green"> 500.         localedir = _default_localedir</font>
+<font color="green"> 501.     if languages is None:</font>
+<font color="green"> 502.         languages = []</font>
+<font color="green"> 503.         for envar in ('LANGUAGE', 'LC_ALL', 'LC_MESSAGES', 'LANG'):</font>
+<font color="green"> 504.             val = os.environ.get(envar)</font>
+<font color="green"> 505.             if val:</font>
+<font color="green"> 506.                 languages = val.split(':')</font>
+<font color="green"> 507.                 break</font>
+<font color="green"> 508.         if 'C' not in languages:</font>
+<font color="green"> 509.             languages.append('C')</font>
+<font color="black"> 510.     # now normalize and expand the languages</font>
+<font color="green"> 511.     nelangs = []</font>
+<font color="green"> 512.     for lang in languages:</font>
+<font color="green"> 513.         for nelang in _expand_lang(lang):</font>
+<font color="green"> 514.             if nelang not in nelangs:</font>
+<font color="green"> 515.                 nelangs.append(nelang)</font>
+<font color="black"> 516.     # select a language</font>
+<font color="green"> 517.     if all:</font>
+<font color="green"> 518.         result = []</font>
+<font color="black"> 519.     else:</font>
+<font color="red"> 520.         result = None</font>
+<font color="green"> 521.     for lang in nelangs:</font>
+<font color="green"> 522.         if lang == 'C':</font>
+<font color="green"> 523.             break</font>
+<font color="green"> 524.         mofile = os.path.join(localedir, lang, 'LC_MESSAGES', '%s.mo' % domain)</font>
+<font color="green"> 525.         if os.path.exists(mofile):</font>
+<font color="red"> 526.             if all:</font>
+<font color="red"> 527.                 result.append(mofile)</font>
+<font color="black"> 528.             else:</font>
+<font color="red"> 529.                 return mofile</font>
+<font color="green"> 530.     return result</font>
+<font color="black"> 531. </font>
+<font color="black"> 532. </font>
+<font color="black"> 533. </font>
+<font color="black"> 534. # a mapping between absolute .mo file path and Translation object</font>
+<font color="red"> 535. _translations = {}</font>
+<font color="black"> 536. </font>
+<font color="red"> 537. def translation(domain, localedir=None, languages=None,</font>
+<font color="red"> 538.                 class_=None, fallback=False, codeset=None):</font>
+<font color="green"> 539.     if class_ is None:</font>
+<font color="green"> 540.         class_ = GNUTranslations</font>
+<font color="green"> 541.     mofiles = find(domain, localedir, languages, all=1)</font>
+<font color="green"> 542.     if not mofiles:</font>
+<font color="green"> 543.         if fallback:</font>
+<font color="red"> 544.             return NullTranslations()</font>
+<font color="green"> 545.         raise IOError(ENOENT, 'No translation file found for domain', domain)</font>
+<font color="black"> 546.     # Avoid opening, reading, and parsing the .mo file after it's been done</font>
+<font color="black"> 547.     # once.</font>
+<font color="red"> 548.     result = None</font>
+<font color="red"> 549.     for mofile in mofiles:</font>
+<font color="red"> 550.         key = (class_, os.path.abspath(mofile))</font>
+<font color="red"> 551.         t = _translations.get(key)</font>
+<font color="red"> 552.         if t is None:</font>
+<font color="red"> 553.             with open(mofile, 'rb') as fp:</font>
+<font color="red"> 554.                 t = _translations.setdefault(key, class_(fp))</font>
+<font color="black"> 555.         # Copy the translation object to allow setting fallbacks and</font>
+<font color="black"> 556.         # output charset. All other instance data is shared with the</font>
+<font color="black"> 557.         # cached object.</font>
+<font color="red"> 558.         t = copy.copy(t)</font>
+<font color="red"> 559.         if codeset:</font>
+<font color="red"> 560.             t.set_output_charset(codeset)</font>
+<font color="red"> 561.         if result is None:</font>
+<font color="red"> 562.             result = t</font>
+<font color="black"> 563.         else:</font>
+<font color="red"> 564.             result.add_fallback(t)</font>
+<font color="red"> 565.     return result</font>
+<font color="black"> 566. </font>
+<font color="black"> 567. </font>
+<font color="red"> 568. def install(domain, localedir=None, unicode=False, codeset=None, names=None):</font>
+<font color="red"> 569.     t = translation(domain, localedir, fallback=True, codeset=codeset)</font>
+<font color="red"> 570.     t.install(unicode, names)</font>
+<font color="black"> 571. </font>
+<font color="black"> 572. </font>
+<font color="black"> 573. </font>
+<font color="black"> 574. # a mapping b/w domains and locale directories</font>
+<font color="red"> 575. _localedirs = {}</font>
+<font color="black"> 576. # a mapping b/w domains and codesets</font>
+<font color="red"> 577. _localecodesets = {}</font>
+<font color="black"> 578. # current global domain, `messages' used for compatibility w/ GNU gettext</font>
+<font color="red"> 579. _current_domain = 'messages'</font>
+<font color="black"> 580. </font>
+<font color="black"> 581. </font>
+<font color="red"> 582. def textdomain(domain=None):</font>
+<font color="black"> 583.     global _current_domain</font>
+<font color="red"> 584.     if domain is not None:</font>
+<font color="red"> 585.         _current_domain = domain</font>
+<font color="red"> 586.     return _current_domain</font>
+<font color="black"> 587. </font>
+<font color="black"> 588. </font>
+<font color="red"> 589. def bindtextdomain(domain, localedir=None):</font>
+<font color="black"> 590.     global _localedirs</font>
+<font color="red"> 591.     if localedir is not None:</font>
+<font color="red"> 592.         _localedirs[domain] = localedir</font>
+<font color="red"> 593.     return _localedirs.get(domain, _default_localedir)</font>
+<font color="black"> 594. </font>
+<font color="black"> 595. </font>
+<font color="red"> 596. def bind_textdomain_codeset(domain, codeset=None):</font>
+<font color="black"> 597.     global _localecodesets</font>
+<font color="red"> 598.     if codeset is not None:</font>
+<font color="red"> 599.         _localecodesets[domain] = codeset</font>
+<font color="red"> 600.     return _localecodesets.get(domain)</font>
+<font color="black"> 601. </font>
+<font color="black"> 602. </font>
+<font color="red"> 603. def dgettext(domain, message):</font>
+<font color="green"> 604.     try:</font>
+<font color="green"> 605.         t = translation(domain, _localedirs.get(domain, None),</font>
+<font color="green"> 606.                         codeset=_localecodesets.get(domain))</font>
+<font color="green"> 607.     except IOError:</font>
+<font color="green"> 608.         return message</font>
+<font color="red"> 609.     return t.gettext(message)</font>
+<font color="black"> 610. </font>
+<font color="red"> 611. def ldgettext(domain, message):</font>
+<font color="red"> 612.     try:</font>
+<font color="red"> 613.         t = translation(domain, _localedirs.get(domain, None),</font>
+<font color="red"> 614.                         codeset=_localecodesets.get(domain))</font>
+<font color="red"> 615.     except IOError:</font>
+<font color="red"> 616.         return message</font>
+<font color="red"> 617.     return t.lgettext(message)</font>
+<font color="black"> 618. </font>
+<font color="red"> 619. def dngettext(domain, msgid1, msgid2, n):</font>
+<font color="red"> 620.     try:</font>
+<font color="red"> 621.         t = translation(domain, _localedirs.get(domain, None),</font>
+<font color="red"> 622.                         codeset=_localecodesets.get(domain))</font>
+<font color="red"> 623.     except IOError:</font>
+<font color="red"> 624.         if n == 1:</font>
+<font color="red"> 625.             return msgid1</font>
+<font color="black"> 626.         else:</font>
+<font color="red"> 627.             return msgid2</font>
+<font color="red"> 628.     return t.ngettext(msgid1, msgid2, n)</font>
+<font color="black"> 629. </font>
+<font color="red"> 630. def ldngettext(domain, msgid1, msgid2, n):</font>
+<font color="red"> 631.     try:</font>
+<font color="red"> 632.         t = translation(domain, _localedirs.get(domain, None),</font>
+<font color="red"> 633.                         codeset=_localecodesets.get(domain))</font>
+<font color="red"> 634.     except IOError:</font>
+<font color="red"> 635.         if n == 1:</font>
+<font color="red"> 636.             return msgid1</font>
+<font color="black"> 637.         else:</font>
+<font color="red"> 638.             return msgid2</font>
+<font color="red"> 639.     return t.lngettext(msgid1, msgid2, n)</font>
+<font color="black"> 640. </font>
+<font color="red"> 641. def gettext(message):</font>
+<font color="green"> 642.     return dgettext(_current_domain, message)</font>
+<font color="black"> 643. </font>
+<font color="red"> 644. def lgettext(message):</font>
+<font color="red"> 645.     return ldgettext(_current_domain, message)</font>
+<font color="black"> 646. </font>
+<font color="red"> 647. def ngettext(msgid1, msgid2, n):</font>
+<font color="red"> 648.     return dngettext(_current_domain, msgid1, msgid2, n)</font>
+<font color="black"> 649. </font>
+<font color="red"> 650. def lngettext(msgid1, msgid2, n):</font>
+<font color="red"> 651.     return ldngettext(_current_domain, msgid1, msgid2, n)</font>
+<font color="black"> 652. </font>
+<font color="black"> 653. # dcgettext() has been deemed unnecessary and is not implemented.</font>
+<font color="black"> 654. </font>
+<font color="black"> 655. # James Henstridge's Catalog constructor from GNOME gettext.  Documented usage</font>
+<font color="black"> 656. # was:</font>
+<font color="black"> 657. #</font>
+<font color="black"> 658. #    import gettext</font>
+<font color="black"> 659. #    cat = gettext.Catalog(PACKAGE, localedir=LOCALEDIR)</font>
+<font color="black"> 660. #    _ = cat.gettext</font>
+<font color="black"> 661. #    print _('Hello World')</font>
+<font color="black"> 662. </font>
+<font color="black"> 663. # The resulting catalog object currently don't support access through a</font>
+<font color="black"> 664. # dictionary API, which was supported (but apparently unused) in GNOME</font>
+<font color="black"> 665. # gettext.</font>
+<font color="black"> 666. </font>
+<font color="red"> 667. Catalog = translation</font>
+</pre>
+

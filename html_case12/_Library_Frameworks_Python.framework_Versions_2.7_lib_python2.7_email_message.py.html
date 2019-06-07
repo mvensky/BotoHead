@@ -1,0 +1,804 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/email/message.py</b><br>
+
+
+file stats: <b>353 lines, 23 executed: 6.5% covered</b>
+<pre>
+<font color="black">   1. # Copyright (C) 2001-2006 Python Software Foundation</font>
+<font color="black">   2. # Author: Barry Warsaw</font>
+<font color="black">   3. # Contact: email-sig@python.org</font>
+<font color="black">   4. </font>
+<font color="red">   5. &quot;&quot;&quot;Basic message object for the email package object model.&quot;&quot;&quot;</font>
+<font color="black">   6. </font>
+<font color="red">   7. __all__ = ['Message']</font>
+<font color="black">   8. </font>
+<font color="red">   9. import re</font>
+<font color="red">  10. import uu</font>
+<font color="red">  11. import binascii</font>
+<font color="red">  12. import warnings</font>
+<font color="red">  13. from cStringIO import StringIO</font>
+<font color="black">  14. </font>
+<font color="black">  15. # Intrapackage imports</font>
+<font color="red">  16. import email.charset</font>
+<font color="red">  17. from email import utils</font>
+<font color="red">  18. from email import errors</font>
+<font color="black">  19. </font>
+<font color="red">  20. SEMISPACE = '; '</font>
+<font color="black">  21. </font>
+<font color="black">  22. # Regular expression that matches `special' characters in parameters, the</font>
+<font color="black">  23. # existence of which force quoting of the parameter value.</font>
+<font color="red">  24. tspecials = re.compile(r'[ \(\)&lt;&gt;@,;:\\&quot;/\[\]\?=]')</font>
+<font color="black">  25. </font>
+<font color="black">  26. </font>
+<font color="black">  27. # Helper functions</font>
+<font color="red">  28. def _splitparam(param):</font>
+<font color="black">  29.     # Split header parameters.  BAW: this may be too simple.  It isn't</font>
+<font color="black">  30.     # strictly RFC 2045 (section 5.1) compliant, but it catches most headers</font>
+<font color="black">  31.     # found in the wild.  We may eventually need a full fledged parser</font>
+<font color="black">  32.     # eventually.</font>
+<font color="red">  33.     a, sep, b = param.partition(';')</font>
+<font color="red">  34.     if not sep:</font>
+<font color="red">  35.         return a.strip(), None</font>
+<font color="red">  36.     return a.strip(), b.strip()</font>
+<font color="black">  37. </font>
+<font color="red">  38. def _formatparam(param, value=None, quote=True):</font>
+<font color="black">  39.     &quot;&quot;&quot;Convenience function to format and return a key=value pair.</font>
+<font color="black">  40. </font>
+<font color="black">  41.     This will quote the value if needed or if quote is true.  If value is a</font>
+<font color="black">  42.     three tuple (charset, language, value), it will be encoded according</font>
+<font color="black">  43.     to RFC2231 rules.</font>
+<font color="black">  44.     &quot;&quot;&quot;</font>
+<font color="red">  45.     if value is not None and len(value) &gt; 0:</font>
+<font color="black">  46.         # A tuple is used for RFC 2231 encoded parameter values where items</font>
+<font color="black">  47.         # are (charset, language, value).  charset is a string, not a Charset</font>
+<font color="black">  48.         # instance.</font>
+<font color="red">  49.         if isinstance(value, tuple):</font>
+<font color="black">  50.             # Encode as per RFC 2231</font>
+<font color="red">  51.             param += '*'</font>
+<font color="red">  52.             value = utils.encode_rfc2231(value[2], value[0], value[1])</font>
+<font color="black">  53.         # BAW: Please check this.  I think that if quote is set it should</font>
+<font color="black">  54.         # force quoting even if not necessary.</font>
+<font color="red">  55.         if quote or tspecials.search(value):</font>
+<font color="red">  56.             return '%s=&quot;%s&quot;' % (param, utils.quote(value))</font>
+<font color="black">  57.         else:</font>
+<font color="red">  58.             return '%s=%s' % (param, value)</font>
+<font color="black">  59.     else:</font>
+<font color="red">  60.         return param</font>
+<font color="black">  61. </font>
+<font color="red">  62. def _parseparam(s):</font>
+<font color="red">  63.     plist = []</font>
+<font color="red">  64.     while s[:1] == ';':</font>
+<font color="red">  65.         s = s[1:]</font>
+<font color="red">  66.         end = s.find(';')</font>
+<font color="red">  67.         while end &gt; 0 and (s.count('&quot;', 0, end) - s.count('\\&quot;', 0, end)) % 2:</font>
+<font color="red">  68.             end = s.find(';', end + 1)</font>
+<font color="red">  69.         if end &lt; 0:</font>
+<font color="red">  70.             end = len(s)</font>
+<font color="red">  71.         f = s[:end]</font>
+<font color="red">  72.         if '=' in f:</font>
+<font color="red">  73.             i = f.index('=')</font>
+<font color="red">  74.             f = f[:i].strip().lower() + '=' + f[i+1:].strip()</font>
+<font color="red">  75.         plist.append(f.strip())</font>
+<font color="red">  76.         s = s[end:]</font>
+<font color="red">  77.     return plist</font>
+<font color="black">  78. </font>
+<font color="black">  79. </font>
+<font color="red">  80. def _unquotevalue(value):</font>
+<font color="black">  81.     # This is different than utils.collapse_rfc2231_value() because it doesn't</font>
+<font color="black">  82.     # try to convert the value to a unicode.  Message.get_param() and</font>
+<font color="black">  83.     # Message.get_params() are both currently defined to return the tuple in</font>
+<font color="black">  84.     # the face of RFC 2231 parameters.</font>
+<font color="red">  85.     if isinstance(value, tuple):</font>
+<font color="red">  86.         return value[0], value[1], utils.unquote(value[2])</font>
+<font color="black">  87.     else:</font>
+<font color="red">  88.         return utils.unquote(value)</font>
+<font color="black">  89. </font>
+<font color="black">  90. </font>
+<font color="black">  91. </font>
+<font color="red">  92. class Message:</font>
+<font color="black">  93.     &quot;&quot;&quot;Basic message object.</font>
+<font color="black">  94. </font>
+<font color="black">  95.     A message object is defined as something that has a bunch of RFC 2822</font>
+<font color="black">  96.     headers and a payload.  It may optionally have an envelope header</font>
+<font color="black">  97.     (a.k.a. Unix-From or From_ header).  If the message is a container (i.e. a</font>
+<font color="black">  98.     multipart or a message/rfc822), then the payload is a list of Message</font>
+<font color="black">  99.     objects, otherwise it is a string.</font>
+<font color="black"> 100. </font>
+<font color="black"> 101.     Message objects implement part of the `mapping' interface, which assumes</font>
+<font color="black"> 102.     there is exactly one occurrence of the header per message.  Some headers</font>
+<font color="black"> 103.     do in fact appear multiple times (e.g. Received) and for those headers,</font>
+<font color="black"> 104.     you must use the explicit API to set or get all the headers.  Not all of</font>
+<font color="black"> 105.     the mapping methods are implemented.</font>
+<font color="red"> 106.     &quot;&quot;&quot;</font>
+<font color="red"> 107.     def __init__(self):</font>
+<font color="green"> 108.         self._headers = []</font>
+<font color="green"> 109.         self._unixfrom = None</font>
+<font color="green"> 110.         self._payload = None</font>
+<font color="green"> 111.         self._charset = None</font>
+<font color="black"> 112.         # Defaults for multipart messages</font>
+<font color="green"> 113.         self.preamble = self.epilogue = None</font>
+<font color="green"> 114.         self.defects = []</font>
+<font color="black"> 115.         # Default content type</font>
+<font color="green"> 116.         self._default_type = 'text/plain'</font>
+<font color="black"> 117. </font>
+<font color="red"> 118.     def __str__(self):</font>
+<font color="black"> 119.         &quot;&quot;&quot;Return the entire formatted message as a string.</font>
+<font color="black"> 120.         This includes the headers, body, and envelope header.</font>
+<font color="black"> 121.         &quot;&quot;&quot;</font>
+<font color="red"> 122.         return self.as_string(unixfrom=True)</font>
+<font color="black"> 123. </font>
+<font color="red"> 124.     def as_string(self, unixfrom=False):</font>
+<font color="black"> 125.         &quot;&quot;&quot;Return the entire formatted message as a string.</font>
+<font color="black"> 126.         Optional `unixfrom' when True, means include the Unix From_ envelope</font>
+<font color="black"> 127.         header.</font>
+<font color="black"> 128. </font>
+<font color="black"> 129.         This is a convenience method and may not generate the message exactly</font>
+<font color="black"> 130.         as you intend because by default it mangles lines that begin with</font>
+<font color="black"> 131.         &quot;From &quot;.  For more flexibility, use the flatten() method of a</font>
+<font color="black"> 132.         Generator instance.</font>
+<font color="black"> 133.         &quot;&quot;&quot;</font>
+<font color="red"> 134.         from email.generator import Generator</font>
+<font color="red"> 135.         fp = StringIO()</font>
+<font color="red"> 136.         g = Generator(fp)</font>
+<font color="red"> 137.         g.flatten(self, unixfrom=unixfrom)</font>
+<font color="red"> 138.         return fp.getvalue()</font>
+<font color="black"> 139. </font>
+<font color="red"> 140.     def is_multipart(self):</font>
+<font color="black"> 141.         &quot;&quot;&quot;Return True if the message consists of multiple parts.&quot;&quot;&quot;</font>
+<font color="red"> 142.         return isinstance(self._payload, list)</font>
+<font color="black"> 143. </font>
+<font color="black"> 144.     #</font>
+<font color="black"> 145.     # Unix From_ line</font>
+<font color="black"> 146.     #</font>
+<font color="red"> 147.     def set_unixfrom(self, unixfrom):</font>
+<font color="red"> 148.         self._unixfrom = unixfrom</font>
+<font color="black"> 149. </font>
+<font color="red"> 150.     def get_unixfrom(self):</font>
+<font color="red"> 151.         return self._unixfrom</font>
+<font color="black"> 152. </font>
+<font color="black"> 153.     #</font>
+<font color="black"> 154.     # Payload manipulation.</font>
+<font color="black"> 155.     #</font>
+<font color="red"> 156.     def attach(self, payload):</font>
+<font color="black"> 157.         &quot;&quot;&quot;Add the given payload to the current payload.</font>
+<font color="black"> 158. </font>
+<font color="black"> 159.         The current payload will always be a list of objects after this method</font>
+<font color="black"> 160.         is called.  If you want to set the payload to a scalar object, use</font>
+<font color="black"> 161.         set_payload() instead.</font>
+<font color="black"> 162.         &quot;&quot;&quot;</font>
+<font color="red"> 163.         if self._payload is None:</font>
+<font color="red"> 164.             self._payload = [payload]</font>
+<font color="black"> 165.         else:</font>
+<font color="red"> 166.             self._payload.append(payload)</font>
+<font color="black"> 167. </font>
+<font color="red"> 168.     def get_payload(self, i=None, decode=False):</font>
+<font color="black"> 169.         &quot;&quot;&quot;Return a reference to the payload.</font>
+<font color="black"> 170. </font>
+<font color="black"> 171.         The payload will either be a list object or a string.  If you mutate</font>
+<font color="black"> 172.         the list object, you modify the message's payload in place.  Optional</font>
+<font color="black"> 173.         i returns that index into the payload.</font>
+<font color="black"> 174. </font>
+<font color="black"> 175.         Optional decode is a flag indicating whether the payload should be</font>
+<font color="black"> 176.         decoded or not, according to the Content-Transfer-Encoding header</font>
+<font color="black"> 177.         (default is False).</font>
+<font color="black"> 178. </font>
+<font color="black"> 179.         When True and the message is not a multipart, the payload will be</font>
+<font color="black"> 180.         decoded if this header's value is `quoted-printable' or `base64'.  If</font>
+<font color="black"> 181.         some other encoding is used, or the header is missing, or if the</font>
+<font color="black"> 182.         payload has bogus data (i.e. bogus base64 or uuencoded data), the</font>
+<font color="black"> 183.         payload is returned as-is.</font>
+<font color="black"> 184. </font>
+<font color="black"> 185.         If the message is a multipart and the decode flag is True, then None</font>
+<font color="black"> 186.         is returned.</font>
+<font color="black"> 187.         &quot;&quot;&quot;</font>
+<font color="red"> 188.         if i is None:</font>
+<font color="red"> 189.             payload = self._payload</font>
+<font color="red"> 190.         elif not isinstance(self._payload, list):</font>
+<font color="red"> 191.             raise TypeError('Expected list, got %s' % type(self._payload))</font>
+<font color="black"> 192.         else:</font>
+<font color="red"> 193.             payload = self._payload[i]</font>
+<font color="red"> 194.         if decode:</font>
+<font color="red"> 195.             if self.is_multipart():</font>
+<font color="red"> 196.                 return None</font>
+<font color="red"> 197.             cte = self.get('content-transfer-encoding', '').lower()</font>
+<font color="red"> 198.             if cte == 'quoted-printable':</font>
+<font color="red"> 199.                 return utils._qdecode(payload)</font>
+<font color="red"> 200.             elif cte == 'base64':</font>
+<font color="red"> 201.                 try:</font>
+<font color="red"> 202.                     return utils._bdecode(payload)</font>
+<font color="red"> 203.                 except binascii.Error:</font>
+<font color="black"> 204.                     # Incorrect padding</font>
+<font color="red"> 205.                     return payload</font>
+<font color="red"> 206.             elif cte in ('x-uuencode', 'uuencode', 'uue', 'x-uue'):</font>
+<font color="red"> 207.                 sfp = StringIO()</font>
+<font color="red"> 208.                 try:</font>
+<font color="red"> 209.                     uu.decode(StringIO(payload+'\n'), sfp, quiet=True)</font>
+<font color="red"> 210.                     payload = sfp.getvalue()</font>
+<font color="red"> 211.                 except uu.Error:</font>
+<font color="black"> 212.                     # Some decoding problem</font>
+<font color="red"> 213.                     return payload</font>
+<font color="black"> 214.         # Everything else, including encodings with 8bit or 7bit are returned</font>
+<font color="black"> 215.         # unchanged.</font>
+<font color="red"> 216.         return payload</font>
+<font color="black"> 217. </font>
+<font color="red"> 218.     def set_payload(self, payload, charset=None):</font>
+<font color="black"> 219.         &quot;&quot;&quot;Set the payload to the given value.</font>
+<font color="black"> 220. </font>
+<font color="black"> 221.         Optional charset sets the message's default character set.  See</font>
+<font color="black"> 222.         set_charset() for details.</font>
+<font color="black"> 223.         &quot;&quot;&quot;</font>
+<font color="red"> 224.         self._payload = payload</font>
+<font color="red"> 225.         if charset is not None:</font>
+<font color="red"> 226.             self.set_charset(charset)</font>
+<font color="black"> 227. </font>
+<font color="red"> 228.     def set_charset(self, charset):</font>
+<font color="black"> 229.         &quot;&quot;&quot;Set the charset of the payload to a given character set.</font>
+<font color="black"> 230. </font>
+<font color="black"> 231.         charset can be a Charset instance, a string naming a character set, or</font>
+<font color="black"> 232.         None.  If it is a string it will be converted to a Charset instance.</font>
+<font color="black"> 233.         If charset is None, the charset parameter will be removed from the</font>
+<font color="black"> 234.         Content-Type field.  Anything else will generate a TypeError.</font>
+<font color="black"> 235. </font>
+<font color="black"> 236.         The message will be assumed to be of type text/* encoded with</font>
+<font color="black"> 237.         charset.input_charset.  It will be converted to charset.output_charset</font>
+<font color="black"> 238.         and encoded properly, if needed, when generating the plain text</font>
+<font color="black"> 239.         representation of the message.  MIME headers (MIME-Version,</font>
+<font color="black"> 240.         Content-Type, Content-Transfer-Encoding) will be added as needed.</font>
+<font color="black"> 241. </font>
+<font color="black"> 242.         &quot;&quot;&quot;</font>
+<font color="red"> 243.         if charset is None:</font>
+<font color="red"> 244.             self.del_param('charset')</font>
+<font color="red"> 245.             self._charset = None</font>
+<font color="red"> 246.             return</font>
+<font color="red"> 247.         if isinstance(charset, basestring):</font>
+<font color="red"> 248.             charset = email.charset.Charset(charset)</font>
+<font color="red"> 249.         if not isinstance(charset, email.charset.Charset):</font>
+<font color="red"> 250.             raise TypeError(charset)</font>
+<font color="black"> 251.         # BAW: should we accept strings that can serve as arguments to the</font>
+<font color="black"> 252.         # Charset constructor?</font>
+<font color="red"> 253.         self._charset = charset</font>
+<font color="red"> 254.         if 'MIME-Version' not in self:</font>
+<font color="red"> 255.             self.add_header('MIME-Version', '1.0')</font>
+<font color="red"> 256.         if 'Content-Type' not in self:</font>
+<font color="red"> 257.             self.add_header('Content-Type', 'text/plain',</font>
+<font color="red"> 258.                             charset=charset.get_output_charset())</font>
+<font color="black"> 259.         else:</font>
+<font color="red"> 260.             self.set_param('charset', charset.get_output_charset())</font>
+<font color="red"> 261.         if isinstance(self._payload, unicode):</font>
+<font color="red"> 262.             self._payload = self._payload.encode(charset.output_charset)</font>
+<font color="red"> 263.         if str(charset) != charset.get_output_charset():</font>
+<font color="red"> 264.             self._payload = charset.body_encode(self._payload)</font>
+<font color="red"> 265.         if 'Content-Transfer-Encoding' not in self:</font>
+<font color="red"> 266.             cte = charset.get_body_encoding()</font>
+<font color="red"> 267.             try:</font>
+<font color="red"> 268.                 cte(self)</font>
+<font color="red"> 269.             except TypeError:</font>
+<font color="red"> 270.                 self._payload = charset.body_encode(self._payload)</font>
+<font color="red"> 271.                 self.add_header('Content-Transfer-Encoding', cte)</font>
+<font color="black"> 272. </font>
+<font color="red"> 273.     def get_charset(self):</font>
+<font color="black"> 274.         &quot;&quot;&quot;Return the Charset instance associated with the message's payload.</font>
+<font color="black"> 275.         &quot;&quot;&quot;</font>
+<font color="red"> 276.         return self._charset</font>
+<font color="black"> 277. </font>
+<font color="black"> 278.     #</font>
+<font color="black"> 279.     # MAPPING INTERFACE (partial)</font>
+<font color="black"> 280.     #</font>
+<font color="red"> 281.     def __len__(self):</font>
+<font color="black"> 282.         &quot;&quot;&quot;Return the total number of headers, including duplicates.&quot;&quot;&quot;</font>
+<font color="green"> 283.         return len(self._headers)</font>
+<font color="black"> 284. </font>
+<font color="red"> 285.     def __getitem__(self, name):</font>
+<font color="black"> 286.         &quot;&quot;&quot;Get a header value.</font>
+<font color="black"> 287. </font>
+<font color="black"> 288.         Return None if the header is missing instead of raising an exception.</font>
+<font color="black"> 289. </font>
+<font color="black"> 290.         Note that if the header appeared multiple times, exactly which</font>
+<font color="black"> 291.         occurrence gets returned is undefined.  Use get_all() to get all</font>
+<font color="black"> 292.         the values matching a header field name.</font>
+<font color="black"> 293.         &quot;&quot;&quot;</font>
+<font color="green"> 294.         return self.get(name)</font>
+<font color="black"> 295. </font>
+<font color="red"> 296.     def __setitem__(self, name, val):</font>
+<font color="black"> 297.         &quot;&quot;&quot;Set the value of a header.</font>
+<font color="black"> 298. </font>
+<font color="black"> 299.         Note: this does not overwrite an existing header with the same field</font>
+<font color="black"> 300.         name.  Use __delitem__() first to delete any existing headers.</font>
+<font color="black"> 301.         &quot;&quot;&quot;</font>
+<font color="green"> 302.         self._headers.append((name, val))</font>
+<font color="black"> 303. </font>
+<font color="red"> 304.     def __delitem__(self, name):</font>
+<font color="black"> 305.         &quot;&quot;&quot;Delete all occurrences of a header, if present.</font>
+<font color="black"> 306. </font>
+<font color="black"> 307.         Does not raise an exception if the header is missing.</font>
+<font color="black"> 308.         &quot;&quot;&quot;</font>
+<font color="red"> 309.         name = name.lower()</font>
+<font color="red"> 310.         newheaders = []</font>
+<font color="red"> 311.         for k, v in self._headers:</font>
+<font color="red"> 312.             if k.lower() != name:</font>
+<font color="red"> 313.                 newheaders.append((k, v))</font>
+<font color="red"> 314.         self._headers = newheaders</font>
+<font color="black"> 315. </font>
+<font color="red"> 316.     def __contains__(self, name):</font>
+<font color="green"> 317.         return name.lower() in [k.lower() for k, v in self._headers]</font>
+<font color="black"> 318. </font>
+<font color="red"> 319.     def has_key(self, name):</font>
+<font color="black"> 320.         &quot;&quot;&quot;Return true if the message contains the header.&quot;&quot;&quot;</font>
+<font color="red"> 321.         missing = object()</font>
+<font color="red"> 322.         return self.get(name, missing) is not missing</font>
+<font color="black"> 323. </font>
+<font color="red"> 324.     def keys(self):</font>
+<font color="black"> 325.         &quot;&quot;&quot;Return a list of all the message's header field names.</font>
+<font color="black"> 326. </font>
+<font color="black"> 327.         These will be sorted in the order they appeared in the original</font>
+<font color="black"> 328.         message, or were added to the message, and may contain duplicates.</font>
+<font color="black"> 329.         Any fields deleted and re-inserted are always appended to the header</font>
+<font color="black"> 330.         list.</font>
+<font color="black"> 331.         &quot;&quot;&quot;</font>
+<font color="red"> 332.         return [k for k, v in self._headers]</font>
+<font color="black"> 333. </font>
+<font color="red"> 334.     def values(self):</font>
+<font color="black"> 335.         &quot;&quot;&quot;Return a list of all the message's header values.</font>
+<font color="black"> 336. </font>
+<font color="black"> 337.         These will be sorted in the order they appeared in the original</font>
+<font color="black"> 338.         message, or were added to the message, and may contain duplicates.</font>
+<font color="black"> 339.         Any fields deleted and re-inserted are always appended to the header</font>
+<font color="black"> 340.         list.</font>
+<font color="black"> 341.         &quot;&quot;&quot;</font>
+<font color="red"> 342.         return [v for k, v in self._headers]</font>
+<font color="black"> 343. </font>
+<font color="red"> 344.     def items(self):</font>
+<font color="black"> 345.         &quot;&quot;&quot;Get all the message's header fields and values.</font>
+<font color="black"> 346. </font>
+<font color="black"> 347.         These will be sorted in the order they appeared in the original</font>
+<font color="black"> 348.         message, or were added to the message, and may contain duplicates.</font>
+<font color="black"> 349.         Any fields deleted and re-inserted are always appended to the header</font>
+<font color="black"> 350.         list.</font>
+<font color="black"> 351.         &quot;&quot;&quot;</font>
+<font color="green"> 352.         return self._headers[:]</font>
+<font color="black"> 353. </font>
+<font color="red"> 354.     def get(self, name, failobj=None):</font>
+<font color="black"> 355.         &quot;&quot;&quot;Get a header value.</font>
+<font color="black"> 356. </font>
+<font color="black"> 357.         Like __getitem__() but return failobj instead of None when the field</font>
+<font color="black"> 358.         is missing.</font>
+<font color="black"> 359.         &quot;&quot;&quot;</font>
+<font color="green"> 360.         name = name.lower()</font>
+<font color="green"> 361.         for k, v in self._headers:</font>
+<font color="green"> 362.             if k.lower() == name:</font>
+<font color="green"> 363.                 return v</font>
+<font color="red"> 364.         return failobj</font>
+<font color="black"> 365. </font>
+<font color="black"> 366.     #</font>
+<font color="black"> 367.     # Additional useful stuff</font>
+<font color="black"> 368.     #</font>
+<font color="black"> 369. </font>
+<font color="red"> 370.     def get_all(self, name, failobj=None):</font>
+<font color="black"> 371.         &quot;&quot;&quot;Return a list of all the values for the named field.</font>
+<font color="black"> 372. </font>
+<font color="black"> 373.         These will be sorted in the order they appeared in the original</font>
+<font color="black"> 374.         message, and may contain duplicates.  Any fields deleted and</font>
+<font color="black"> 375.         re-inserted are always appended to the header list.</font>
+<font color="black"> 376. </font>
+<font color="black"> 377.         If no such fields exist, failobj is returned (defaults to None).</font>
+<font color="black"> 378.         &quot;&quot;&quot;</font>
+<font color="green"> 379.         values = []</font>
+<font color="green"> 380.         name = name.lower()</font>
+<font color="green"> 381.         for k, v in self._headers:</font>
+<font color="green"> 382.             if k.lower() == name:</font>
+<font color="green"> 383.                 values.append(v)</font>
+<font color="green"> 384.         if not values:</font>
+<font color="red"> 385.             return failobj</font>
+<font color="green"> 386.         return values</font>
+<font color="black"> 387. </font>
+<font color="red"> 388.     def add_header(self, _name, _value, **_params):</font>
+<font color="black"> 389.         &quot;&quot;&quot;Extended header setting.</font>
+<font color="black"> 390. </font>
+<font color="black"> 391.         name is the header field to add.  keyword arguments can be used to set</font>
+<font color="black"> 392.         additional parameters for the header field, with underscores converted</font>
+<font color="black"> 393.         to dashes.  Normally the parameter will be added as key=&quot;value&quot; unless</font>
+<font color="black"> 394.         value is None, in which case only the key will be added.  If a</font>
+<font color="black"> 395.         parameter value contains non-ASCII characters it must be specified as a</font>
+<font color="black"> 396.         three-tuple of (charset, language, value), in which case it will be</font>
+<font color="black"> 397.         encoded according to RFC2231 rules.</font>
+<font color="black"> 398. </font>
+<font color="black"> 399.         Example:</font>
+<font color="black"> 400. </font>
+<font color="black"> 401.         msg.add_header('content-disposition', 'attachment', filename='bud.gif')</font>
+<font color="black"> 402.         &quot;&quot;&quot;</font>
+<font color="red"> 403.         parts = []</font>
+<font color="red"> 404.         for k, v in _params.items():</font>
+<font color="red"> 405.             if v is None:</font>
+<font color="red"> 406.                 parts.append(k.replace('_', '-'))</font>
+<font color="black"> 407.             else:</font>
+<font color="red"> 408.                 parts.append(_formatparam(k.replace('_', '-'), v))</font>
+<font color="red"> 409.         if _value is not None:</font>
+<font color="red"> 410.             parts.insert(0, _value)</font>
+<font color="red"> 411.         self._headers.append((_name, SEMISPACE.join(parts)))</font>
+<font color="black"> 412. </font>
+<font color="red"> 413.     def replace_header(self, _name, _value):</font>
+<font color="black"> 414.         &quot;&quot;&quot;Replace a header.</font>
+<font color="black"> 415. </font>
+<font color="black"> 416.         Replace the first matching header found in the message, retaining</font>
+<font color="black"> 417.         header order and case.  If no matching header was found, a KeyError is</font>
+<font color="black"> 418.         raised.</font>
+<font color="black"> 419.         &quot;&quot;&quot;</font>
+<font color="red"> 420.         _name = _name.lower()</font>
+<font color="red"> 421.         for i, (k, v) in zip(range(len(self._headers)), self._headers):</font>
+<font color="red"> 422.             if k.lower() == _name:</font>
+<font color="red"> 423.                 self._headers[i] = (k, _value)</font>
+<font color="red"> 424.                 break</font>
+<font color="black"> 425.         else:</font>
+<font color="red"> 426.             raise KeyError(_name)</font>
+<font color="black"> 427. </font>
+<font color="black"> 428.     #</font>
+<font color="black"> 429.     # Use these three methods instead of the three above.</font>
+<font color="black"> 430.     #</font>
+<font color="black"> 431. </font>
+<font color="red"> 432.     def get_content_type(self):</font>
+<font color="black"> 433.         &quot;&quot;&quot;Return the message's content type.</font>
+<font color="black"> 434. </font>
+<font color="black"> 435.         The returned string is coerced to lower case of the form</font>
+<font color="black"> 436.         `maintype/subtype'.  If there was no Content-Type header in the</font>
+<font color="black"> 437.         message, the default type as given by get_default_type() will be</font>
+<font color="black"> 438.         returned.  Since according to RFC 2045, messages always have a default</font>
+<font color="black"> 439.         type this will always return a value.</font>
+<font color="black"> 440. </font>
+<font color="black"> 441.         RFC 2045 defines a message's default type to be text/plain unless it</font>
+<font color="black"> 442.         appears inside a multipart/digest container, in which case it would be</font>
+<font color="black"> 443.         message/rfc822.</font>
+<font color="black"> 444.         &quot;&quot;&quot;</font>
+<font color="red"> 445.         missing = object()</font>
+<font color="red"> 446.         value = self.get('content-type', missing)</font>
+<font color="red"> 447.         if value is missing:</font>
+<font color="black"> 448.             # This should have no parameters</font>
+<font color="red"> 449.             return self.get_default_type()</font>
+<font color="red"> 450.         ctype = _splitparam(value)[0].lower()</font>
+<font color="black"> 451.         # RFC 2045, section 5.2 says if its invalid, use text/plain</font>
+<font color="red"> 452.         if ctype.count('/') != 1:</font>
+<font color="red"> 453.             return 'text/plain'</font>
+<font color="red"> 454.         return ctype</font>
+<font color="black"> 455. </font>
+<font color="red"> 456.     def get_content_maintype(self):</font>
+<font color="black"> 457.         &quot;&quot;&quot;Return the message's main content type.</font>
+<font color="black"> 458. </font>
+<font color="black"> 459.         This is the `maintype' part of the string returned by</font>
+<font color="black"> 460.         get_content_type().</font>
+<font color="black"> 461.         &quot;&quot;&quot;</font>
+<font color="red"> 462.         ctype = self.get_content_type()</font>
+<font color="red"> 463.         return ctype.split('/')[0]</font>
+<font color="black"> 464. </font>
+<font color="red"> 465.     def get_content_subtype(self):</font>
+<font color="black"> 466.         &quot;&quot;&quot;Returns the message's sub-content type.</font>
+<font color="black"> 467. </font>
+<font color="black"> 468.         This is the `subtype' part of the string returned by</font>
+<font color="black"> 469.         get_content_type().</font>
+<font color="black"> 470.         &quot;&quot;&quot;</font>
+<font color="red"> 471.         ctype = self.get_content_type()</font>
+<font color="red"> 472.         return ctype.split('/')[1]</font>
+<font color="black"> 473. </font>
+<font color="red"> 474.     def get_default_type(self):</font>
+<font color="black"> 475.         &quot;&quot;&quot;Return the `default' content type.</font>
+<font color="black"> 476. </font>
+<font color="black"> 477.         Most messages have a default content type of text/plain, except for</font>
+<font color="black"> 478.         messages that are subparts of multipart/digest containers.  Such</font>
+<font color="black"> 479.         subparts have a default content type of message/rfc822.</font>
+<font color="black"> 480.         &quot;&quot;&quot;</font>
+<font color="red"> 481.         return self._default_type</font>
+<font color="black"> 482. </font>
+<font color="red"> 483.     def set_default_type(self, ctype):</font>
+<font color="black"> 484.         &quot;&quot;&quot;Set the `default' content type.</font>
+<font color="black"> 485. </font>
+<font color="black"> 486.         ctype should be either &quot;text/plain&quot; or &quot;message/rfc822&quot;, although this</font>
+<font color="black"> 487.         is not enforced.  The default content type is not stored in the</font>
+<font color="black"> 488.         Content-Type header.</font>
+<font color="black"> 489.         &quot;&quot;&quot;</font>
+<font color="red"> 490.         self._default_type = ctype</font>
+<font color="black"> 491. </font>
+<font color="red"> 492.     def _get_params_preserve(self, failobj, header):</font>
+<font color="black"> 493.         # Like get_params() but preserves the quoting of values.  BAW:</font>
+<font color="black"> 494.         # should this be part of the public interface?</font>
+<font color="red"> 495.         missing = object()</font>
+<font color="red"> 496.         value = self.get(header, missing)</font>
+<font color="red"> 497.         if value is missing:</font>
+<font color="red"> 498.             return failobj</font>
+<font color="red"> 499.         params = []</font>
+<font color="red"> 500.         for p in _parseparam(';' + value):</font>
+<font color="red"> 501.             try:</font>
+<font color="red"> 502.                 name, val = p.split('=', 1)</font>
+<font color="red"> 503.                 name = name.strip()</font>
+<font color="red"> 504.                 val = val.strip()</font>
+<font color="red"> 505.             except ValueError:</font>
+<font color="black"> 506.                 # Must have been a bare attribute</font>
+<font color="red"> 507.                 name = p.strip()</font>
+<font color="red"> 508.                 val = ''</font>
+<font color="red"> 509.             params.append((name, val))</font>
+<font color="red"> 510.         params = utils.decode_params(params)</font>
+<font color="red"> 511.         return params</font>
+<font color="black"> 512. </font>
+<font color="red"> 513.     def get_params(self, failobj=None, header='content-type', unquote=True):</font>
+<font color="black"> 514.         &quot;&quot;&quot;Return the message's Content-Type parameters, as a list.</font>
+<font color="black"> 515. </font>
+<font color="black"> 516.         The elements of the returned list are 2-tuples of key/value pairs, as</font>
+<font color="black"> 517.         split on the `=' sign.  The left hand side of the `=' is the key,</font>
+<font color="black"> 518.         while the right hand side is the value.  If there is no `=' sign in</font>
+<font color="black"> 519.         the parameter the value is the empty string.  The value is as</font>
+<font color="black"> 520.         described in the get_param() method.</font>
+<font color="black"> 521. </font>
+<font color="black"> 522.         Optional failobj is the object to return if there is no Content-Type</font>
+<font color="black"> 523.         header.  Optional header is the header to search instead of</font>
+<font color="black"> 524.         Content-Type.  If unquote is True, the value is unquoted.</font>
+<font color="black"> 525.         &quot;&quot;&quot;</font>
+<font color="red"> 526.         missing = object()</font>
+<font color="red"> 527.         params = self._get_params_preserve(missing, header)</font>
+<font color="red"> 528.         if params is missing:</font>
+<font color="red"> 529.             return failobj</font>
+<font color="red"> 530.         if unquote:</font>
+<font color="red"> 531.             return [(k, _unquotevalue(v)) for k, v in params]</font>
+<font color="black"> 532.         else:</font>
+<font color="red"> 533.             return params</font>
+<font color="black"> 534. </font>
+<font color="red"> 535.     def get_param(self, param, failobj=None, header='content-type',</font>
+<font color="red"> 536.                   unquote=True):</font>
+<font color="black"> 537.         &quot;&quot;&quot;Return the parameter value if found in the Content-Type header.</font>
+<font color="black"> 538. </font>
+<font color="black"> 539.         Optional failobj is the object to return if there is no Content-Type</font>
+<font color="black"> 540.         header, or the Content-Type header has no such parameter.  Optional</font>
+<font color="black"> 541.         header is the header to search instead of Content-Type.</font>
+<font color="black"> 542. </font>
+<font color="black"> 543.         Parameter keys are always compared case insensitively.  The return</font>
+<font color="black"> 544.         value can either be a string, or a 3-tuple if the parameter was RFC</font>
+<font color="black"> 545.         2231 encoded.  When it's a 3-tuple, the elements of the value are of</font>
+<font color="black"> 546.         the form (CHARSET, LANGUAGE, VALUE).  Note that both CHARSET and</font>
+<font color="black"> 547.         LANGUAGE can be None, in which case you should consider VALUE to be</font>
+<font color="black"> 548.         encoded in the us-ascii charset.  You can usually ignore LANGUAGE.</font>
+<font color="black"> 549. </font>
+<font color="black"> 550.         Your application should be prepared to deal with 3-tuple return</font>
+<font color="black"> 551.         values, and can convert the parameter to a Unicode string like so:</font>
+<font color="black"> 552. </font>
+<font color="black"> 553.             param = msg.get_param('foo')</font>
+<font color="black"> 554.             if isinstance(param, tuple):</font>
+<font color="black"> 555.                 param = unicode(param[2], param[0] or 'us-ascii')</font>
+<font color="black"> 556. </font>
+<font color="black"> 557.         In any case, the parameter value (either the returned string, or the</font>
+<font color="black"> 558.         VALUE item in the 3-tuple) is always unquoted, unless unquote is set</font>
+<font color="black"> 559.         to False.</font>
+<font color="black"> 560.         &quot;&quot;&quot;</font>
+<font color="red"> 561.         if header not in self:</font>
+<font color="red"> 562.             return failobj</font>
+<font color="red"> 563.         for k, v in self._get_params_preserve(failobj, header):</font>
+<font color="red"> 564.             if k.lower() == param.lower():</font>
+<font color="red"> 565.                 if unquote:</font>
+<font color="red"> 566.                     return _unquotevalue(v)</font>
+<font color="black"> 567.                 else:</font>
+<font color="red"> 568.                     return v</font>
+<font color="red"> 569.         return failobj</font>
+<font color="black"> 570. </font>
+<font color="red"> 571.     def set_param(self, param, value, header='Content-Type', requote=True,</font>
+<font color="red"> 572.                   charset=None, language=''):</font>
+<font color="black"> 573.         &quot;&quot;&quot;Set a parameter in the Content-Type header.</font>
+<font color="black"> 574. </font>
+<font color="black"> 575.         If the parameter already exists in the header, its value will be</font>
+<font color="black"> 576.         replaced with the new value.</font>
+<font color="black"> 577. </font>
+<font color="black"> 578.         If header is Content-Type and has not yet been defined for this</font>
+<font color="black"> 579.         message, it will be set to &quot;text/plain&quot; and the new parameter and</font>
+<font color="black"> 580.         value will be appended as per RFC 2045.</font>
+<font color="black"> 581. </font>
+<font color="black"> 582.         An alternate header can be specified in the header argument, and all</font>
+<font color="black"> 583.         parameters will be quoted as necessary unless requote is False.</font>
+<font color="black"> 584. </font>
+<font color="black"> 585.         If charset is specified, the parameter will be encoded according to RFC</font>
+<font color="black"> 586.         2231.  Optional language specifies the RFC 2231 language, defaulting</font>
+<font color="black"> 587.         to the empty string.  Both charset and language should be strings.</font>
+<font color="black"> 588.         &quot;&quot;&quot;</font>
+<font color="red"> 589.         if not isinstance(value, tuple) and charset:</font>
+<font color="red"> 590.             value = (charset, language, value)</font>
+<font color="black"> 591. </font>
+<font color="red"> 592.         if header not in self and header.lower() == 'content-type':</font>
+<font color="red"> 593.             ctype = 'text/plain'</font>
+<font color="black"> 594.         else:</font>
+<font color="red"> 595.             ctype = self.get(header)</font>
+<font color="red"> 596.         if not self.get_param(param, header=header):</font>
+<font color="red"> 597.             if not ctype:</font>
+<font color="red"> 598.                 ctype = _formatparam(param, value, requote)</font>
+<font color="black"> 599.             else:</font>
+<font color="red"> 600.                 ctype = SEMISPACE.join(</font>
+<font color="red"> 601.                     [ctype, _formatparam(param, value, requote)])</font>
+<font color="black"> 602.         else:</font>
+<font color="red"> 603.             ctype = ''</font>
+<font color="red"> 604.             for old_param, old_value in self.get_params(header=header,</font>
+<font color="red"> 605.                                                         unquote=requote):</font>
+<font color="red"> 606.                 append_param = ''</font>
+<font color="red"> 607.                 if old_param.lower() == param.lower():</font>
+<font color="red"> 608.                     append_param = _formatparam(param, value, requote)</font>
+<font color="black"> 609.                 else:</font>
+<font color="red"> 610.                     append_param = _formatparam(old_param, old_value, requote)</font>
+<font color="red"> 611.                 if not ctype:</font>
+<font color="red"> 612.                     ctype = append_param</font>
+<font color="black"> 613.                 else:</font>
+<font color="red"> 614.                     ctype = SEMISPACE.join([ctype, append_param])</font>
+<font color="red"> 615.         if ctype != self.get(header):</font>
+<font color="red"> 616.             del self[header]</font>
+<font color="red"> 617.             self[header] = ctype</font>
+<font color="black"> 618. </font>
+<font color="red"> 619.     def del_param(self, param, header='content-type', requote=True):</font>
+<font color="black"> 620.         &quot;&quot;&quot;Remove the given parameter completely from the Content-Type header.</font>
+<font color="black"> 621. </font>
+<font color="black"> 622.         The header will be re-written in place without the parameter or its</font>
+<font color="black"> 623.         value. All values will be quoted as necessary unless requote is</font>
+<font color="black"> 624.         False.  Optional header specifies an alternative to the Content-Type</font>
+<font color="black"> 625.         header.</font>
+<font color="black"> 626.         &quot;&quot;&quot;</font>
+<font color="red"> 627.         if header not in self:</font>
+<font color="red"> 628.             return</font>
+<font color="red"> 629.         new_ctype = ''</font>
+<font color="red"> 630.         for p, v in self.get_params(header=header, unquote=requote):</font>
+<font color="red"> 631.             if p.lower() != param.lower():</font>
+<font color="red"> 632.                 if not new_ctype:</font>
+<font color="red"> 633.                     new_ctype = _formatparam(p, v, requote)</font>
+<font color="black"> 634.                 else:</font>
+<font color="red"> 635.                     new_ctype = SEMISPACE.join([new_ctype,</font>
+<font color="red"> 636.                                                 _formatparam(p, v, requote)])</font>
+<font color="red"> 637.         if new_ctype != self.get(header):</font>
+<font color="red"> 638.             del self[header]</font>
+<font color="red"> 639.             self[header] = new_ctype</font>
+<font color="black"> 640. </font>
+<font color="red"> 641.     def set_type(self, type, header='Content-Type', requote=True):</font>
+<font color="black"> 642.         &quot;&quot;&quot;Set the main type and subtype for the Content-Type header.</font>
+<font color="black"> 643. </font>
+<font color="black"> 644.         type must be a string in the form &quot;maintype/subtype&quot;, otherwise a</font>
+<font color="black"> 645.         ValueError is raised.</font>
+<font color="black"> 646. </font>
+<font color="black"> 647.         This method replaces the Content-Type header, keeping all the</font>
+<font color="black"> 648.         parameters in place.  If requote is False, this leaves the existing</font>
+<font color="black"> 649.         header's quoting as is.  Otherwise, the parameters will be quoted (the</font>
+<font color="black"> 650.         default).</font>
+<font color="black"> 651. </font>
+<font color="black"> 652.         An alternative header can be specified in the header argument.  When</font>
+<font color="black"> 653.         the Content-Type header is set, we'll always also add a MIME-Version</font>
+<font color="black"> 654.         header.</font>
+<font color="black"> 655.         &quot;&quot;&quot;</font>
+<font color="black"> 656.         # BAW: should we be strict?</font>
+<font color="red"> 657.         if not type.count('/') == 1:</font>
+<font color="red"> 658.             raise ValueError</font>
+<font color="black"> 659.         # Set the Content-Type, you get a MIME-Version</font>
+<font color="red"> 660.         if header.lower() == 'content-type':</font>
+<font color="red"> 661.             del self['mime-version']</font>
+<font color="red"> 662.             self['MIME-Version'] = '1.0'</font>
+<font color="red"> 663.         if header not in self:</font>
+<font color="red"> 664.             self[header] = type</font>
+<font color="red"> 665.             return</font>
+<font color="red"> 666.         params = self.get_params(header=header, unquote=requote)</font>
+<font color="red"> 667.         del self[header]</font>
+<font color="red"> 668.         self[header] = type</font>
+<font color="black"> 669.         # Skip the first param; it's the old type.</font>
+<font color="red"> 670.         for p, v in params[1:]:</font>
+<font color="red"> 671.             self.set_param(p, v, header, requote)</font>
+<font color="black"> 672. </font>
+<font color="red"> 673.     def get_filename(self, failobj=None):</font>
+<font color="black"> 674.         &quot;&quot;&quot;Return the filename associated with the payload if present.</font>
+<font color="black"> 675. </font>
+<font color="black"> 676.         The filename is extracted from the Content-Disposition header's</font>
+<font color="black"> 677.         `filename' parameter, and it is unquoted.  If that header is missing</font>
+<font color="black"> 678.         the `filename' parameter, this method falls back to looking for the</font>
+<font color="black"> 679.         `name' parameter.</font>
+<font color="black"> 680.         &quot;&quot;&quot;</font>
+<font color="red"> 681.         missing = object()</font>
+<font color="red"> 682.         filename = self.get_param('filename', missing, 'content-disposition')</font>
+<font color="red"> 683.         if filename is missing:</font>
+<font color="red"> 684.             filename = self.get_param('name', missing, 'content-type')</font>
+<font color="red"> 685.         if filename is missing:</font>
+<font color="red"> 686.             return failobj</font>
+<font color="red"> 687.         return utils.collapse_rfc2231_value(filename).strip()</font>
+<font color="black"> 688. </font>
+<font color="red"> 689.     def get_boundary(self, failobj=None):</font>
+<font color="black"> 690.         &quot;&quot;&quot;Return the boundary associated with the payload if present.</font>
+<font color="black"> 691. </font>
+<font color="black"> 692.         The boundary is extracted from the Content-Type header's `boundary'</font>
+<font color="black"> 693.         parameter, and it is unquoted.</font>
+<font color="black"> 694.         &quot;&quot;&quot;</font>
+<font color="red"> 695.         missing = object()</font>
+<font color="red"> 696.         boundary = self.get_param('boundary', missing)</font>
+<font color="red"> 697.         if boundary is missing:</font>
+<font color="red"> 698.             return failobj</font>
+<font color="black"> 699.         # RFC 2046 says that boundaries may begin but not end in w/s</font>
+<font color="red"> 700.         return utils.collapse_rfc2231_value(boundary).rstrip()</font>
+<font color="black"> 701. </font>
+<font color="red"> 702.     def set_boundary(self, boundary):</font>
+<font color="black"> 703.         &quot;&quot;&quot;Set the boundary parameter in Content-Type to 'boundary'.</font>
+<font color="black"> 704. </font>
+<font color="black"> 705.         This is subtly different than deleting the Content-Type header and</font>
+<font color="black"> 706.         adding a new one with a new boundary parameter via add_header().  The</font>
+<font color="black"> 707.         main difference is that using the set_boundary() method preserves the</font>
+<font color="black"> 708.         order of the Content-Type header in the original message.</font>
+<font color="black"> 709. </font>
+<font color="black"> 710.         HeaderParseError is raised if the message has no Content-Type header.</font>
+<font color="black"> 711.         &quot;&quot;&quot;</font>
+<font color="red"> 712.         missing = object()</font>
+<font color="red"> 713.         params = self._get_params_preserve(missing, 'content-type')</font>
+<font color="red"> 714.         if params is missing:</font>
+<font color="black"> 715.             # There was no Content-Type header, and we don't know what type</font>
+<font color="black"> 716.             # to set it to, so raise an exception.</font>
+<font color="red"> 717.             raise errors.HeaderParseError('No Content-Type header found')</font>
+<font color="red"> 718.         newparams = []</font>
+<font color="red"> 719.         foundp = False</font>
+<font color="red"> 720.         for pk, pv in params:</font>
+<font color="red"> 721.             if pk.lower() == 'boundary':</font>
+<font color="red"> 722.                 newparams.append(('boundary', '&quot;%s&quot;' % boundary))</font>
+<font color="red"> 723.                 foundp = True</font>
+<font color="black"> 724.             else:</font>
+<font color="red"> 725.                 newparams.append((pk, pv))</font>
+<font color="red"> 726.         if not foundp:</font>
+<font color="black"> 727.             # The original Content-Type header had no boundary attribute.</font>
+<font color="black"> 728.             # Tack one on the end.  BAW: should we raise an exception</font>
+<font color="black"> 729.             # instead???</font>
+<font color="red"> 730.             newparams.append(('boundary', '&quot;%s&quot;' % boundary))</font>
+<font color="black"> 731.         # Replace the existing Content-Type header with the new value</font>
+<font color="red"> 732.         newheaders = []</font>
+<font color="red"> 733.         for h, v in self._headers:</font>
+<font color="red"> 734.             if h.lower() == 'content-type':</font>
+<font color="red"> 735.                 parts = []</font>
+<font color="red"> 736.                 for k, v in newparams:</font>
+<font color="red"> 737.                     if v == '':</font>
+<font color="red"> 738.                         parts.append(k)</font>
+<font color="black"> 739.                     else:</font>
+<font color="red"> 740.                         parts.append('%s=%s' % (k, v))</font>
+<font color="red"> 741.                 newheaders.append((h, SEMISPACE.join(parts)))</font>
+<font color="black"> 742. </font>
+<font color="black"> 743.             else:</font>
+<font color="red"> 744.                 newheaders.append((h, v))</font>
+<font color="red"> 745.         self._headers = newheaders</font>
+<font color="black"> 746. </font>
+<font color="red"> 747.     def get_content_charset(self, failobj=None):</font>
+<font color="black"> 748.         &quot;&quot;&quot;Return the charset parameter of the Content-Type header.</font>
+<font color="black"> 749. </font>
+<font color="black"> 750.         The returned string is always coerced to lower case.  If there is no</font>
+<font color="black"> 751.         Content-Type header, or if that header has no charset parameter,</font>
+<font color="black"> 752.         failobj is returned.</font>
+<font color="black"> 753.         &quot;&quot;&quot;</font>
+<font color="red"> 754.         missing = object()</font>
+<font color="red"> 755.         charset = self.get_param('charset', missing)</font>
+<font color="red"> 756.         if charset is missing:</font>
+<font color="red"> 757.             return failobj</font>
+<font color="red"> 758.         if isinstance(charset, tuple):</font>
+<font color="black"> 759.             # RFC 2231 encoded, so decode it, and it better end up as ascii.</font>
+<font color="red"> 760.             pcharset = charset[0] or 'us-ascii'</font>
+<font color="red"> 761.             try:</font>
+<font color="black"> 762.                 # LookupError will be raised if the charset isn't known to</font>
+<font color="black"> 763.                 # Python.  UnicodeError will be raised if the encoded text</font>
+<font color="black"> 764.                 # contains a character not in the charset.</font>
+<font color="red"> 765.                 charset = unicode(charset[2], pcharset).encode('us-ascii')</font>
+<font color="red"> 766.             except (LookupError, UnicodeError):</font>
+<font color="red"> 767.                 charset = charset[2]</font>
+<font color="black"> 768.         # charset character must be in us-ascii range</font>
+<font color="red"> 769.         try:</font>
+<font color="red"> 770.             if isinstance(charset, str):</font>
+<font color="red"> 771.                 charset = unicode(charset, 'us-ascii')</font>
+<font color="red"> 772.             charset = charset.encode('us-ascii')</font>
+<font color="red"> 773.         except UnicodeError:</font>
+<font color="red"> 774.             return failobj</font>
+<font color="black"> 775.         # RFC 2046, $4.1.2 says charsets are not case sensitive</font>
+<font color="red"> 776.         return charset.lower()</font>
+<font color="black"> 777. </font>
+<font color="red"> 778.     def get_charsets(self, failobj=None):</font>
+<font color="black"> 779.         &quot;&quot;&quot;Return a list containing the charset(s) used in this message.</font>
+<font color="black"> 780. </font>
+<font color="black"> 781.         The returned list of items describes the Content-Type headers'</font>
+<font color="black"> 782.         charset parameter for this message and all the subparts in its</font>
+<font color="black"> 783.         payload.</font>
+<font color="black"> 784. </font>
+<font color="black"> 785.         Each item will either be a string (the value of the charset parameter</font>
+<font color="black"> 786.         in the Content-Type header of that part) or the value of the</font>
+<font color="black"> 787.         'failobj' parameter (defaults to None), if the part does not have a</font>
+<font color="black"> 788.         main MIME type of &quot;text&quot;, or the charset is not defined.</font>
+<font color="black"> 789. </font>
+<font color="black"> 790.         The list will contain one string for each part of the message, plus</font>
+<font color="black"> 791.         one for the container message (i.e. self), so that a non-multipart</font>
+<font color="black"> 792.         message will still return a list of length 1.</font>
+<font color="black"> 793.         &quot;&quot;&quot;</font>
+<font color="red"> 794.         return [part.get_content_charset(failobj) for part in self.walk()]</font>
+<font color="black"> 795. </font>
+<font color="black"> 796.     # I.e. def walk(self): ...</font>
+<font color="red"> 797.     from email.iterators import walk</font>
+</pre>
+

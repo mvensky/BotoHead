@@ -1,0 +1,177 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/_LWPCookieJar.py</b><br>
+
+
+file stats: <b>109 lines, 9 executed: 8.3% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Load / save to libwww-perl (LWP) format files.</font>
+<font color="black">   2. </font>
+<font color="black">   3. Actually, the format is slightly extended from that used by LWP's</font>
+<font color="black">   4. (libwww-perl's) HTTP::Cookies, to avoid losing some RFC 2965 information</font>
+<font color="black">   5. not recorded by LWP.</font>
+<font color="black">   6. </font>
+<font color="black">   7. It uses the version string &quot;2.0&quot;, though really there isn't an LWP Cookies</font>
+<font color="black">   8. 2.0 format.  This indicates that there is extra information in here</font>
+<font color="black">   9. (domain_dot and # port_spec) while still being compatible with</font>
+<font color="black">  10. libwww-perl, I hope.</font>
+<font color="black">  11. </font>
+<font color="green">  12. &quot;&quot;&quot;</font>
+<font color="black">  13. </font>
+<font color="green">  14. import time, re</font>
+<font color="green">  15. from cookielib import (_warn_unhandled_exception, FileCookieJar, LoadError,</font>
+<font color="black">  16.                        Cookie, MISSING_FILENAME_TEXT,</font>
+<font color="black">  17.                        join_header_words, split_header_words,</font>
+<font color="black">  18.                        iso2time, time2isoz)</font>
+<font color="black">  19. </font>
+<font color="green">  20. def lwp_cookie_str(cookie):</font>
+<font color="black">  21.     &quot;&quot;&quot;Return string representation of Cookie in the LWP cookie file format.</font>
+<font color="black">  22. </font>
+<font color="black">  23.     Actually, the format is extended a bit -- see module docstring.</font>
+<font color="black">  24. </font>
+<font color="black">  25.     &quot;&quot;&quot;</font>
+<font color="red">  26.     h = [(cookie.name, cookie.value),</font>
+<font color="red">  27.          (&quot;path&quot;, cookie.path),</font>
+<font color="red">  28.          (&quot;domain&quot;, cookie.domain)]</font>
+<font color="red">  29.     if cookie.port is not None: h.append((&quot;port&quot;, cookie.port))</font>
+<font color="red">  30.     if cookie.path_specified: h.append((&quot;path_spec&quot;, None))</font>
+<font color="red">  31.     if cookie.port_specified: h.append((&quot;port_spec&quot;, None))</font>
+<font color="red">  32.     if cookie.domain_initial_dot: h.append((&quot;domain_dot&quot;, None))</font>
+<font color="red">  33.     if cookie.secure: h.append((&quot;secure&quot;, None))</font>
+<font color="red">  34.     if cookie.expires: h.append((&quot;expires&quot;,</font>
+<font color="red">  35.                                time2isoz(float(cookie.expires))))</font>
+<font color="red">  36.     if cookie.discard: h.append((&quot;discard&quot;, None))</font>
+<font color="red">  37.     if cookie.comment: h.append((&quot;comment&quot;, cookie.comment))</font>
+<font color="red">  38.     if cookie.comment_url: h.append((&quot;commenturl&quot;, cookie.comment_url))</font>
+<font color="black">  39. </font>
+<font color="red">  40.     keys = cookie._rest.keys()</font>
+<font color="red">  41.     keys.sort()</font>
+<font color="red">  42.     for k in keys:</font>
+<font color="red">  43.         h.append((k, str(cookie._rest[k])))</font>
+<font color="black">  44. </font>
+<font color="red">  45.     h.append((&quot;version&quot;, str(cookie.version)))</font>
+<font color="black">  46. </font>
+<font color="red">  47.     return join_header_words([h])</font>
+<font color="black">  48. </font>
+<font color="green">  49. class LWPCookieJar(FileCookieJar):</font>
+<font color="black">  50.     &quot;&quot;&quot;</font>
+<font color="black">  51.     The LWPCookieJar saves a sequence of &quot;Set-Cookie3&quot; lines.</font>
+<font color="black">  52.     &quot;Set-Cookie3&quot; is the format used by the libwww-perl library, not known</font>
+<font color="black">  53.     to be compatible with any browser, but which is easy to read and</font>
+<font color="black">  54.     doesn't lose information about RFC 2965 cookies.</font>
+<font color="black">  55. </font>
+<font color="black">  56.     Additional methods</font>
+<font color="black">  57. </font>
+<font color="black">  58.     as_lwp_str(ignore_discard=True, ignore_expired=True)</font>
+<font color="black">  59. </font>
+<font color="green">  60.     &quot;&quot;&quot;</font>
+<font color="black">  61. </font>
+<font color="green">  62.     def as_lwp_str(self, ignore_discard=True, ignore_expires=True):</font>
+<font color="black">  63.         &quot;&quot;&quot;Return cookies as a string of &quot;\\n&quot;-separated &quot;Set-Cookie3&quot; headers.</font>
+<font color="black">  64. </font>
+<font color="black">  65.         ignore_discard and ignore_expires: see docstring for FileCookieJar.save</font>
+<font color="black">  66. </font>
+<font color="black">  67.         &quot;&quot;&quot;</font>
+<font color="red">  68.         now = time.time()</font>
+<font color="red">  69.         r = []</font>
+<font color="red">  70.         for cookie in self:</font>
+<font color="red">  71.             if not ignore_discard and cookie.discard:</font>
+<font color="red">  72.                 continue</font>
+<font color="red">  73.             if not ignore_expires and cookie.is_expired(now):</font>
+<font color="red">  74.                 continue</font>
+<font color="red">  75.             r.append(&quot;Set-Cookie3: %s&quot; % lwp_cookie_str(cookie))</font>
+<font color="red">  76.         return &quot;\n&quot;.join(r+[&quot;&quot;])</font>
+<font color="black">  77. </font>
+<font color="green">  78.     def save(self, filename=None, ignore_discard=False, ignore_expires=False):</font>
+<font color="red">  79.         if filename is None:</font>
+<font color="red">  80.             if self.filename is not None: filename = self.filename</font>
+<font color="red">  81.             else: raise ValueError(MISSING_FILENAME_TEXT)</font>
+<font color="black">  82. </font>
+<font color="red">  83.         f = open(filename, &quot;w&quot;)</font>
+<font color="red">  84.         try:</font>
+<font color="black">  85.             # There really isn't an LWP Cookies 2.0 format, but this indicates</font>
+<font color="black">  86.             # that there is extra information in here (domain_dot and</font>
+<font color="black">  87.             # port_spec) while still being compatible with libwww-perl, I hope.</font>
+<font color="red">  88.             f.write(&quot;#LWP-Cookies-2.0\n&quot;)</font>
+<font color="red">  89.             f.write(self.as_lwp_str(ignore_discard, ignore_expires))</font>
+<font color="black">  90.         finally:</font>
+<font color="red">  91.             f.close()</font>
+<font color="black">  92. </font>
+<font color="green">  93.     def _really_load(self, f, filename, ignore_discard, ignore_expires):</font>
+<font color="red">  94.         magic = f.readline()</font>
+<font color="red">  95.         if not re.search(self.magic_re, magic):</font>
+<font color="red">  96.             msg = (&quot;%r does not look like a Set-Cookie3 (LWP) format &quot;</font>
+<font color="red">  97.                    &quot;file&quot; % filename)</font>
+<font color="red">  98.             raise LoadError(msg)</font>
+<font color="black">  99. </font>
+<font color="red"> 100.         now = time.time()</font>
+<font color="black"> 101. </font>
+<font color="red"> 102.         header = &quot;Set-Cookie3:&quot;</font>
+<font color="black"> 103.         boolean_attrs = (&quot;port_spec&quot;, &quot;path_spec&quot;, &quot;domain_dot&quot;,</font>
+<font color="red"> 104.                          &quot;secure&quot;, &quot;discard&quot;)</font>
+<font color="black"> 105.         value_attrs = (&quot;version&quot;,</font>
+<font color="black"> 106.                        &quot;port&quot;, &quot;path&quot;, &quot;domain&quot;,</font>
+<font color="black"> 107.                        &quot;expires&quot;,</font>
+<font color="red"> 108.                        &quot;comment&quot;, &quot;commenturl&quot;)</font>
+<font color="black"> 109. </font>
+<font color="red"> 110.         try:</font>
+<font color="red"> 111.             while 1:</font>
+<font color="red"> 112.                 line = f.readline()</font>
+<font color="red"> 113.                 if line == &quot;&quot;: break</font>
+<font color="red"> 114.                 if not line.startswith(header):</font>
+<font color="red"> 115.                     continue</font>
+<font color="red"> 116.                 line = line[len(header):].strip()</font>
+<font color="black"> 117. </font>
+<font color="red"> 118.                 for data in split_header_words([line]):</font>
+<font color="red"> 119.                     name, value = data[0]</font>
+<font color="red"> 120.                     standard = {}</font>
+<font color="red"> 121.                     rest = {}</font>
+<font color="red"> 122.                     for k in boolean_attrs:</font>
+<font color="red"> 123.                         standard[k] = False</font>
+<font color="red"> 124.                     for k, v in data[1:]:</font>
+<font color="red"> 125.                         if k is not None:</font>
+<font color="red"> 126.                             lc = k.lower()</font>
+<font color="black"> 127.                         else:</font>
+<font color="red"> 128.                             lc = None</font>
+<font color="black"> 129.                         # don't lose case distinction for unknown fields</font>
+<font color="red"> 130.                         if (lc in value_attrs) or (lc in boolean_attrs):</font>
+<font color="red"> 131.                             k = lc</font>
+<font color="red"> 132.                         if k in boolean_attrs:</font>
+<font color="red"> 133.                             if v is None: v = True</font>
+<font color="red"> 134.                             standard[k] = v</font>
+<font color="red"> 135.                         elif k in value_attrs:</font>
+<font color="red"> 136.                             standard[k] = v</font>
+<font color="black"> 137.                         else:</font>
+<font color="red"> 138.                             rest[k] = v</font>
+<font color="black"> 139. </font>
+<font color="red"> 140.                     h = standard.get</font>
+<font color="red"> 141.                     expires = h(&quot;expires&quot;)</font>
+<font color="red"> 142.                     discard = h(&quot;discard&quot;)</font>
+<font color="red"> 143.                     if expires is not None:</font>
+<font color="red"> 144.                         expires = iso2time(expires)</font>
+<font color="red"> 145.                     if expires is None:</font>
+<font color="red"> 146.                         discard = True</font>
+<font color="red"> 147.                     domain = h(&quot;domain&quot;)</font>
+<font color="red"> 148.                     domain_specified = domain.startswith(&quot;.&quot;)</font>
+<font color="red"> 149.                     c = Cookie(h(&quot;version&quot;), name, value,</font>
+<font color="red"> 150.                                h(&quot;port&quot;), h(&quot;port_spec&quot;),</font>
+<font color="red"> 151.                                domain, domain_specified, h(&quot;domain_dot&quot;),</font>
+<font color="red"> 152.                                h(&quot;path&quot;), h(&quot;path_spec&quot;),</font>
+<font color="red"> 153.                                h(&quot;secure&quot;),</font>
+<font color="red"> 154.                                expires,</font>
+<font color="red"> 155.                                discard,</font>
+<font color="red"> 156.                                h(&quot;comment&quot;),</font>
+<font color="red"> 157.                                h(&quot;commenturl&quot;),</font>
+<font color="red"> 158.                                rest)</font>
+<font color="red"> 159.                     if not ignore_discard and c.discard:</font>
+<font color="red"> 160.                         continue</font>
+<font color="red"> 161.                     if not ignore_expires and c.is_expired(now):</font>
+<font color="red"> 162.                         continue</font>
+<font color="red"> 163.                     self.set_cookie(c)</font>
+<font color="black"> 164. </font>
+<font color="red"> 165.         except IOError:</font>
+<font color="red"> 166.             raise</font>
+<font color="red"> 167.         except Exception:</font>
+<font color="red"> 168.             _warn_unhandled_exception()</font>
+<font color="red"> 169.             raise LoadError(&quot;invalid Set-Cookie3 format file %r: %r&quot; %</font>
+<font color="red"> 170.                             (filename, line))</font>
+</pre>
+

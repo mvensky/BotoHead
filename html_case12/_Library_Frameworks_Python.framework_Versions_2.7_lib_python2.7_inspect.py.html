@@ -1,0 +1,1073 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/inspect.py</b><br>
+
+
+file stats: <b>613 lines, 30 executed: 4.9% covered</b>
+<pre>
+<font color="black">   1. # -*- coding: iso-8859-1 -*-</font>
+<font color="black">   2. &quot;&quot;&quot;Get useful information from live Python objects.</font>
+<font color="black">   3. </font>
+<font color="black">   4. This module encapsulates the interface provided by the internal special</font>
+<font color="black">   5. attributes (func_*, co_*, im_*, tb_*, etc.) in a friendlier fashion.</font>
+<font color="black">   6. It also provides some help for examining source code and class layout.</font>
+<font color="black">   7. </font>
+<font color="black">   8. Here are some of the useful functions provided by this module:</font>
+<font color="black">   9. </font>
+<font color="black">  10.     ismodule(), isclass(), ismethod(), isfunction(), isgeneratorfunction(),</font>
+<font color="black">  11.         isgenerator(), istraceback(), isframe(), iscode(), isbuiltin(),</font>
+<font color="black">  12.         isroutine() - check object types</font>
+<font color="black">  13.     getmembers() - get members of an object that satisfy a given condition</font>
+<font color="black">  14. </font>
+<font color="black">  15.     getfile(), getsourcefile(), getsource() - find an object's source code</font>
+<font color="black">  16.     getdoc(), getcomments() - get documentation on an object</font>
+<font color="black">  17.     getmodule() - determine the module that an object came from</font>
+<font color="black">  18.     getclasstree() - arrange classes so as to represent their hierarchy</font>
+<font color="black">  19. </font>
+<font color="black">  20.     getargspec(), getargvalues(), getcallargs() - get info about function arguments</font>
+<font color="black">  21.     formatargspec(), formatargvalues() - format an argument spec</font>
+<font color="black">  22.     getouterframes(), getinnerframes() - get info about frames</font>
+<font color="black">  23.     currentframe() - get the current stack frame</font>
+<font color="black">  24.     stack(), trace() - get info about frames on the stack or in a traceback</font>
+<font color="red">  25. &quot;&quot;&quot;</font>
+<font color="black">  26. </font>
+<font color="black">  27. # This module is in the public domain.  No warranties.</font>
+<font color="black">  28. </font>
+<font color="red">  29. __author__ = 'Ka-Ping Yee &lt;ping@lfw.org&gt;'</font>
+<font color="red">  30. __date__ = '1 Jan 2001'</font>
+<font color="black">  31. </font>
+<font color="red">  32. import sys</font>
+<font color="red">  33. import os</font>
+<font color="red">  34. import types</font>
+<font color="red">  35. import string</font>
+<font color="red">  36. import re</font>
+<font color="red">  37. import dis</font>
+<font color="red">  38. import imp</font>
+<font color="red">  39. import tokenize</font>
+<font color="red">  40. import linecache</font>
+<font color="red">  41. from operator import attrgetter</font>
+<font color="red">  42. from collections import namedtuple</font>
+<font color="black">  43. </font>
+<font color="black">  44. # These constants are from Include/code.h.</font>
+<font color="red">  45. CO_OPTIMIZED, CO_NEWLOCALS, CO_VARARGS, CO_VARKEYWORDS = 0x1, 0x2, 0x4, 0x8</font>
+<font color="red">  46. CO_NESTED, CO_GENERATOR, CO_NOFREE = 0x10, 0x20, 0x40</font>
+<font color="black">  47. # See Include/object.h</font>
+<font color="red">  48. TPFLAGS_IS_ABSTRACT = 1 &lt;&lt; 20</font>
+<font color="black">  49. </font>
+<font color="black">  50. # ----------------------------------------------------------- type-checking</font>
+<font color="red">  51. def ismodule(object):</font>
+<font color="black">  52.     &quot;&quot;&quot;Return true if the object is a module.</font>
+<font color="black">  53. </font>
+<font color="black">  54.     Module objects provide these attributes:</font>
+<font color="black">  55.         __doc__         documentation string</font>
+<font color="black">  56.         __file__        filename (missing for built-in modules)&quot;&quot;&quot;</font>
+<font color="red">  57.     return isinstance(object, types.ModuleType)</font>
+<font color="black">  58. </font>
+<font color="red">  59. def isclass(object):</font>
+<font color="black">  60.     &quot;&quot;&quot;Return true if the object is a class.</font>
+<font color="black">  61. </font>
+<font color="black">  62.     Class objects provide these attributes:</font>
+<font color="black">  63.         __doc__         documentation string</font>
+<font color="black">  64.         __module__      name of module in which this class was defined&quot;&quot;&quot;</font>
+<font color="red">  65.     return isinstance(object, (type, types.ClassType))</font>
+<font color="black">  66. </font>
+<font color="red">  67. def ismethod(object):</font>
+<font color="black">  68.     &quot;&quot;&quot;Return true if the object is an instance method.</font>
+<font color="black">  69. </font>
+<font color="black">  70.     Instance method objects provide these attributes:</font>
+<font color="black">  71.         __doc__         documentation string</font>
+<font color="black">  72.         __name__        name with which this method was defined</font>
+<font color="black">  73.         im_class        class object in which this method belongs</font>
+<font color="black">  74.         im_func         function object containing implementation of method</font>
+<font color="black">  75.         im_self         instance to which this method is bound, or None&quot;&quot;&quot;</font>
+<font color="green">  76.     return isinstance(object, types.MethodType)</font>
+<font color="black">  77. </font>
+<font color="red">  78. def ismethoddescriptor(object):</font>
+<font color="black">  79.     &quot;&quot;&quot;Return true if the object is a method descriptor.</font>
+<font color="black">  80. </font>
+<font color="black">  81.     But not if ismethod() or isclass() or isfunction() are true.</font>
+<font color="black">  82. </font>
+<font color="black">  83.     This is new in Python 2.2, and, for example, is true of int.__add__.</font>
+<font color="black">  84.     An object passing this test has a __get__ attribute but not a __set__</font>
+<font color="black">  85.     attribute, but beyond that the set of attributes varies.  __name__ is</font>
+<font color="black">  86.     usually sensible, and __doc__ often is.</font>
+<font color="black">  87. </font>
+<font color="black">  88.     Methods implemented via descriptors that also pass one of the other</font>
+<font color="black">  89.     tests return false from the ismethoddescriptor() test, simply because</font>
+<font color="black">  90.     the other tests promise more -- you can, e.g., count on having the</font>
+<font color="black">  91.     im_func attribute (etc) when an object passes ismethod().&quot;&quot;&quot;</font>
+<font color="red">  92.     return (hasattr(object, &quot;__get__&quot;)</font>
+<font color="red">  93.             and not hasattr(object, &quot;__set__&quot;) # else it's a data descriptor</font>
+<font color="red">  94.             and not ismethod(object)           # mutual exclusion</font>
+<font color="red">  95.             and not isfunction(object)</font>
+<font color="red">  96.             and not isclass(object))</font>
+<font color="black">  97. </font>
+<font color="red">  98. def isdatadescriptor(object):</font>
+<font color="black">  99.     &quot;&quot;&quot;Return true if the object is a data descriptor.</font>
+<font color="black"> 100. </font>
+<font color="black"> 101.     Data descriptors have both a __get__ and a __set__ attribute.  Examples are</font>
+<font color="black"> 102.     properties (defined in Python) and getsets and members (defined in C).</font>
+<font color="black"> 103.     Typically, data descriptors will also have __name__ and __doc__ attributes</font>
+<font color="black"> 104.     (properties, getsets, and members have both of these attributes), but this</font>
+<font color="black"> 105.     is not guaranteed.&quot;&quot;&quot;</font>
+<font color="red"> 106.     return (hasattr(object, &quot;__set__&quot;) and hasattr(object, &quot;__get__&quot;))</font>
+<font color="black"> 107. </font>
+<font color="red"> 108. if hasattr(types, 'MemberDescriptorType'):</font>
+<font color="black"> 109.     # CPython and equivalent</font>
+<font color="red"> 110.     def ismemberdescriptor(object):</font>
+<font color="black"> 111.         &quot;&quot;&quot;Return true if the object is a member descriptor.</font>
+<font color="black"> 112. </font>
+<font color="black"> 113.         Member descriptors are specialized descriptors defined in extension</font>
+<font color="black"> 114.         modules.&quot;&quot;&quot;</font>
+<font color="red"> 115.         return isinstance(object, types.MemberDescriptorType)</font>
+<font color="black"> 116. else:</font>
+<font color="black"> 117.     # Other implementations</font>
+<font color="red"> 118.     def ismemberdescriptor(object):</font>
+<font color="black"> 119.         &quot;&quot;&quot;Return true if the object is a member descriptor.</font>
+<font color="black"> 120. </font>
+<font color="black"> 121.         Member descriptors are specialized descriptors defined in extension</font>
+<font color="black"> 122.         modules.&quot;&quot;&quot;</font>
+<font color="red"> 123.         return False</font>
+<font color="black"> 124. </font>
+<font color="red"> 125. if hasattr(types, 'GetSetDescriptorType'):</font>
+<font color="black"> 126.     # CPython and equivalent</font>
+<font color="red"> 127.     def isgetsetdescriptor(object):</font>
+<font color="black"> 128.         &quot;&quot;&quot;Return true if the object is a getset descriptor.</font>
+<font color="black"> 129. </font>
+<font color="black"> 130.         getset descriptors are specialized descriptors defined in extension</font>
+<font color="black"> 131.         modules.&quot;&quot;&quot;</font>
+<font color="red"> 132.         return isinstance(object, types.GetSetDescriptorType)</font>
+<font color="black"> 133. else:</font>
+<font color="black"> 134.     # Other implementations</font>
+<font color="red"> 135.     def isgetsetdescriptor(object):</font>
+<font color="black"> 136.         &quot;&quot;&quot;Return true if the object is a getset descriptor.</font>
+<font color="black"> 137. </font>
+<font color="black"> 138.         getset descriptors are specialized descriptors defined in extension</font>
+<font color="black"> 139.         modules.&quot;&quot;&quot;</font>
+<font color="red"> 140.         return False</font>
+<font color="black"> 141. </font>
+<font color="red"> 142. def isfunction(object):</font>
+<font color="black"> 143.     &quot;&quot;&quot;Return true if the object is a user-defined function.</font>
+<font color="black"> 144. </font>
+<font color="black"> 145.     Function objects provide these attributes:</font>
+<font color="black"> 146.         __doc__         documentation string</font>
+<font color="black"> 147.         __name__        name with which this function was defined</font>
+<font color="black"> 148.         func_code       code object containing compiled function bytecode</font>
+<font color="black"> 149.         func_defaults   tuple of any default values for arguments</font>
+<font color="black"> 150.         func_doc        (same as __doc__)</font>
+<font color="black"> 151.         func_globals    global namespace in which this function was defined</font>
+<font color="black"> 152.         func_name       (same as __name__)&quot;&quot;&quot;</font>
+<font color="green"> 153.     return isinstance(object, types.FunctionType)</font>
+<font color="black"> 154. </font>
+<font color="red"> 155. def isgeneratorfunction(object):</font>
+<font color="black"> 156.     &quot;&quot;&quot;Return true if the object is a user-defined generator function.</font>
+<font color="black"> 157. </font>
+<font color="black"> 158.     Generator function objects provide the same attributes as functions.</font>
+<font color="black"> 159.     See help(isfunction) for a list of attributes.&quot;&quot;&quot;</font>
+<font color="red"> 160.     return bool((isfunction(object) or ismethod(object)) and</font>
+<font color="red"> 161.                 object.func_code.co_flags &amp; CO_GENERATOR)</font>
+<font color="black"> 162. </font>
+<font color="red"> 163. def isgenerator(object):</font>
+<font color="black"> 164.     &quot;&quot;&quot;Return true if the object is a generator.</font>
+<font color="black"> 165. </font>
+<font color="black"> 166.     Generator objects provide these attributes:</font>
+<font color="black"> 167.         __iter__        defined to support iteration over container</font>
+<font color="black"> 168.         close           raises a new GeneratorExit exception inside the</font>
+<font color="black"> 169.                         generator to terminate the iteration</font>
+<font color="black"> 170.         gi_code         code object</font>
+<font color="black"> 171.         gi_frame        frame object or possibly None once the generator has</font>
+<font color="black"> 172.                         been exhausted</font>
+<font color="black"> 173.         gi_running      set to 1 when generator is executing, 0 otherwise</font>
+<font color="black"> 174.         next            return the next item from the container</font>
+<font color="black"> 175.         send            resumes the generator and &quot;sends&quot; a value that becomes</font>
+<font color="black"> 176.                         the result of the current yield-expression</font>
+<font color="black"> 177.         throw           used to raise an exception inside the generator&quot;&quot;&quot;</font>
+<font color="red"> 178.     return isinstance(object, types.GeneratorType)</font>
+<font color="black"> 179. </font>
+<font color="red"> 180. def istraceback(object):</font>
+<font color="black"> 181.     &quot;&quot;&quot;Return true if the object is a traceback.</font>
+<font color="black"> 182. </font>
+<font color="black"> 183.     Traceback objects provide these attributes:</font>
+<font color="black"> 184.         tb_frame        frame object at this level</font>
+<font color="black"> 185.         tb_lasti        index of last attempted instruction in bytecode</font>
+<font color="black"> 186.         tb_lineno       current line number in Python source code</font>
+<font color="black"> 187.         tb_next         next inner traceback object (called by this level)&quot;&quot;&quot;</font>
+<font color="red"> 188.     return isinstance(object, types.TracebackType)</font>
+<font color="black"> 189. </font>
+<font color="red"> 190. def isframe(object):</font>
+<font color="black"> 191.     &quot;&quot;&quot;Return true if the object is a frame object.</font>
+<font color="black"> 192. </font>
+<font color="black"> 193.     Frame objects provide these attributes:</font>
+<font color="black"> 194.         f_back          next outer frame object (this frame's caller)</font>
+<font color="black"> 195.         f_builtins      built-in namespace seen by this frame</font>
+<font color="black"> 196.         f_code          code object being executed in this frame</font>
+<font color="black"> 197.         f_exc_traceback traceback if raised in this frame, or None</font>
+<font color="black"> 198.         f_exc_type      exception type if raised in this frame, or None</font>
+<font color="black"> 199.         f_exc_value     exception value if raised in this frame, or None</font>
+<font color="black"> 200.         f_globals       global namespace seen by this frame</font>
+<font color="black"> 201.         f_lasti         index of last attempted instruction in bytecode</font>
+<font color="black"> 202.         f_lineno        current line number in Python source code</font>
+<font color="black"> 203.         f_locals        local namespace seen by this frame</font>
+<font color="black"> 204.         f_restricted    0 or 1 if frame is in restricted execution mode</font>
+<font color="black"> 205.         f_trace         tracing function for this frame, or None&quot;&quot;&quot;</font>
+<font color="red"> 206.     return isinstance(object, types.FrameType)</font>
+<font color="black"> 207. </font>
+<font color="red"> 208. def iscode(object):</font>
+<font color="black"> 209.     &quot;&quot;&quot;Return true if the object is a code object.</font>
+<font color="black"> 210. </font>
+<font color="black"> 211.     Code objects provide these attributes:</font>
+<font color="black"> 212.         co_argcount     number of arguments (not including * or ** args)</font>
+<font color="black"> 213.         co_code         string of raw compiled bytecode</font>
+<font color="black"> 214.         co_consts       tuple of constants used in the bytecode</font>
+<font color="black"> 215.         co_filename     name of file in which this code object was created</font>
+<font color="black"> 216.         co_firstlineno  number of first line in Python source code</font>
+<font color="black"> 217.         co_flags        bitmap: 1=optimized | 2=newlocals | 4=*arg | 8=**arg</font>
+<font color="black"> 218.         co_lnotab       encoded mapping of line numbers to bytecode indices</font>
+<font color="black"> 219.         co_name         name with which this code object was defined</font>
+<font color="black"> 220.         co_names        tuple of names of local variables</font>
+<font color="black"> 221.         co_nlocals      number of local variables</font>
+<font color="black"> 222.         co_stacksize    virtual machine stack space required</font>
+<font color="black"> 223.         co_varnames     tuple of names of arguments and local variables&quot;&quot;&quot;</font>
+<font color="green"> 224.     return isinstance(object, types.CodeType)</font>
+<font color="black"> 225. </font>
+<font color="red"> 226. def isbuiltin(object):</font>
+<font color="black"> 227.     &quot;&quot;&quot;Return true if the object is a built-in function or method.</font>
+<font color="black"> 228. </font>
+<font color="black"> 229.     Built-in functions and methods provide these attributes:</font>
+<font color="black"> 230.         __doc__         documentation string</font>
+<font color="black"> 231.         __name__        original name of this function or method</font>
+<font color="black"> 232.         __self__        instance to which a method is bound, or None&quot;&quot;&quot;</font>
+<font color="red"> 233.     return isinstance(object, types.BuiltinFunctionType)</font>
+<font color="black"> 234. </font>
+<font color="red"> 235. def isroutine(object):</font>
+<font color="black"> 236.     &quot;&quot;&quot;Return true if the object is any kind of function or method.&quot;&quot;&quot;</font>
+<font color="red"> 237.     return (isbuiltin(object)</font>
+<font color="red"> 238.             or isfunction(object)</font>
+<font color="red"> 239.             or ismethod(object)</font>
+<font color="red"> 240.             or ismethoddescriptor(object))</font>
+<font color="black"> 241. </font>
+<font color="red"> 242. def isabstract(object):</font>
+<font color="black"> 243.     &quot;&quot;&quot;Return true if the object is an abstract base class (ABC).&quot;&quot;&quot;</font>
+<font color="red"> 244.     return bool(isinstance(object, type) and object.__flags__ &amp; TPFLAGS_IS_ABSTRACT)</font>
+<font color="black"> 245. </font>
+<font color="red"> 246. def getmembers(object, predicate=None):</font>
+<font color="black"> 247.     &quot;&quot;&quot;Return all members of an object as (name, value) pairs sorted by name.</font>
+<font color="black"> 248.     Optionally, only return members that satisfy a given predicate.&quot;&quot;&quot;</font>
+<font color="green"> 249.     results = []</font>
+<font color="green"> 250.     for key in dir(object):</font>
+<font color="green"> 251.         try:</font>
+<font color="green"> 252.             value = getattr(object, key)</font>
+<font color="red"> 253.         except AttributeError:</font>
+<font color="red"> 254.             continue</font>
+<font color="green"> 255.         if not predicate or predicate(value):</font>
+<font color="green"> 256.             results.append((key, value))</font>
+<font color="green"> 257.     results.sort()</font>
+<font color="green"> 258.     return results</font>
+<font color="black"> 259. </font>
+<font color="red"> 260. Attribute = namedtuple('Attribute', 'name kind defining_class object')</font>
+<font color="black"> 261. </font>
+<font color="red"> 262. def classify_class_attrs(cls):</font>
+<font color="black"> 263.     &quot;&quot;&quot;Return list of attribute-descriptor tuples.</font>
+<font color="black"> 264. </font>
+<font color="black"> 265.     For each name in dir(cls), the return list contains a 4-tuple</font>
+<font color="black"> 266.     with these elements:</font>
+<font color="black"> 267. </font>
+<font color="black"> 268.         0. The name (a string).</font>
+<font color="black"> 269. </font>
+<font color="black"> 270.         1. The kind of attribute this is, one of these strings:</font>
+<font color="black"> 271.                'class method'    created via classmethod()</font>
+<font color="black"> 272.                'static method'   created via staticmethod()</font>
+<font color="black"> 273.                'property'        created via property()</font>
+<font color="black"> 274.                'method'          any other flavor of method</font>
+<font color="black"> 275.                'data'            not a method</font>
+<font color="black"> 276. </font>
+<font color="black"> 277.         2. The class which defined this attribute (a class).</font>
+<font color="black"> 278. </font>
+<font color="black"> 279.         3. The object as obtained directly from the defining class's</font>
+<font color="black"> 280.            __dict__, not via getattr.  This is especially important for</font>
+<font color="black"> 281.            data attributes:  C.data is just a data object, but</font>
+<font color="black"> 282.            C.__dict__['data'] may be a data descriptor with additional</font>
+<font color="black"> 283.            info, like a __doc__ string.</font>
+<font color="black"> 284.     &quot;&quot;&quot;</font>
+<font color="black"> 285. </font>
+<font color="red"> 286.     mro = getmro(cls)</font>
+<font color="red"> 287.     names = dir(cls)</font>
+<font color="red"> 288.     result = []</font>
+<font color="red"> 289.     for name in names:</font>
+<font color="black"> 290.         # Get the object associated with the name, and where it was defined.</font>
+<font color="black"> 291.         # Getting an obj from the __dict__ sometimes reveals more than</font>
+<font color="black"> 292.         # using getattr.  Static and class methods are dramatic examples.</font>
+<font color="black"> 293.         # Furthermore, some objects may raise an Exception when fetched with</font>
+<font color="black"> 294.         # getattr(). This is the case with some descriptors (bug #1785).</font>
+<font color="black"> 295.         # Thus, we only use getattr() as a last resort.</font>
+<font color="red"> 296.         homecls = None</font>
+<font color="red"> 297.         for base in (cls,) + mro:</font>
+<font color="red"> 298.             if name in base.__dict__:</font>
+<font color="red"> 299.                 obj = base.__dict__[name]</font>
+<font color="red"> 300.                 homecls = base</font>
+<font color="red"> 301.                 break</font>
+<font color="black"> 302.         else:</font>
+<font color="red"> 303.             obj = getattr(cls, name)</font>
+<font color="red"> 304.             homecls = getattr(obj, &quot;__objclass__&quot;, homecls)</font>
+<font color="black"> 305. </font>
+<font color="black"> 306.         # Classify the object.</font>
+<font color="red"> 307.         if isinstance(obj, staticmethod):</font>
+<font color="red"> 308.             kind = &quot;static method&quot;</font>
+<font color="red"> 309.         elif isinstance(obj, classmethod):</font>
+<font color="red"> 310.             kind = &quot;class method&quot;</font>
+<font color="red"> 311.         elif isinstance(obj, property):</font>
+<font color="red"> 312.             kind = &quot;property&quot;</font>
+<font color="red"> 313.         elif ismethoddescriptor(obj):</font>
+<font color="red"> 314.             kind = &quot;method&quot;</font>
+<font color="red"> 315.         elif isdatadescriptor(obj):</font>
+<font color="red"> 316.             kind = &quot;data&quot;</font>
+<font color="black"> 317.         else:</font>
+<font color="red"> 318.             obj_via_getattr = getattr(cls, name)</font>
+<font color="red"> 319.             if (ismethod(obj_via_getattr) or</font>
+<font color="red"> 320.                 ismethoddescriptor(obj_via_getattr)):</font>
+<font color="red"> 321.                 kind = &quot;method&quot;</font>
+<font color="black"> 322.             else:</font>
+<font color="red"> 323.                 kind = &quot;data&quot;</font>
+<font color="red"> 324.             obj = obj_via_getattr</font>
+<font color="black"> 325. </font>
+<font color="red"> 326.         result.append(Attribute(name, kind, homecls, obj))</font>
+<font color="black"> 327. </font>
+<font color="red"> 328.     return result</font>
+<font color="black"> 329. </font>
+<font color="black"> 330. # ----------------------------------------------------------- class helpers</font>
+<font color="red"> 331. def _searchbases(cls, accum):</font>
+<font color="black"> 332.     # Simulate the &quot;classic class&quot; search order.</font>
+<font color="red"> 333.     if cls in accum:</font>
+<font color="red"> 334.         return</font>
+<font color="red"> 335.     accum.append(cls)</font>
+<font color="red"> 336.     for base in cls.__bases__:</font>
+<font color="red"> 337.         _searchbases(base, accum)</font>
+<font color="black"> 338. </font>
+<font color="red"> 339. def getmro(cls):</font>
+<font color="black"> 340.     &quot;Return tuple of base classes (including cls) in method resolution order.&quot;</font>
+<font color="red"> 341.     if hasattr(cls, &quot;__mro__&quot;):</font>
+<font color="red"> 342.         return cls.__mro__</font>
+<font color="black"> 343.     else:</font>
+<font color="red"> 344.         result = []</font>
+<font color="red"> 345.         _searchbases(cls, result)</font>
+<font color="red"> 346.         return tuple(result)</font>
+<font color="black"> 347. </font>
+<font color="black"> 348. # -------------------------------------------------- source code extraction</font>
+<font color="red"> 349. def indentsize(line):</font>
+<font color="black"> 350.     &quot;&quot;&quot;Return the indent size, in spaces, at the start of a line of text.&quot;&quot;&quot;</font>
+<font color="red"> 351.     expline = string.expandtabs(line)</font>
+<font color="red"> 352.     return len(expline) - len(string.lstrip(expline))</font>
+<font color="black"> 353. </font>
+<font color="red"> 354. def getdoc(object):</font>
+<font color="black"> 355.     &quot;&quot;&quot;Get the documentation string for an object.</font>
+<font color="black"> 356. </font>
+<font color="black"> 357.     All tabs are expanded to spaces.  To clean up docstrings that are</font>
+<font color="black"> 358.     indented to line up with blocks of code, any whitespace than can be</font>
+<font color="black"> 359.     uniformly removed from the second line onwards is removed.&quot;&quot;&quot;</font>
+<font color="red"> 360.     try:</font>
+<font color="red"> 361.         doc = object.__doc__</font>
+<font color="red"> 362.     except AttributeError:</font>
+<font color="red"> 363.         return None</font>
+<font color="red"> 364.     if not isinstance(doc, types.StringTypes):</font>
+<font color="red"> 365.         return None</font>
+<font color="red"> 366.     return cleandoc(doc)</font>
+<font color="black"> 367. </font>
+<font color="red"> 368. def cleandoc(doc):</font>
+<font color="black"> 369.     &quot;&quot;&quot;Clean up indentation from docstrings.</font>
+<font color="black"> 370. </font>
+<font color="black"> 371.     Any whitespace that can be uniformly removed from the second line</font>
+<font color="black"> 372.     onwards is removed.&quot;&quot;&quot;</font>
+<font color="red"> 373.     try:</font>
+<font color="red"> 374.         lines = string.split(string.expandtabs(doc), '\n')</font>
+<font color="red"> 375.     except UnicodeError:</font>
+<font color="red"> 376.         return None</font>
+<font color="black"> 377.     else:</font>
+<font color="black"> 378.         # Find minimum indentation of any non-blank lines after first line.</font>
+<font color="red"> 379.         margin = sys.maxint</font>
+<font color="red"> 380.         for line in lines[1:]:</font>
+<font color="red"> 381.             content = len(string.lstrip(line))</font>
+<font color="red"> 382.             if content:</font>
+<font color="red"> 383.                 indent = len(line) - content</font>
+<font color="red"> 384.                 margin = min(margin, indent)</font>
+<font color="black"> 385.         # Remove indentation.</font>
+<font color="red"> 386.         if lines:</font>
+<font color="red"> 387.             lines[0] = lines[0].lstrip()</font>
+<font color="red"> 388.         if margin &lt; sys.maxint:</font>
+<font color="red"> 389.             for i in range(1, len(lines)): lines[i] = lines[i][margin:]</font>
+<font color="black"> 390.         # Remove any trailing or leading blank lines.</font>
+<font color="red"> 391.         while lines and not lines[-1]:</font>
+<font color="red"> 392.             lines.pop()</font>
+<font color="red"> 393.         while lines and not lines[0]:</font>
+<font color="red"> 394.             lines.pop(0)</font>
+<font color="red"> 395.         return string.join(lines, '\n')</font>
+<font color="black"> 396. </font>
+<font color="red"> 397. def getfile(object):</font>
+<font color="black"> 398.     &quot;&quot;&quot;Work out which source or compiled file an object was defined in.&quot;&quot;&quot;</font>
+<font color="red"> 399.     if ismodule(object):</font>
+<font color="red"> 400.         if hasattr(object, '__file__'):</font>
+<font color="red"> 401.             return object.__file__</font>
+<font color="red"> 402.         raise TypeError('{!r} is a built-in module'.format(object))</font>
+<font color="red"> 403.     if isclass(object):</font>
+<font color="red"> 404.         object = sys.modules.get(object.__module__)</font>
+<font color="red"> 405.         if hasattr(object, '__file__'):</font>
+<font color="red"> 406.             return object.__file__</font>
+<font color="red"> 407.         raise TypeError('{!r} is a built-in class'.format(object))</font>
+<font color="red"> 408.     if ismethod(object):</font>
+<font color="red"> 409.         object = object.im_func</font>
+<font color="red"> 410.     if isfunction(object):</font>
+<font color="red"> 411.         object = object.func_code</font>
+<font color="red"> 412.     if istraceback(object):</font>
+<font color="red"> 413.         object = object.tb_frame</font>
+<font color="red"> 414.     if isframe(object):</font>
+<font color="red"> 415.         object = object.f_code</font>
+<font color="red"> 416.     if iscode(object):</font>
+<font color="red"> 417.         return object.co_filename</font>
+<font color="red"> 418.     raise TypeError('{!r} is not a module, class, method, '</font>
+<font color="red"> 419.                     'function, traceback, frame, or code object'.format(object))</font>
+<font color="black"> 420. </font>
+<font color="red"> 421. ModuleInfo = namedtuple('ModuleInfo', 'name suffix mode module_type')</font>
+<font color="black"> 422. </font>
+<font color="red"> 423. def getmoduleinfo(path):</font>
+<font color="black"> 424.     &quot;&quot;&quot;Get the module name, suffix, mode, and module type for a given file.&quot;&quot;&quot;</font>
+<font color="red"> 425.     filename = os.path.basename(path)</font>
+<font color="red"> 426.     suffixes = map(lambda info:</font>
+<font color="red"> 427.                    (-len(info[0]), info[0], info[1], info[2]),</font>
+<font color="red"> 428.                     imp.get_suffixes())</font>
+<font color="red"> 429.     suffixes.sort() # try longest suffixes first, in case they overlap</font>
+<font color="red"> 430.     for neglen, suffix, mode, mtype in suffixes:</font>
+<font color="red"> 431.         if filename[neglen:] == suffix:</font>
+<font color="red"> 432.             return ModuleInfo(filename[:neglen], suffix, mode, mtype)</font>
+<font color="black"> 433. </font>
+<font color="red"> 434. def getmodulename(path):</font>
+<font color="black"> 435.     &quot;&quot;&quot;Return the module name for a given file, or None.&quot;&quot;&quot;</font>
+<font color="red"> 436.     info = getmoduleinfo(path)</font>
+<font color="red"> 437.     if info: return info[0]</font>
+<font color="black"> 438. </font>
+<font color="red"> 439. def getsourcefile(object):</font>
+<font color="black"> 440.     &quot;&quot;&quot;Return the filename that can be used to locate an object's source.</font>
+<font color="black"> 441.     Return None if no way can be identified to get the source.</font>
+<font color="black"> 442.     &quot;&quot;&quot;</font>
+<font color="red"> 443.     filename = getfile(object)</font>
+<font color="red"> 444.     if string.lower(filename[-4:]) in ('.pyc', '.pyo'):</font>
+<font color="red"> 445.         filename = filename[:-4] + '.py'</font>
+<font color="red"> 446.     for suffix, mode, kind in imp.get_suffixes():</font>
+<font color="red"> 447.         if 'b' in mode and string.lower(filename[-len(suffix):]) == suffix:</font>
+<font color="black"> 448.             # Looks like a binary file.  We want to only return a text file.</font>
+<font color="red"> 449.             return None</font>
+<font color="red"> 450.     if os.path.exists(filename):</font>
+<font color="red"> 451.         return filename</font>
+<font color="black"> 452.     # only return a non-existent filename if the module has a PEP 302 loader</font>
+<font color="red"> 453.     if hasattr(getmodule(object, filename), '__loader__'):</font>
+<font color="red"> 454.         return filename</font>
+<font color="black"> 455.     # or it is in the linecache</font>
+<font color="red"> 456.     if filename in linecache.cache:</font>
+<font color="red"> 457.         return filename</font>
+<font color="black"> 458. </font>
+<font color="red"> 459. def getabsfile(object, _filename=None):</font>
+<font color="black"> 460.     &quot;&quot;&quot;Return an absolute path to the source or compiled file for an object.</font>
+<font color="black"> 461. </font>
+<font color="black"> 462.     The idea is for each object to have a unique origin, so this routine</font>
+<font color="black"> 463.     normalizes the result as much as possible.&quot;&quot;&quot;</font>
+<font color="red"> 464.     if _filename is None:</font>
+<font color="red"> 465.         _filename = getsourcefile(object) or getfile(object)</font>
+<font color="red"> 466.     return os.path.normcase(os.path.abspath(_filename))</font>
+<font color="black"> 467. </font>
+<font color="red"> 468. modulesbyfile = {}</font>
+<font color="red"> 469. _filesbymodname = {}</font>
+<font color="black"> 470. </font>
+<font color="red"> 471. def getmodule(object, _filename=None):</font>
+<font color="black"> 472.     &quot;&quot;&quot;Return the module an object was defined in, or None if not found.&quot;&quot;&quot;</font>
+<font color="red"> 473.     if ismodule(object):</font>
+<font color="red"> 474.         return object</font>
+<font color="red"> 475.     if hasattr(object, '__module__'):</font>
+<font color="red"> 476.         return sys.modules.get(object.__module__)</font>
+<font color="black"> 477.     # Try the filename to modulename cache</font>
+<font color="red"> 478.     if _filename is not None and _filename in modulesbyfile:</font>
+<font color="red"> 479.         return sys.modules.get(modulesbyfile[_filename])</font>
+<font color="black"> 480.     # Try the cache again with the absolute file name</font>
+<font color="red"> 481.     try:</font>
+<font color="red"> 482.         file = getabsfile(object, _filename)</font>
+<font color="red"> 483.     except TypeError:</font>
+<font color="red"> 484.         return None</font>
+<font color="red"> 485.     if file in modulesbyfile:</font>
+<font color="red"> 486.         return sys.modules.get(modulesbyfile[file])</font>
+<font color="black"> 487.     # Update the filename to module name cache and check yet again</font>
+<font color="black"> 488.     # Copy sys.modules in order to cope with changes while iterating</font>
+<font color="red"> 489.     for modname, module in sys.modules.items():</font>
+<font color="red"> 490.         if ismodule(module) and hasattr(module, '__file__'):</font>
+<font color="red"> 491.             f = module.__file__</font>
+<font color="red"> 492.             if f == _filesbymodname.get(modname, None):</font>
+<font color="black"> 493.                 # Have already mapped this module, so skip it</font>
+<font color="red"> 494.                 continue</font>
+<font color="red"> 495.             _filesbymodname[modname] = f</font>
+<font color="red"> 496.             f = getabsfile(module)</font>
+<font color="black"> 497.             # Always map to the name the module knows itself by</font>
+<font color="black"> 498.             modulesbyfile[f] = modulesbyfile[</font>
+<font color="red"> 499.                 os.path.realpath(f)] = module.__name__</font>
+<font color="red"> 500.     if file in modulesbyfile:</font>
+<font color="red"> 501.         return sys.modules.get(modulesbyfile[file])</font>
+<font color="black"> 502.     # Check the main module</font>
+<font color="red"> 503.     main = sys.modules['__main__']</font>
+<font color="red"> 504.     if not hasattr(object, '__name__'):</font>
+<font color="red"> 505.         return None</font>
+<font color="red"> 506.     if hasattr(main, object.__name__):</font>
+<font color="red"> 507.         mainobject = getattr(main, object.__name__)</font>
+<font color="red"> 508.         if mainobject is object:</font>
+<font color="red"> 509.             return main</font>
+<font color="black"> 510.     # Check builtins</font>
+<font color="red"> 511.     builtin = sys.modules['__builtin__']</font>
+<font color="red"> 512.     if hasattr(builtin, object.__name__):</font>
+<font color="red"> 513.         builtinobject = getattr(builtin, object.__name__)</font>
+<font color="red"> 514.         if builtinobject is object:</font>
+<font color="red"> 515.             return builtin</font>
+<font color="black"> 516. </font>
+<font color="red"> 517. def findsource(object):</font>
+<font color="black"> 518.     &quot;&quot;&quot;Return the entire source file and starting line number for an object.</font>
+<font color="black"> 519. </font>
+<font color="black"> 520.     The argument may be a module, class, method, function, traceback, frame,</font>
+<font color="black"> 521.     or code object.  The source code is returned as a list of all the lines</font>
+<font color="black"> 522.     in the file and the line number indexes a line in that list.  An IOError</font>
+<font color="black"> 523.     is raised if the source code cannot be retrieved.&quot;&quot;&quot;</font>
+<font color="black"> 524. </font>
+<font color="red"> 525.     file = getfile(object)</font>
+<font color="red"> 526.     sourcefile = getsourcefile(object)</font>
+<font color="red"> 527.     if not sourcefile and file[:1] + file[-1:] != '&lt;&gt;':</font>
+<font color="red"> 528.         raise IOError('source code not available')</font>
+<font color="red"> 529.     file = sourcefile if sourcefile else file</font>
+<font color="black"> 530. </font>
+<font color="red"> 531.     module = getmodule(object, file)</font>
+<font color="red"> 532.     if module:</font>
+<font color="red"> 533.         lines = linecache.getlines(file, module.__dict__)</font>
+<font color="black"> 534.     else:</font>
+<font color="red"> 535.         lines = linecache.getlines(file)</font>
+<font color="red"> 536.     if not lines:</font>
+<font color="red"> 537.         raise IOError('could not get source code')</font>
+<font color="black"> 538. </font>
+<font color="red"> 539.     if ismodule(object):</font>
+<font color="red"> 540.         return lines, 0</font>
+<font color="black"> 541. </font>
+<font color="red"> 542.     if isclass(object):</font>
+<font color="red"> 543.         name = object.__name__</font>
+<font color="red"> 544.         pat = re.compile(r'^(\s*)class\s*' + name + r'\b')</font>
+<font color="black"> 545.         # make some effort to find the best matching class definition:</font>
+<font color="black"> 546.         # use the one with the least indentation, which is the one</font>
+<font color="black"> 547.         # that's most probably not inside a function definition.</font>
+<font color="red"> 548.         candidates = []</font>
+<font color="red"> 549.         for i in range(len(lines)):</font>
+<font color="red"> 550.             match = pat.match(lines[i])</font>
+<font color="red"> 551.             if match:</font>
+<font color="black"> 552.                 # if it's at toplevel, it's already the best one</font>
+<font color="red"> 553.                 if lines[i][0] == 'c':</font>
+<font color="red"> 554.                     return lines, i</font>
+<font color="black"> 555.                 # else add whitespace to candidate list</font>
+<font color="red"> 556.                 candidates.append((match.group(1), i))</font>
+<font color="red"> 557.         if candidates:</font>
+<font color="black"> 558.             # this will sort by whitespace, and by line number,</font>
+<font color="black"> 559.             # less whitespace first</font>
+<font color="red"> 560.             candidates.sort()</font>
+<font color="red"> 561.             return lines, candidates[0][1]</font>
+<font color="black"> 562.         else:</font>
+<font color="red"> 563.             raise IOError('could not find class definition')</font>
+<font color="black"> 564. </font>
+<font color="red"> 565.     if ismethod(object):</font>
+<font color="red"> 566.         object = object.im_func</font>
+<font color="red"> 567.     if isfunction(object):</font>
+<font color="red"> 568.         object = object.func_code</font>
+<font color="red"> 569.     if istraceback(object):</font>
+<font color="red"> 570.         object = object.tb_frame</font>
+<font color="red"> 571.     if isframe(object):</font>
+<font color="red"> 572.         object = object.f_code</font>
+<font color="red"> 573.     if iscode(object):</font>
+<font color="red"> 574.         if not hasattr(object, 'co_firstlineno'):</font>
+<font color="red"> 575.             raise IOError('could not find function definition')</font>
+<font color="red"> 576.         lnum = object.co_firstlineno - 1</font>
+<font color="red"> 577.         pat = re.compile(r'^(\s*def\s)|(.*(?&lt;!\w)lambda(:|\s))|^(\s*@)')</font>
+<font color="red"> 578.         while lnum &gt; 0:</font>
+<font color="red"> 579.             if pat.match(lines[lnum]): break</font>
+<font color="red"> 580.             lnum = lnum - 1</font>
+<font color="red"> 581.         return lines, lnum</font>
+<font color="red"> 582.     raise IOError('could not find code object')</font>
+<font color="black"> 583. </font>
+<font color="red"> 584. def getcomments(object):</font>
+<font color="black"> 585.     &quot;&quot;&quot;Get lines of comments immediately preceding an object's source code.</font>
+<font color="black"> 586. </font>
+<font color="black"> 587.     Returns None when source can't be found.</font>
+<font color="black"> 588.     &quot;&quot;&quot;</font>
+<font color="red"> 589.     try:</font>
+<font color="red"> 590.         lines, lnum = findsource(object)</font>
+<font color="red"> 591.     except (IOError, TypeError):</font>
+<font color="red"> 592.         return None</font>
+<font color="black"> 593. </font>
+<font color="red"> 594.     if ismodule(object):</font>
+<font color="black"> 595.         # Look for a comment block at the top of the file.</font>
+<font color="red"> 596.         start = 0</font>
+<font color="red"> 597.         if lines and lines[0][:2] == '#!': start = 1</font>
+<font color="red"> 598.         while start &lt; len(lines) and string.strip(lines[start]) in ('', '#'):</font>
+<font color="red"> 599.             start = start + 1</font>
+<font color="red"> 600.         if start &lt; len(lines) and lines[start][:1] == '#':</font>
+<font color="red"> 601.             comments = []</font>
+<font color="red"> 602.             end = start</font>
+<font color="red"> 603.             while end &lt; len(lines) and lines[end][:1] == '#':</font>
+<font color="red"> 604.                 comments.append(string.expandtabs(lines[end]))</font>
+<font color="red"> 605.                 end = end + 1</font>
+<font color="red"> 606.             return string.join(comments, '')</font>
+<font color="black"> 607. </font>
+<font color="black"> 608.     # Look for a preceding block of comments at the same indentation.</font>
+<font color="red"> 609.     elif lnum &gt; 0:</font>
+<font color="red"> 610.         indent = indentsize(lines[lnum])</font>
+<font color="red"> 611.         end = lnum - 1</font>
+<font color="red"> 612.         if end &gt;= 0 and string.lstrip(lines[end])[:1] == '#' and \</font>
+<font color="red"> 613.             indentsize(lines[end]) == indent:</font>
+<font color="red"> 614.             comments = [string.lstrip(string.expandtabs(lines[end]))]</font>
+<font color="red"> 615.             if end &gt; 0:</font>
+<font color="red"> 616.                 end = end - 1</font>
+<font color="red"> 617.                 comment = string.lstrip(string.expandtabs(lines[end]))</font>
+<font color="red"> 618.                 while comment[:1] == '#' and indentsize(lines[end]) == indent:</font>
+<font color="red"> 619.                     comments[:0] = [comment]</font>
+<font color="red"> 620.                     end = end - 1</font>
+<font color="red"> 621.                     if end &lt; 0: break</font>
+<font color="red"> 622.                     comment = string.lstrip(string.expandtabs(lines[end]))</font>
+<font color="red"> 623.             while comments and string.strip(comments[0]) == '#':</font>
+<font color="red"> 624.                 comments[:1] = []</font>
+<font color="red"> 625.             while comments and string.strip(comments[-1]) == '#':</font>
+<font color="red"> 626.                 comments[-1:] = []</font>
+<font color="red"> 627.             return string.join(comments, '')</font>
+<font color="black"> 628. </font>
+<font color="red"> 629. class EndOfBlock(Exception): pass</font>
+<font color="black"> 630. </font>
+<font color="red"> 631. class BlockFinder:</font>
+<font color="red"> 632.     &quot;&quot;&quot;Provide a tokeneater() method to detect the end of a code block.&quot;&quot;&quot;</font>
+<font color="red"> 633.     def __init__(self):</font>
+<font color="red"> 634.         self.indent = 0</font>
+<font color="red"> 635.         self.islambda = False</font>
+<font color="red"> 636.         self.started = False</font>
+<font color="red"> 637.         self.passline = False</font>
+<font color="red"> 638.         self.last = 1</font>
+<font color="black"> 639. </font>
+<font color="red"> 640.     def tokeneater(self, type, token, srow_scol, erow_ecol, line):</font>
+<font color="red"> 641.         srow, scol = srow_scol</font>
+<font color="red"> 642.         erow, ecol = erow_ecol</font>
+<font color="red"> 643.         if not self.started:</font>
+<font color="black"> 644.             # look for the first &quot;def&quot;, &quot;class&quot; or &quot;lambda&quot;</font>
+<font color="red"> 645.             if token in (&quot;def&quot;, &quot;class&quot;, &quot;lambda&quot;):</font>
+<font color="red"> 646.                 if token == &quot;lambda&quot;:</font>
+<font color="red"> 647.                     self.islambda = True</font>
+<font color="red"> 648.                 self.started = True</font>
+<font color="red"> 649.             self.passline = True    # skip to the end of the line</font>
+<font color="red"> 650.         elif type == tokenize.NEWLINE:</font>
+<font color="red"> 651.             self.passline = False   # stop skipping when a NEWLINE is seen</font>
+<font color="red"> 652.             self.last = srow</font>
+<font color="red"> 653.             if self.islambda:       # lambdas always end at the first NEWLINE</font>
+<font color="red"> 654.                 raise EndOfBlock</font>
+<font color="red"> 655.         elif self.passline:</font>
+<font color="red"> 656.             pass</font>
+<font color="red"> 657.         elif type == tokenize.INDENT:</font>
+<font color="red"> 658.             self.indent = self.indent + 1</font>
+<font color="red"> 659.             self.passline = True</font>
+<font color="red"> 660.         elif type == tokenize.DEDENT:</font>
+<font color="red"> 661.             self.indent = self.indent - 1</font>
+<font color="black"> 662.             # the end of matching indent/dedent pairs end a block</font>
+<font color="black"> 663.             # (note that this only works for &quot;def&quot;/&quot;class&quot; blocks,</font>
+<font color="black"> 664.             #  not e.g. for &quot;if: else:&quot; or &quot;try: finally:&quot; blocks)</font>
+<font color="red"> 665.             if self.indent &lt;= 0:</font>
+<font color="red"> 666.                 raise EndOfBlock</font>
+<font color="red"> 667.         elif self.indent == 0 and type not in (tokenize.COMMENT, tokenize.NL):</font>
+<font color="black"> 668.             # any other token on the same indentation level end the previous</font>
+<font color="black"> 669.             # block as well, except the pseudo-tokens COMMENT and NL.</font>
+<font color="red"> 670.             raise EndOfBlock</font>
+<font color="black"> 671. </font>
+<font color="red"> 672. def getblock(lines):</font>
+<font color="black"> 673.     &quot;&quot;&quot;Extract the block of code at the top of the given list of lines.&quot;&quot;&quot;</font>
+<font color="red"> 674.     blockfinder = BlockFinder()</font>
+<font color="red"> 675.     try:</font>
+<font color="red"> 676.         tokenize.tokenize(iter(lines).next, blockfinder.tokeneater)</font>
+<font color="red"> 677.     except (EndOfBlock, IndentationError):</font>
+<font color="red"> 678.         pass</font>
+<font color="red"> 679.     return lines[:blockfinder.last]</font>
+<font color="black"> 680. </font>
+<font color="red"> 681. def getsourcelines(object):</font>
+<font color="black"> 682.     &quot;&quot;&quot;Return a list of source lines and starting line number for an object.</font>
+<font color="black"> 683. </font>
+<font color="black"> 684.     The argument may be a module, class, method, function, traceback, frame,</font>
+<font color="black"> 685.     or code object.  The source code is returned as a list of the lines</font>
+<font color="black"> 686.     corresponding to the object and the line number indicates where in the</font>
+<font color="black"> 687.     original source file the first line of code was found.  An IOError is</font>
+<font color="black"> 688.     raised if the source code cannot be retrieved.&quot;&quot;&quot;</font>
+<font color="red"> 689.     lines, lnum = findsource(object)</font>
+<font color="black"> 690. </font>
+<font color="red"> 691.     if ismodule(object): return lines, 0</font>
+<font color="red"> 692.     else: return getblock(lines[lnum:]), lnum + 1</font>
+<font color="black"> 693. </font>
+<font color="red"> 694. def getsource(object):</font>
+<font color="black"> 695.     &quot;&quot;&quot;Return the text of the source code for an object.</font>
+<font color="black"> 696. </font>
+<font color="black"> 697.     The argument may be a module, class, method, function, traceback, frame,</font>
+<font color="black"> 698.     or code object.  The source code is returned as a single string.  An</font>
+<font color="black"> 699.     IOError is raised if the source code cannot be retrieved.&quot;&quot;&quot;</font>
+<font color="red"> 700.     lines, lnum = getsourcelines(object)</font>
+<font color="red"> 701.     return string.join(lines, '')</font>
+<font color="black"> 702. </font>
+<font color="black"> 703. # --------------------------------------------------- class tree extraction</font>
+<font color="red"> 704. def walktree(classes, children, parent):</font>
+<font color="black"> 705.     &quot;&quot;&quot;Recursive helper function for getclasstree().&quot;&quot;&quot;</font>
+<font color="red"> 706.     results = []</font>
+<font color="red"> 707.     classes.sort(key=attrgetter('__module__', '__name__'))</font>
+<font color="red"> 708.     for c in classes:</font>
+<font color="red"> 709.         results.append((c, c.__bases__))</font>
+<font color="red"> 710.         if c in children:</font>
+<font color="red"> 711.             results.append(walktree(children[c], children, c))</font>
+<font color="red"> 712.     return results</font>
+<font color="black"> 713. </font>
+<font color="red"> 714. def getclasstree(classes, unique=0):</font>
+<font color="black"> 715.     &quot;&quot;&quot;Arrange the given list of classes into a hierarchy of nested lists.</font>
+<font color="black"> 716. </font>
+<font color="black"> 717.     Where a nested list appears, it contains classes derived from the class</font>
+<font color="black"> 718.     whose entry immediately precedes the list.  Each entry is a 2-tuple</font>
+<font color="black"> 719.     containing a class and a tuple of its base classes.  If the 'unique'</font>
+<font color="black"> 720.     argument is true, exactly one entry appears in the returned structure</font>
+<font color="black"> 721.     for each class in the given list.  Otherwise, classes using multiple</font>
+<font color="black"> 722.     inheritance and their descendants will appear multiple times.&quot;&quot;&quot;</font>
+<font color="red"> 723.     children = {}</font>
+<font color="red"> 724.     roots = []</font>
+<font color="red"> 725.     for c in classes:</font>
+<font color="red"> 726.         if c.__bases__:</font>
+<font color="red"> 727.             for parent in c.__bases__:</font>
+<font color="red"> 728.                 if not parent in children:</font>
+<font color="red"> 729.                     children[parent] = []</font>
+<font color="red"> 730.                 if c not in children[parent]:</font>
+<font color="red"> 731.                     children[parent].append(c)</font>
+<font color="red"> 732.                 if unique and parent in classes: break</font>
+<font color="red"> 733.         elif c not in roots:</font>
+<font color="red"> 734.             roots.append(c)</font>
+<font color="red"> 735.     for parent in children:</font>
+<font color="red"> 736.         if parent not in classes:</font>
+<font color="red"> 737.             roots.append(parent)</font>
+<font color="red"> 738.     return walktree(roots, children, None)</font>
+<font color="black"> 739. </font>
+<font color="black"> 740. # ------------------------------------------------ argument list extraction</font>
+<font color="red"> 741. Arguments = namedtuple('Arguments', 'args varargs keywords')</font>
+<font color="black"> 742. </font>
+<font color="red"> 743. def getargs(co):</font>
+<font color="black"> 744.     &quot;&quot;&quot;Get information about the arguments accepted by a code object.</font>
+<font color="black"> 745. </font>
+<font color="black"> 746.     Three things are returned: (args, varargs, varkw), where 'args' is</font>
+<font color="black"> 747.     a list of argument names (possibly containing nested lists), and</font>
+<font color="black"> 748.     'varargs' and 'varkw' are the names of the * and ** arguments or None.&quot;&quot;&quot;</font>
+<font color="black"> 749. </font>
+<font color="green"> 750.     if not iscode(co):</font>
+<font color="red"> 751.         raise TypeError('{!r} is not a code object'.format(co))</font>
+<font color="black"> 752. </font>
+<font color="green"> 753.     nargs = co.co_argcount</font>
+<font color="green"> 754.     names = co.co_varnames</font>
+<font color="green"> 755.     args = list(names[:nargs])</font>
+<font color="green"> 756.     step = 0</font>
+<font color="black"> 757. </font>
+<font color="black"> 758.     # The following acrobatics are for anonymous (tuple) arguments.</font>
+<font color="green"> 759.     for i in range(nargs):</font>
+<font color="green"> 760.         if args[i][:1] in ('', '.'):</font>
+<font color="red"> 761.             stack, remain, count = [], [], []</font>
+<font color="red"> 762.             while step &lt; len(co.co_code):</font>
+<font color="red"> 763.                 op = ord(co.co_code[step])</font>
+<font color="red"> 764.                 step = step + 1</font>
+<font color="red"> 765.                 if op &gt;= dis.HAVE_ARGUMENT:</font>
+<font color="red"> 766.                     opname = dis.opname[op]</font>
+<font color="red"> 767.                     value = ord(co.co_code[step]) + ord(co.co_code[step+1])*256</font>
+<font color="red"> 768.                     step = step + 2</font>
+<font color="red"> 769.                     if opname in ('UNPACK_TUPLE', 'UNPACK_SEQUENCE'):</font>
+<font color="red"> 770.                         remain.append(value)</font>
+<font color="red"> 771.                         count.append(value)</font>
+<font color="red"> 772.                     elif opname in ('STORE_FAST', 'STORE_DEREF'):</font>
+<font color="red"> 773.                         if opname == 'STORE_FAST':</font>
+<font color="red"> 774.                             stack.append(names[value])</font>
+<font color="black"> 775.                         else:</font>
+<font color="red"> 776.                             stack.append(co.co_cellvars[value])</font>
+<font color="black"> 777. </font>
+<font color="black"> 778.                         # Special case for sublists of length 1: def foo((bar))</font>
+<font color="black"> 779.                         # doesn't generate the UNPACK_TUPLE bytecode, so if</font>
+<font color="black"> 780.                         # `remain` is empty here, we have such a sublist.</font>
+<font color="red"> 781.                         if not remain:</font>
+<font color="red"> 782.                             stack[0] = [stack[0]]</font>
+<font color="red"> 783.                             break</font>
+<font color="black"> 784.                         else:</font>
+<font color="red"> 785.                             remain[-1] = remain[-1] - 1</font>
+<font color="red"> 786.                             while remain[-1] == 0:</font>
+<font color="red"> 787.                                 remain.pop()</font>
+<font color="red"> 788.                                 size = count.pop()</font>
+<font color="red"> 789.                                 stack[-size:] = [stack[-size:]]</font>
+<font color="red"> 790.                                 if not remain: break</font>
+<font color="red"> 791.                                 remain[-1] = remain[-1] - 1</font>
+<font color="red"> 792.                             if not remain: break</font>
+<font color="red"> 793.             args[i] = stack[0]</font>
+<font color="black"> 794. </font>
+<font color="green"> 795.     varargs = None</font>
+<font color="green"> 796.     if co.co_flags &amp; CO_VARARGS:</font>
+<font color="red"> 797.         varargs = co.co_varnames[nargs]</font>
+<font color="red"> 798.         nargs = nargs + 1</font>
+<font color="green"> 799.     varkw = None</font>
+<font color="green"> 800.     if co.co_flags &amp; CO_VARKEYWORDS:</font>
+<font color="green"> 801.         varkw = co.co_varnames[nargs]</font>
+<font color="green"> 802.     return Arguments(args, varargs, varkw)</font>
+<font color="black"> 803. </font>
+<font color="red"> 804. ArgSpec = namedtuple('ArgSpec', 'args varargs keywords defaults')</font>
+<font color="black"> 805. </font>
+<font color="red"> 806. def getargspec(func):</font>
+<font color="black"> 807.     &quot;&quot;&quot;Get the names and default values of a function's arguments.</font>
+<font color="black"> 808. </font>
+<font color="black"> 809.     A tuple of four things is returned: (args, varargs, varkw, defaults).</font>
+<font color="black"> 810.     'args' is a list of the argument names (it may contain nested lists).</font>
+<font color="black"> 811.     'varargs' and 'varkw' are the names of the * and ** arguments or None.</font>
+<font color="black"> 812.     'defaults' is an n-tuple of the default values of the last n arguments.</font>
+<font color="black"> 813.     &quot;&quot;&quot;</font>
+<font color="black"> 814. </font>
+<font color="green"> 815.     if ismethod(func):</font>
+<font color="green"> 816.         func = func.im_func</font>
+<font color="green"> 817.     if not isfunction(func):</font>
+<font color="green"> 818.         raise TypeError('{!r} is not a Python function'.format(func))</font>
+<font color="green"> 819.     args, varargs, varkw = getargs(func.func_code)</font>
+<font color="green"> 820.     return ArgSpec(args, varargs, varkw, func.func_defaults)</font>
+<font color="black"> 821. </font>
+<font color="red"> 822. ArgInfo = namedtuple('ArgInfo', 'args varargs keywords locals')</font>
+<font color="black"> 823. </font>
+<font color="red"> 824. def getargvalues(frame):</font>
+<font color="black"> 825.     &quot;&quot;&quot;Get information about arguments passed into a particular frame.</font>
+<font color="black"> 826. </font>
+<font color="black"> 827.     A tuple of four things is returned: (args, varargs, varkw, locals).</font>
+<font color="black"> 828.     'args' is a list of the argument names (it may contain nested lists).</font>
+<font color="black"> 829.     'varargs' and 'varkw' are the names of the * and ** arguments or None.</font>
+<font color="black"> 830.     'locals' is the locals dictionary of the given frame.&quot;&quot;&quot;</font>
+<font color="red"> 831.     args, varargs, varkw = getargs(frame.f_code)</font>
+<font color="red"> 832.     return ArgInfo(args, varargs, varkw, frame.f_locals)</font>
+<font color="black"> 833. </font>
+<font color="red"> 834. def joinseq(seq):</font>
+<font color="red"> 835.     if len(seq) == 1:</font>
+<font color="red"> 836.         return '(' + seq[0] + ',)'</font>
+<font color="black"> 837.     else:</font>
+<font color="red"> 838.         return '(' + string.join(seq, ', ') + ')'</font>
+<font color="black"> 839. </font>
+<font color="red"> 840. def strseq(object, convert, join=joinseq):</font>
+<font color="black"> 841.     &quot;&quot;&quot;Recursively walk a sequence, stringifying each element.&quot;&quot;&quot;</font>
+<font color="red"> 842.     if type(object) in (list, tuple):</font>
+<font color="red"> 843.         return join(map(lambda o, c=convert, j=join: strseq(o, c, j), object))</font>
+<font color="black"> 844.     else:</font>
+<font color="red"> 845.         return convert(object)</font>
+<font color="black"> 846. </font>
+<font color="red"> 847. def formatargspec(args, varargs=None, varkw=None, defaults=None,</font>
+<font color="red"> 848.                   formatarg=str,</font>
+<font color="red"> 849.                   formatvarargs=lambda name: '*' + name,</font>
+<font color="red"> 850.                   formatvarkw=lambda name: '**' + name,</font>
+<font color="red"> 851.                   formatvalue=lambda value: '=' + repr(value),</font>
+<font color="red"> 852.                   join=joinseq):</font>
+<font color="black"> 853.     &quot;&quot;&quot;Format an argument spec from the 4 values returned by getargspec.</font>
+<font color="black"> 854. </font>
+<font color="black"> 855.     The first four arguments are (args, varargs, varkw, defaults).  The</font>
+<font color="black"> 856.     other four arguments are the corresponding optional formatting functions</font>
+<font color="black"> 857.     that are called to turn names and values into strings.  The ninth</font>
+<font color="black"> 858.     argument is an optional function to format the sequence of arguments.&quot;&quot;&quot;</font>
+<font color="red"> 859.     specs = []</font>
+<font color="red"> 860.     if defaults:</font>
+<font color="red"> 861.         firstdefault = len(args) - len(defaults)</font>
+<font color="red"> 862.     for i, arg in enumerate(args):</font>
+<font color="red"> 863.         spec = strseq(arg, formatarg, join)</font>
+<font color="red"> 864.         if defaults and i &gt;= firstdefault:</font>
+<font color="red"> 865.             spec = spec + formatvalue(defaults[i - firstdefault])</font>
+<font color="red"> 866.         specs.append(spec)</font>
+<font color="red"> 867.     if varargs is not None:</font>
+<font color="red"> 868.         specs.append(formatvarargs(varargs))</font>
+<font color="red"> 869.     if varkw is not None:</font>
+<font color="red"> 870.         specs.append(formatvarkw(varkw))</font>
+<font color="red"> 871.     return '(' + string.join(specs, ', ') + ')'</font>
+<font color="black"> 872. </font>
+<font color="black"> 873. def formatargvalues(args, varargs, varkw, locals,</font>
+<font color="red"> 874.                     formatarg=str,</font>
+<font color="red"> 875.                     formatvarargs=lambda name: '*' + name,</font>
+<font color="red"> 876.                     formatvarkw=lambda name: '**' + name,</font>
+<font color="red"> 877.                     formatvalue=lambda value: '=' + repr(value),</font>
+<font color="red"> 878.                     join=joinseq):</font>
+<font color="black"> 879.     &quot;&quot;&quot;Format an argument spec from the 4 values returned by getargvalues.</font>
+<font color="black"> 880. </font>
+<font color="black"> 881.     The first four arguments are (args, varargs, varkw, locals).  The</font>
+<font color="black"> 882.     next four arguments are the corresponding optional formatting functions</font>
+<font color="black"> 883.     that are called to turn names and values into strings.  The ninth</font>
+<font color="black"> 884.     argument is an optional function to format the sequence of arguments.&quot;&quot;&quot;</font>
+<font color="red"> 885.     def convert(name, locals=locals,</font>
+<font color="red"> 886.                 formatarg=formatarg, formatvalue=formatvalue):</font>
+<font color="red"> 887.         return formatarg(name) + formatvalue(locals[name])</font>
+<font color="red"> 888.     specs = []</font>
+<font color="red"> 889.     for i in range(len(args)):</font>
+<font color="red"> 890.         specs.append(strseq(args[i], convert, join))</font>
+<font color="red"> 891.     if varargs:</font>
+<font color="red"> 892.         specs.append(formatvarargs(varargs) + formatvalue(locals[varargs]))</font>
+<font color="red"> 893.     if varkw:</font>
+<font color="red"> 894.         specs.append(formatvarkw(varkw) + formatvalue(locals[varkw]))</font>
+<font color="red"> 895.     return '(' + string.join(specs, ', ') + ')'</font>
+<font color="black"> 896. </font>
+<font color="red"> 897. def getcallargs(func, *positional, **named):</font>
+<font color="black"> 898.     &quot;&quot;&quot;Get the mapping of arguments to values.</font>
+<font color="black"> 899. </font>
+<font color="black"> 900.     A dict is returned, with keys the function argument names (including the</font>
+<font color="black"> 901.     names of the * and ** arguments, if any), and values the respective bound</font>
+<font color="black"> 902.     values from 'positional' and 'named'.&quot;&quot;&quot;</font>
+<font color="red"> 903.     args, varargs, varkw, defaults = getargspec(func)</font>
+<font color="red"> 904.     f_name = func.__name__</font>
+<font color="red"> 905.     arg2value = {}</font>
+<font color="black"> 906. </font>
+<font color="black"> 907.     # The following closures are basically because of tuple parameter unpacking.</font>
+<font color="red"> 908.     assigned_tuple_params = []</font>
+<font color="red"> 909.     def assign(arg, value):</font>
+<font color="red"> 910.         if isinstance(arg, str):</font>
+<font color="red"> 911.             arg2value[arg] = value</font>
+<font color="black"> 912.         else:</font>
+<font color="red"> 913.             assigned_tuple_params.append(arg)</font>
+<font color="red"> 914.             value = iter(value)</font>
+<font color="red"> 915.             for i, subarg in enumerate(arg):</font>
+<font color="red"> 916.                 try:</font>
+<font color="red"> 917.                     subvalue = next(value)</font>
+<font color="red"> 918.                 except StopIteration:</font>
+<font color="red"> 919.                     raise ValueError('need more than %d %s to unpack' %</font>
+<font color="red"> 920.                                      (i, 'values' if i &gt; 1 else 'value'))</font>
+<font color="red"> 921.                 assign(subarg,subvalue)</font>
+<font color="red"> 922.             try:</font>
+<font color="red"> 923.                 next(value)</font>
+<font color="red"> 924.             except StopIteration:</font>
+<font color="red"> 925.                 pass</font>
+<font color="black"> 926.             else:</font>
+<font color="red"> 927.                 raise ValueError('too many values to unpack')</font>
+<font color="red"> 928.     def is_assigned(arg):</font>
+<font color="red"> 929.         if isinstance(arg,str):</font>
+<font color="red"> 930.             return arg in arg2value</font>
+<font color="red"> 931.         return arg in assigned_tuple_params</font>
+<font color="red"> 932.     if ismethod(func) and func.im_self is not None:</font>
+<font color="black"> 933.         # implicit 'self' (or 'cls' for classmethods) argument</font>
+<font color="red"> 934.         positional = (func.im_self,) + positional</font>
+<font color="red"> 935.     num_pos = len(positional)</font>
+<font color="red"> 936.     num_total = num_pos + len(named)</font>
+<font color="red"> 937.     num_args = len(args)</font>
+<font color="red"> 938.     num_defaults = len(defaults) if defaults else 0</font>
+<font color="red"> 939.     for arg, value in zip(args, positional):</font>
+<font color="red"> 940.         assign(arg, value)</font>
+<font color="red"> 941.     if varargs:</font>
+<font color="red"> 942.         if num_pos &gt; num_args:</font>
+<font color="red"> 943.             assign(varargs, positional[-(num_pos-num_args):])</font>
+<font color="black"> 944.         else:</font>
+<font color="red"> 945.             assign(varargs, ())</font>
+<font color="red"> 946.     elif 0 &lt; num_args &lt; num_pos:</font>
+<font color="red"> 947.         raise TypeError('%s() takes %s %d %s (%d given)' % (</font>
+<font color="red"> 948.             f_name, 'at most' if defaults else 'exactly', num_args,</font>
+<font color="red"> 949.             'arguments' if num_args &gt; 1 else 'argument', num_total))</font>
+<font color="red"> 950.     elif num_args == 0 and num_total:</font>
+<font color="red"> 951.         if varkw:</font>
+<font color="red"> 952.             if num_pos:</font>
+<font color="black"> 953.                 # XXX: We should use num_pos, but Python also uses num_total:</font>
+<font color="red"> 954.                 raise TypeError('%s() takes exactly 0 arguments '</font>
+<font color="red"> 955.                                 '(%d given)' % (f_name, num_total))</font>
+<font color="black"> 956.         else:</font>
+<font color="red"> 957.             raise TypeError('%s() takes no arguments (%d given)' %</font>
+<font color="red"> 958.                             (f_name, num_total))</font>
+<font color="red"> 959.     for arg in args:</font>
+<font color="red"> 960.         if isinstance(arg, str) and arg in named:</font>
+<font color="red"> 961.             if is_assigned(arg):</font>
+<font color="red"> 962.                 raise TypeError(&quot;%s() got multiple values for keyword &quot;</font>
+<font color="red"> 963.                                 &quot;argument '%s'&quot; % (f_name, arg))</font>
+<font color="black"> 964.             else:</font>
+<font color="red"> 965.                 assign(arg, named.pop(arg))</font>
+<font color="red"> 966.     if defaults:    # fill in any missing values with the defaults</font>
+<font color="red"> 967.         for arg, value in zip(args[-num_defaults:], defaults):</font>
+<font color="red"> 968.             if not is_assigned(arg):</font>
+<font color="red"> 969.                 assign(arg, value)</font>
+<font color="red"> 970.     if varkw:</font>
+<font color="red"> 971.         assign(varkw, named)</font>
+<font color="red"> 972.     elif named:</font>
+<font color="red"> 973.         unexpected = next(iter(named))</font>
+<font color="red"> 974.         try:</font>
+<font color="red"> 975.             unicode</font>
+<font color="red"> 976.         except NameError:</font>
+<font color="red"> 977.             pass</font>
+<font color="black"> 978.         else:</font>
+<font color="red"> 979.             if isinstance(unexpected, unicode):</font>
+<font color="red"> 980.                 unexpected = unexpected.encode(sys.getdefaultencoding(), 'replace')</font>
+<font color="red"> 981.         raise TypeError(&quot;%s() got an unexpected keyword argument '%s'&quot; %</font>
+<font color="red"> 982.                         (f_name, unexpected))</font>
+<font color="red"> 983.     unassigned = num_args - len([arg for arg in args if is_assigned(arg)])</font>
+<font color="red"> 984.     if unassigned:</font>
+<font color="red"> 985.         num_required = num_args - num_defaults</font>
+<font color="red"> 986.         raise TypeError('%s() takes %s %d %s (%d given)' % (</font>
+<font color="red"> 987.             f_name, 'at least' if defaults else 'exactly', num_required,</font>
+<font color="red"> 988.             'arguments' if num_required &gt; 1 else 'argument', num_total))</font>
+<font color="red"> 989.     return arg2value</font>
+<font color="black"> 990. </font>
+<font color="black"> 991. # -------------------------------------------------- stack frame extraction</font>
+<font color="black"> 992. </font>
+<font color="red"> 993. Traceback = namedtuple('Traceback', 'filename lineno function code_context index')</font>
+<font color="black"> 994. </font>
+<font color="red"> 995. def getframeinfo(frame, context=1):</font>
+<font color="black"> 996.     &quot;&quot;&quot;Get information about a frame or traceback object.</font>
+<font color="black"> 997. </font>
+<font color="black"> 998.     A tuple of five things is returned: the filename, the line number of</font>
+<font color="black"> 999.     the current line, the function name, a list of lines of context from</font>
+<font color="black">1000.     the source code, and the index of the current line within that list.</font>
+<font color="black">1001.     The optional second argument specifies the number of lines of context</font>
+<font color="black">1002.     to return, which are centered around the current line.&quot;&quot;&quot;</font>
+<font color="red">1003.     if istraceback(frame):</font>
+<font color="red">1004.         lineno = frame.tb_lineno</font>
+<font color="red">1005.         frame = frame.tb_frame</font>
+<font color="black">1006.     else:</font>
+<font color="red">1007.         lineno = frame.f_lineno</font>
+<font color="red">1008.     if not isframe(frame):</font>
+<font color="red">1009.         raise TypeError('{!r} is not a frame or traceback object'.format(frame))</font>
+<font color="black">1010. </font>
+<font color="red">1011.     filename = getsourcefile(frame) or getfile(frame)</font>
+<font color="red">1012.     if context &gt; 0:</font>
+<font color="red">1013.         start = lineno - 1 - context//2</font>
+<font color="red">1014.         try:</font>
+<font color="red">1015.             lines, lnum = findsource(frame)</font>
+<font color="red">1016.         except IOError:</font>
+<font color="red">1017.             lines = index = None</font>
+<font color="black">1018.         else:</font>
+<font color="red">1019.             start = max(start, 1)</font>
+<font color="red">1020.             start = max(0, min(start, len(lines) - context))</font>
+<font color="red">1021.             lines = lines[start:start+context]</font>
+<font color="red">1022.             index = lineno - 1 - start</font>
+<font color="black">1023.     else:</font>
+<font color="red">1024.         lines = index = None</font>
+<font color="black">1025. </font>
+<font color="red">1026.     return Traceback(filename, lineno, frame.f_code.co_name, lines, index)</font>
+<font color="black">1027. </font>
+<font color="red">1028. def getlineno(frame):</font>
+<font color="black">1029.     &quot;&quot;&quot;Get the line number from a frame object, allowing for optimization.&quot;&quot;&quot;</font>
+<font color="black">1030.     # FrameType.f_lineno is now a descriptor that grovels co_lnotab</font>
+<font color="red">1031.     return frame.f_lineno</font>
+<font color="black">1032. </font>
+<font color="red">1033. def getouterframes(frame, context=1):</font>
+<font color="black">1034.     &quot;&quot;&quot;Get a list of records for a frame and all higher (calling) frames.</font>
+<font color="black">1035. </font>
+<font color="black">1036.     Each record contains a frame object, filename, line number, function</font>
+<font color="black">1037.     name, a list of lines of context, and index within the context.&quot;&quot;&quot;</font>
+<font color="red">1038.     framelist = []</font>
+<font color="red">1039.     while frame:</font>
+<font color="red">1040.         framelist.append((frame,) + getframeinfo(frame, context))</font>
+<font color="red">1041.         frame = frame.f_back</font>
+<font color="red">1042.     return framelist</font>
+<font color="black">1043. </font>
+<font color="red">1044. def getinnerframes(tb, context=1):</font>
+<font color="black">1045.     &quot;&quot;&quot;Get a list of records for a traceback's frame and all lower frames.</font>
+<font color="black">1046. </font>
+<font color="black">1047.     Each record contains a frame object, filename, line number, function</font>
+<font color="black">1048.     name, a list of lines of context, and index within the context.&quot;&quot;&quot;</font>
+<font color="red">1049.     framelist = []</font>
+<font color="red">1050.     while tb:</font>
+<font color="red">1051.         framelist.append((tb.tb_frame,) + getframeinfo(tb, context))</font>
+<font color="red">1052.         tb = tb.tb_next</font>
+<font color="red">1053.     return framelist</font>
+<font color="black">1054. </font>
+<font color="red">1055. if hasattr(sys, '_getframe'):</font>
+<font color="red">1056.     currentframe = sys._getframe</font>
+<font color="black">1057. else:</font>
+<font color="red">1058.     currentframe = lambda _=None: None</font>
+<font color="black">1059. </font>
+<font color="red">1060. def stack(context=1):</font>
+<font color="black">1061.     &quot;&quot;&quot;Return a list of records for the stack above the caller's frame.&quot;&quot;&quot;</font>
+<font color="red">1062.     return getouterframes(sys._getframe(1), context)</font>
+<font color="black">1063. </font>
+<font color="red">1064. def trace(context=1):</font>
+<font color="black">1065.     &quot;&quot;&quot;Return a list of records for the stack below the current exception.&quot;&quot;&quot;</font>
+<font color="red">1066.     return getinnerframes(sys.exc_info()[2], context)</font>
+</pre>
+

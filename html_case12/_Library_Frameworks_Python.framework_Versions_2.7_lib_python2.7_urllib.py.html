@@ -1,0 +1,1676 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/urllib.py</b><br>
+
+
+file stats: <b>1147 lines, 70 executed: 6.1% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Open an arbitrary URL.</font>
+<font color="black">   2. </font>
+<font color="black">   3. See the following document for more info on URLs:</font>
+<font color="black">   4. &quot;Names and Addresses, URIs, URLs, URNs, URCs&quot;, at</font>
+<font color="black">   5. http://www.w3.org/pub/WWW/Addressing/Overview.html</font>
+<font color="black">   6. </font>
+<font color="black">   7. See also the HTTP spec (from which the error codes are derived):</font>
+<font color="black">   8. &quot;HTTP - Hypertext Transfer Protocol&quot;, at</font>
+<font color="black">   9. http://www.w3.org/pub/WWW/Protocols/</font>
+<font color="black">  10. </font>
+<font color="black">  11. Related standards and specs:</font>
+<font color="black">  12. - RFC1808: the &quot;relative URL&quot; spec. (authoritative status)</font>
+<font color="black">  13. - RFC1738 - the &quot;URL standard&quot;. (authoritative status)</font>
+<font color="black">  14. - RFC1630 - the &quot;URI spec&quot;. (informational status)</font>
+<font color="black">  15. </font>
+<font color="black">  16. The object returned by URLopener().open(file) will differ per</font>
+<font color="black">  17. protocol.  All you know is that is has methods read(), readline(),</font>
+<font color="black">  18. readlines(), fileno(), close() and info().  The read*(), fileno()</font>
+<font color="black">  19. and close() methods work like those of open files.</font>
+<font color="black">  20. The info() method returns a mimetools.Message object which can be</font>
+<font color="black">  21. used to query various info about the object, if available.</font>
+<font color="black">  22. (mimetools.Message objects are queried with the getheader() method.)</font>
+<font color="red">  23. &quot;&quot;&quot;</font>
+<font color="black">  24. </font>
+<font color="red">  25. import string</font>
+<font color="red">  26. import socket</font>
+<font color="red">  27. import os</font>
+<font color="red">  28. import time</font>
+<font color="red">  29. import sys</font>
+<font color="red">  30. import base64</font>
+<font color="red">  31. import re</font>
+<font color="black">  32. </font>
+<font color="red">  33. from urlparse import urljoin as basejoin</font>
+<font color="black">  34. </font>
+<font color="red">  35. __all__ = [&quot;urlopen&quot;, &quot;URLopener&quot;, &quot;FancyURLopener&quot;, &quot;urlretrieve&quot;,</font>
+<font color="red">  36.            &quot;urlcleanup&quot;, &quot;quote&quot;, &quot;quote_plus&quot;, &quot;unquote&quot;, &quot;unquote_plus&quot;,</font>
+<font color="red">  37.            &quot;urlencode&quot;, &quot;url2pathname&quot;, &quot;pathname2url&quot;, &quot;splittag&quot;,</font>
+<font color="red">  38.            &quot;localhost&quot;, &quot;thishost&quot;, &quot;ftperrors&quot;, &quot;basejoin&quot;, &quot;unwrap&quot;,</font>
+<font color="red">  39.            &quot;splittype&quot;, &quot;splithost&quot;, &quot;splituser&quot;, &quot;splitpasswd&quot;, &quot;splitport&quot;,</font>
+<font color="red">  40.            &quot;splitnport&quot;, &quot;splitquery&quot;, &quot;splitattr&quot;, &quot;splitvalue&quot;,</font>
+<font color="red">  41.            &quot;getproxies&quot;]</font>
+<font color="black">  42. </font>
+<font color="red">  43. __version__ = '1.17'    # XXX This version is not always updated :-(</font>
+<font color="black">  44. </font>
+<font color="red">  45. MAXFTPCACHE = 10        # Trim the ftp cache beyond this size</font>
+<font color="black">  46. </font>
+<font color="black">  47. # Helper for non-unix systems</font>
+<font color="red">  48. if os.name == 'nt':</font>
+<font color="red">  49.     from nturl2path import url2pathname, pathname2url</font>
+<font color="red">  50. elif os.name == 'riscos':</font>
+<font color="red">  51.     from rourl2path import url2pathname, pathname2url</font>
+<font color="black">  52. else:</font>
+<font color="red">  53.     def url2pathname(pathname):</font>
+<font color="black">  54.         &quot;&quot;&quot;OS-specific conversion from a relative URL of the 'file' scheme</font>
+<font color="black">  55.         to a file system path; not recommended for general use.&quot;&quot;&quot;</font>
+<font color="red">  56.         return unquote(pathname)</font>
+<font color="black">  57. </font>
+<font color="red">  58.     def pathname2url(pathname):</font>
+<font color="black">  59.         &quot;&quot;&quot;OS-specific conversion from a file system path to a relative URL</font>
+<font color="black">  60.         of the 'file' scheme; not recommended for general use.&quot;&quot;&quot;</font>
+<font color="red">  61.         return quote(pathname)</font>
+<font color="black">  62. </font>
+<font color="black">  63. # This really consists of two pieces:</font>
+<font color="black">  64. # (1) a class which handles opening of all sorts of URLs</font>
+<font color="black">  65. #     (plus assorted utilities etc.)</font>
+<font color="black">  66. # (2) a set of functions for parsing URLs</font>
+<font color="black">  67. # XXX Should these be separated out into different modules?</font>
+<font color="black">  68. </font>
+<font color="black">  69. </font>
+<font color="black">  70. # Shortcut for basic usage</font>
+<font color="red">  71. _urlopener = None</font>
+<font color="red">  72. def urlopen(url, data=None, proxies=None, context=None):</font>
+<font color="black">  73.     &quot;&quot;&quot;Create a file-like object for the specified URL to read from.&quot;&quot;&quot;</font>
+<font color="red">  74.     from warnings import warnpy3k</font>
+<font color="red">  75.     warnpy3k(&quot;urllib.urlopen() has been removed in Python 3.0 in &quot;</font>
+<font color="red">  76.              &quot;favor of urllib2.urlopen()&quot;, stacklevel=2)</font>
+<font color="black">  77. </font>
+<font color="black">  78.     global _urlopener</font>
+<font color="red">  79.     if proxies is not None or context is not None:</font>
+<font color="red">  80.         opener = FancyURLopener(proxies=proxies, context=context)</font>
+<font color="red">  81.     elif not _urlopener:</font>
+<font color="red">  82.         opener = FancyURLopener()</font>
+<font color="red">  83.         _urlopener = opener</font>
+<font color="black">  84.     else:</font>
+<font color="red">  85.         opener = _urlopener</font>
+<font color="red">  86.     if data is None:</font>
+<font color="red">  87.         return opener.open(url)</font>
+<font color="black">  88.     else:</font>
+<font color="red">  89.         return opener.open(url, data)</font>
+<font color="red">  90. def urlretrieve(url, filename=None, reporthook=None, data=None, context=None):</font>
+<font color="black">  91.     global _urlopener</font>
+<font color="red">  92.     if context is not None:</font>
+<font color="red">  93.         opener = FancyURLopener(context=context)</font>
+<font color="red">  94.     elif not _urlopener:</font>
+<font color="red">  95.         _urlopener = opener = FancyURLopener()</font>
+<font color="black">  96.     else:</font>
+<font color="red">  97.         opener = _urlopener</font>
+<font color="red">  98.     return opener.retrieve(url, filename, reporthook, data)</font>
+<font color="red">  99. def urlcleanup():</font>
+<font color="red"> 100.     if _urlopener:</font>
+<font color="red"> 101.         _urlopener.cleanup()</font>
+<font color="red"> 102.     _safe_quoters.clear()</font>
+<font color="red"> 103.     ftpcache.clear()</font>
+<font color="black"> 104. </font>
+<font color="black"> 105. # check for SSL</font>
+<font color="red"> 106. try:</font>
+<font color="red"> 107.     import ssl</font>
+<font color="red"> 108. except:</font>
+<font color="red"> 109.     _have_ssl = False</font>
+<font color="black"> 110. else:</font>
+<font color="red"> 111.     _have_ssl = True</font>
+<font color="black"> 112. </font>
+<font color="black"> 113. # exception raised when downloaded size does not match content-length</font>
+<font color="red"> 114. class ContentTooShortError(IOError):</font>
+<font color="red"> 115.     def __init__(self, message, content):</font>
+<font color="red"> 116.         IOError.__init__(self, message)</font>
+<font color="red"> 117.         self.content = content</font>
+<font color="black"> 118. </font>
+<font color="red"> 119. ftpcache = {}</font>
+<font color="red"> 120. class URLopener:</font>
+<font color="black"> 121.     &quot;&quot;&quot;Class to open URLs.</font>
+<font color="black"> 122.     This is a class rather than just a subroutine because we may need</font>
+<font color="black"> 123.     more than one set of global protocol-specific options.</font>
+<font color="black"> 124.     Note -- this is a base class for those who don't want the</font>
+<font color="black"> 125.     automatic handling of errors type 302 (relocated) and 401</font>
+<font color="red"> 126.     (authorization needed).&quot;&quot;&quot;</font>
+<font color="black"> 127. </font>
+<font color="red"> 128.     __tempfiles = None</font>
+<font color="black"> 129. </font>
+<font color="red"> 130.     version = &quot;Python-urllib/%s&quot; % __version__</font>
+<font color="black"> 131. </font>
+<font color="black"> 132.     # Constructor</font>
+<font color="red"> 133.     def __init__(self, proxies=None, context=None, **x509):</font>
+<font color="red"> 134.         if proxies is None:</font>
+<font color="red"> 135.             proxies = getproxies()</font>
+<font color="red"> 136.         assert hasattr(proxies, 'has_key'), &quot;proxies must be a mapping&quot;</font>
+<font color="red"> 137.         self.proxies = proxies</font>
+<font color="red"> 138.         self.key_file = x509.get('key_file')</font>
+<font color="red"> 139.         self.cert_file = x509.get('cert_file')</font>
+<font color="red"> 140.         self.context = context</font>
+<font color="red"> 141.         self.addheaders = [('User-Agent', self.version), ('Accept', '*/*')]</font>
+<font color="red"> 142.         self.__tempfiles = []</font>
+<font color="red"> 143.         self.__unlink = os.unlink # See cleanup()</font>
+<font color="red"> 144.         self.tempcache = None</font>
+<font color="black"> 145.         # Undocumented feature: if you assign {} to tempcache,</font>
+<font color="black"> 146.         # it is used to cache files retrieved with</font>
+<font color="black"> 147.         # self.retrieve().  This is not enabled by default</font>
+<font color="black"> 148.         # since it does not work for changing documents (and I</font>
+<font color="black"> 149.         # haven't got the logic to check expiration headers</font>
+<font color="black"> 150.         # yet).</font>
+<font color="red"> 151.         self.ftpcache = ftpcache</font>
+<font color="black"> 152.         # Undocumented feature: you can use a different</font>
+<font color="black"> 153.         # ftp cache by assigning to the .ftpcache member;</font>
+<font color="black"> 154.         # in case you want logically independent URL openers</font>
+<font color="black"> 155.         # XXX This is not threadsafe.  Bah.</font>
+<font color="black"> 156. </font>
+<font color="red"> 157.     def __del__(self):</font>
+<font color="red"> 158.         self.close()</font>
+<font color="black"> 159. </font>
+<font color="red"> 160.     def close(self):</font>
+<font color="red"> 161.         self.cleanup()</font>
+<font color="black"> 162. </font>
+<font color="red"> 163.     def cleanup(self):</font>
+<font color="black"> 164.         # This code sometimes runs when the rest of this module</font>
+<font color="black"> 165.         # has already been deleted, so it can't use any globals</font>
+<font color="black"> 166.         # or import anything.</font>
+<font color="red"> 167.         if self.__tempfiles:</font>
+<font color="red"> 168.             for file in self.__tempfiles:</font>
+<font color="red"> 169.                 try:</font>
+<font color="red"> 170.                     self.__unlink(file)</font>
+<font color="red"> 171.                 except OSError:</font>
+<font color="red"> 172.                     pass</font>
+<font color="red"> 173.             del self.__tempfiles[:]</font>
+<font color="red"> 174.         if self.tempcache:</font>
+<font color="red"> 175.             self.tempcache.clear()</font>
+<font color="black"> 176. </font>
+<font color="red"> 177.     def addheader(self, *args):</font>
+<font color="black"> 178.         &quot;&quot;&quot;Add a header to be used by the HTTP interface only</font>
+<font color="black"> 179.         e.g. u.addheader('Accept', 'sound/basic')&quot;&quot;&quot;</font>
+<font color="red"> 180.         self.addheaders.append(args)</font>
+<font color="black"> 181. </font>
+<font color="black"> 182.     # External interface</font>
+<font color="red"> 183.     def open(self, fullurl, data=None):</font>
+<font color="black"> 184.         &quot;&quot;&quot;Use URLopener().open(file) instead of open(file, 'r').&quot;&quot;&quot;</font>
+<font color="red"> 185.         fullurl = unwrap(toBytes(fullurl))</font>
+<font color="black"> 186.         # percent encode url, fixing lame server errors for e.g, like space</font>
+<font color="black"> 187.         # within url paths.</font>
+<font color="red"> 188.         fullurl = quote(fullurl, safe=&quot;%/:=&amp;?~#+!$,;'@()*[]|&quot;)</font>
+<font color="red"> 189.         if self.tempcache and fullurl in self.tempcache:</font>
+<font color="red"> 190.             filename, headers = self.tempcache[fullurl]</font>
+<font color="red"> 191.             fp = open(filename, 'rb')</font>
+<font color="red"> 192.             return addinfourl(fp, headers, fullurl)</font>
+<font color="red"> 193.         urltype, url = splittype(fullurl)</font>
+<font color="red"> 194.         if not urltype:</font>
+<font color="red"> 195.             urltype = 'file'</font>
+<font color="red"> 196.         if urltype in self.proxies:</font>
+<font color="red"> 197.             proxy = self.proxies[urltype]</font>
+<font color="red"> 198.             urltype, proxyhost = splittype(proxy)</font>
+<font color="red"> 199.             host, selector = splithost(proxyhost)</font>
+<font color="red"> 200.             url = (host, fullurl) # Signal special case to open_*()</font>
+<font color="black"> 201.         else:</font>
+<font color="red"> 202.             proxy = None</font>
+<font color="red"> 203.         name = 'open_' + urltype</font>
+<font color="red"> 204.         self.type = urltype</font>
+<font color="red"> 205.         name = name.replace('-', '_')</font>
+<font color="red"> 206.         if not hasattr(self, name):</font>
+<font color="red"> 207.             if proxy:</font>
+<font color="red"> 208.                 return self.open_unknown_proxy(proxy, fullurl, data)</font>
+<font color="black"> 209.             else:</font>
+<font color="red"> 210.                 return self.open_unknown(fullurl, data)</font>
+<font color="red"> 211.         try:</font>
+<font color="red"> 212.             if data is None:</font>
+<font color="red"> 213.                 return getattr(self, name)(url)</font>
+<font color="black"> 214.             else:</font>
+<font color="red"> 215.                 return getattr(self, name)(url, data)</font>
+<font color="red"> 216.         except socket.error, msg:</font>
+<font color="red"> 217.             raise IOError, ('socket error', msg), sys.exc_info()[2]</font>
+<font color="black"> 218. </font>
+<font color="red"> 219.     def open_unknown(self, fullurl, data=None):</font>
+<font color="black"> 220.         &quot;&quot;&quot;Overridable interface to open unknown URL type.&quot;&quot;&quot;</font>
+<font color="red"> 221.         type, url = splittype(fullurl)</font>
+<font color="red"> 222.         raise IOError, ('url error', 'unknown url type', type)</font>
+<font color="black"> 223. </font>
+<font color="red"> 224.     def open_unknown_proxy(self, proxy, fullurl, data=None):</font>
+<font color="black"> 225.         &quot;&quot;&quot;Overridable interface to open unknown URL type.&quot;&quot;&quot;</font>
+<font color="red"> 226.         type, url = splittype(fullurl)</font>
+<font color="red"> 227.         raise IOError, ('url error', 'invalid proxy for %s' % type, proxy)</font>
+<font color="black"> 228. </font>
+<font color="black"> 229.     # External interface</font>
+<font color="red"> 230.     def retrieve(self, url, filename=None, reporthook=None, data=None):</font>
+<font color="black"> 231.         &quot;&quot;&quot;retrieve(url) returns (filename, headers) for a local object</font>
+<font color="black"> 232.         or (tempfilename, headers) for a remote object.&quot;&quot;&quot;</font>
+<font color="red"> 233.         url = unwrap(toBytes(url))</font>
+<font color="red"> 234.         if self.tempcache and url in self.tempcache:</font>
+<font color="red"> 235.             return self.tempcache[url]</font>
+<font color="red"> 236.         type, url1 = splittype(url)</font>
+<font color="red"> 237.         if filename is None and (not type or type == 'file'):</font>
+<font color="red"> 238.             try:</font>
+<font color="red"> 239.                 fp = self.open_local_file(url1)</font>
+<font color="red"> 240.                 hdrs = fp.info()</font>
+<font color="red"> 241.                 fp.close()</font>
+<font color="red"> 242.                 return url2pathname(splithost(url1)[1]), hdrs</font>
+<font color="red"> 243.             except IOError:</font>
+<font color="red"> 244.                 pass</font>
+<font color="red"> 245.         fp = self.open(url, data)</font>
+<font color="red"> 246.         try:</font>
+<font color="red"> 247.             headers = fp.info()</font>
+<font color="red"> 248.             if filename:</font>
+<font color="red"> 249.                 tfp = open(filename, 'wb')</font>
+<font color="black"> 250.             else:</font>
+<font color="red"> 251.                 import tempfile</font>
+<font color="red"> 252.                 garbage, path = splittype(url)</font>
+<font color="red"> 253.                 garbage, path = splithost(path or &quot;&quot;)</font>
+<font color="red"> 254.                 path, garbage = splitquery(path or &quot;&quot;)</font>
+<font color="red"> 255.                 path, garbage = splitattr(path or &quot;&quot;)</font>
+<font color="red"> 256.                 suffix = os.path.splitext(path)[1]</font>
+<font color="red"> 257.                 (fd, filename) = tempfile.mkstemp(suffix)</font>
+<font color="red"> 258.                 self.__tempfiles.append(filename)</font>
+<font color="red"> 259.                 tfp = os.fdopen(fd, 'wb')</font>
+<font color="red"> 260.             try:</font>
+<font color="red"> 261.                 result = filename, headers</font>
+<font color="red"> 262.                 if self.tempcache is not None:</font>
+<font color="red"> 263.                     self.tempcache[url] = result</font>
+<font color="red"> 264.                 bs = 1024*8</font>
+<font color="red"> 265.                 size = -1</font>
+<font color="red"> 266.                 read = 0</font>
+<font color="red"> 267.                 blocknum = 0</font>
+<font color="red"> 268.                 if &quot;content-length&quot; in headers:</font>
+<font color="red"> 269.                     size = int(headers[&quot;Content-Length&quot;])</font>
+<font color="red"> 270.                 if reporthook:</font>
+<font color="red"> 271.                     reporthook(blocknum, bs, size)</font>
+<font color="red"> 272.                 while 1:</font>
+<font color="red"> 273.                     block = fp.read(bs)</font>
+<font color="red"> 274.                     if block == &quot;&quot;:</font>
+<font color="red"> 275.                         break</font>
+<font color="red"> 276.                     read += len(block)</font>
+<font color="red"> 277.                     tfp.write(block)</font>
+<font color="red"> 278.                     blocknum += 1</font>
+<font color="red"> 279.                     if reporthook:</font>
+<font color="red"> 280.                         reporthook(blocknum, bs, size)</font>
+<font color="black"> 281.             finally:</font>
+<font color="red"> 282.                 tfp.close()</font>
+<font color="black"> 283.         finally:</font>
+<font color="red"> 284.             fp.close()</font>
+<font color="black"> 285. </font>
+<font color="black"> 286.         # raise exception if actual size does not match content-length header</font>
+<font color="red"> 287.         if size &gt;= 0 and read &lt; size:</font>
+<font color="red"> 288.             raise ContentTooShortError(&quot;retrieval incomplete: got only %i out &quot;</font>
+<font color="red"> 289.                                        &quot;of %i bytes&quot; % (read, size), result)</font>
+<font color="black"> 290. </font>
+<font color="red"> 291.         return result</font>
+<font color="black"> 292. </font>
+<font color="black"> 293.     # Each method named open_&lt;type&gt; knows how to open that type of URL</font>
+<font color="black"> 294. </font>
+<font color="red"> 295.     def open_http(self, url, data=None):</font>
+<font color="black"> 296.         &quot;&quot;&quot;Use HTTP protocol.&quot;&quot;&quot;</font>
+<font color="red"> 297.         import httplib</font>
+<font color="red"> 298.         user_passwd = None</font>
+<font color="red"> 299.         proxy_passwd= None</font>
+<font color="red"> 300.         if isinstance(url, str):</font>
+<font color="red"> 301.             host, selector = splithost(url)</font>
+<font color="red"> 302.             if host:</font>
+<font color="red"> 303.                 user_passwd, host = splituser(host)</font>
+<font color="red"> 304.                 host = unquote(host)</font>
+<font color="red"> 305.             realhost = host</font>
+<font color="black"> 306.         else:</font>
+<font color="red"> 307.             host, selector = url</font>
+<font color="black"> 308.             # check whether the proxy contains authorization information</font>
+<font color="red"> 309.             proxy_passwd, host = splituser(host)</font>
+<font color="black"> 310.             # now we proceed with the url we want to obtain</font>
+<font color="red"> 311.             urltype, rest = splittype(selector)</font>
+<font color="red"> 312.             url = rest</font>
+<font color="red"> 313.             user_passwd = None</font>
+<font color="red"> 314.             if urltype.lower() != 'http':</font>
+<font color="red"> 315.                 realhost = None</font>
+<font color="black"> 316.             else:</font>
+<font color="red"> 317.                 realhost, rest = splithost(rest)</font>
+<font color="red"> 318.                 if realhost:</font>
+<font color="red"> 319.                     user_passwd, realhost = splituser(realhost)</font>
+<font color="red"> 320.                 if user_passwd:</font>
+<font color="red"> 321.                     selector = &quot;%s://%s%s&quot; % (urltype, realhost, rest)</font>
+<font color="red"> 322.                 if proxy_bypass(realhost):</font>
+<font color="red"> 323.                     host = realhost</font>
+<font color="black"> 324. </font>
+<font color="black"> 325.             #print &quot;proxy via http:&quot;, host, selector</font>
+<font color="red"> 326.         if not host: raise IOError, ('http error', 'no host given')</font>
+<font color="black"> 327. </font>
+<font color="red"> 328.         if proxy_passwd:</font>
+<font color="red"> 329.             proxy_passwd = unquote(proxy_passwd)</font>
+<font color="red"> 330.             proxy_auth = base64.b64encode(proxy_passwd).strip()</font>
+<font color="black"> 331.         else:</font>
+<font color="red"> 332.             proxy_auth = None</font>
+<font color="black"> 333. </font>
+<font color="red"> 334.         if user_passwd:</font>
+<font color="red"> 335.             user_passwd = unquote(user_passwd)</font>
+<font color="red"> 336.             auth = base64.b64encode(user_passwd).strip()</font>
+<font color="black"> 337.         else:</font>
+<font color="red"> 338.             auth = None</font>
+<font color="red"> 339.         h = httplib.HTTP(host)</font>
+<font color="red"> 340.         if data is not None:</font>
+<font color="red"> 341.             h.putrequest('POST', selector)</font>
+<font color="red"> 342.             h.putheader('Content-Type', 'application/x-www-form-urlencoded')</font>
+<font color="red"> 343.             h.putheader('Content-Length', '%d' % len(data))</font>
+<font color="black"> 344.         else:</font>
+<font color="red"> 345.             h.putrequest('GET', selector)</font>
+<font color="red"> 346.         if proxy_auth: h.putheader('Proxy-Authorization', 'Basic %s' % proxy_auth)</font>
+<font color="red"> 347.         if auth: h.putheader('Authorization', 'Basic %s' % auth)</font>
+<font color="red"> 348.         if realhost: h.putheader('Host', realhost)</font>
+<font color="red"> 349.         for args in self.addheaders: h.putheader(*args)</font>
+<font color="red"> 350.         h.endheaders(data)</font>
+<font color="red"> 351.         errcode, errmsg, headers = h.getreply()</font>
+<font color="red"> 352.         fp = h.getfile()</font>
+<font color="red"> 353.         if errcode == -1:</font>
+<font color="red"> 354.             if fp: fp.close()</font>
+<font color="black"> 355.             # something went wrong with the HTTP status line</font>
+<font color="red"> 356.             raise IOError, ('http protocol error', 0,</font>
+<font color="red"> 357.                             'got a bad status line', None)</font>
+<font color="black"> 358.         # According to RFC 2616, &quot;2xx&quot; code indicates that the client's</font>
+<font color="black"> 359.         # request was successfully received, understood, and accepted.</font>
+<font color="red"> 360.         if (200 &lt;= errcode &lt; 300):</font>
+<font color="red"> 361.             return addinfourl(fp, headers, &quot;http:&quot; + url, errcode)</font>
+<font color="black"> 362.         else:</font>
+<font color="red"> 363.             if data is None:</font>
+<font color="red"> 364.                 return self.http_error(url, fp, errcode, errmsg, headers)</font>
+<font color="black"> 365.             else:</font>
+<font color="red"> 366.                 return self.http_error(url, fp, errcode, errmsg, headers, data)</font>
+<font color="black"> 367. </font>
+<font color="red"> 368.     def http_error(self, url, fp, errcode, errmsg, headers, data=None):</font>
+<font color="black"> 369.         &quot;&quot;&quot;Handle http errors.</font>
+<font color="black"> 370.         Derived class can override this, or provide specific handlers</font>
+<font color="black"> 371.         named http_error_DDD where DDD is the 3-digit error code.&quot;&quot;&quot;</font>
+<font color="black"> 372.         # First check if there's a specific handler for this error</font>
+<font color="red"> 373.         name = 'http_error_%d' % errcode</font>
+<font color="red"> 374.         if hasattr(self, name):</font>
+<font color="red"> 375.             method = getattr(self, name)</font>
+<font color="red"> 376.             if data is None:</font>
+<font color="red"> 377.                 result = method(url, fp, errcode, errmsg, headers)</font>
+<font color="black"> 378.             else:</font>
+<font color="red"> 379.                 result = method(url, fp, errcode, errmsg, headers, data)</font>
+<font color="red"> 380.             if result: return result</font>
+<font color="red"> 381.         return self.http_error_default(url, fp, errcode, errmsg, headers)</font>
+<font color="black"> 382. </font>
+<font color="red"> 383.     def http_error_default(self, url, fp, errcode, errmsg, headers):</font>
+<font color="black"> 384.         &quot;&quot;&quot;Default error handler: close the connection and raise IOError.&quot;&quot;&quot;</font>
+<font color="red"> 385.         fp.close()</font>
+<font color="red"> 386.         raise IOError, ('http error', errcode, errmsg, headers)</font>
+<font color="black"> 387. </font>
+<font color="red"> 388.     if _have_ssl:</font>
+<font color="red"> 389.         def open_https(self, url, data=None):</font>
+<font color="black"> 390.             &quot;&quot;&quot;Use HTTPS protocol.&quot;&quot;&quot;</font>
+<font color="black"> 391. </font>
+<font color="red"> 392.             import httplib</font>
+<font color="red"> 393.             user_passwd = None</font>
+<font color="red"> 394.             proxy_passwd = None</font>
+<font color="red"> 395.             if isinstance(url, str):</font>
+<font color="red"> 396.                 host, selector = splithost(url)</font>
+<font color="red"> 397.                 if host:</font>
+<font color="red"> 398.                     user_passwd, host = splituser(host)</font>
+<font color="red"> 399.                     host = unquote(host)</font>
+<font color="red"> 400.                 realhost = host</font>
+<font color="black"> 401.             else:</font>
+<font color="red"> 402.                 host, selector = url</font>
+<font color="black"> 403.                 # here, we determine, whether the proxy contains authorization information</font>
+<font color="red"> 404.                 proxy_passwd, host = splituser(host)</font>
+<font color="red"> 405.                 urltype, rest = splittype(selector)</font>
+<font color="red"> 406.                 url = rest</font>
+<font color="red"> 407.                 user_passwd = None</font>
+<font color="red"> 408.                 if urltype.lower() != 'https':</font>
+<font color="red"> 409.                     realhost = None</font>
+<font color="black"> 410.                 else:</font>
+<font color="red"> 411.                     realhost, rest = splithost(rest)</font>
+<font color="red"> 412.                     if realhost:</font>
+<font color="red"> 413.                         user_passwd, realhost = splituser(realhost)</font>
+<font color="red"> 414.                     if user_passwd:</font>
+<font color="red"> 415.                         selector = &quot;%s://%s%s&quot; % (urltype, realhost, rest)</font>
+<font color="black"> 416.                 #print &quot;proxy via https:&quot;, host, selector</font>
+<font color="red"> 417.             if not host: raise IOError, ('https error', 'no host given')</font>
+<font color="red"> 418.             if proxy_passwd:</font>
+<font color="red"> 419.                 proxy_passwd = unquote(proxy_passwd)</font>
+<font color="red"> 420.                 proxy_auth = base64.b64encode(proxy_passwd).strip()</font>
+<font color="black"> 421.             else:</font>
+<font color="red"> 422.                 proxy_auth = None</font>
+<font color="red"> 423.             if user_passwd:</font>
+<font color="red"> 424.                 user_passwd = unquote(user_passwd)</font>
+<font color="red"> 425.                 auth = base64.b64encode(user_passwd).strip()</font>
+<font color="black"> 426.             else:</font>
+<font color="red"> 427.                 auth = None</font>
+<font color="red"> 428.             h = httplib.HTTPS(host, 0,</font>
+<font color="red"> 429.                               key_file=self.key_file,</font>
+<font color="red"> 430.                               cert_file=self.cert_file,</font>
+<font color="red"> 431.                               context=self.context)</font>
+<font color="red"> 432.             if data is not None:</font>
+<font color="red"> 433.                 h.putrequest('POST', selector)</font>
+<font color="red"> 434.                 h.putheader('Content-Type',</font>
+<font color="red"> 435.                             'application/x-www-form-urlencoded')</font>
+<font color="red"> 436.                 h.putheader('Content-Length', '%d' % len(data))</font>
+<font color="black"> 437.             else:</font>
+<font color="red"> 438.                 h.putrequest('GET', selector)</font>
+<font color="red"> 439.             if proxy_auth: h.putheader('Proxy-Authorization', 'Basic %s' % proxy_auth)</font>
+<font color="red"> 440.             if auth: h.putheader('Authorization', 'Basic %s' % auth)</font>
+<font color="red"> 441.             if realhost: h.putheader('Host', realhost)</font>
+<font color="red"> 442.             for args in self.addheaders: h.putheader(*args)</font>
+<font color="red"> 443.             h.endheaders(data)</font>
+<font color="red"> 444.             errcode, errmsg, headers = h.getreply()</font>
+<font color="red"> 445.             fp = h.getfile()</font>
+<font color="red"> 446.             if errcode == -1:</font>
+<font color="red"> 447.                 if fp: fp.close()</font>
+<font color="black"> 448.                 # something went wrong with the HTTP status line</font>
+<font color="red"> 449.                 raise IOError, ('http protocol error', 0,</font>
+<font color="red"> 450.                                 'got a bad status line', None)</font>
+<font color="black"> 451.             # According to RFC 2616, &quot;2xx&quot; code indicates that the client's</font>
+<font color="black"> 452.             # request was successfully received, understood, and accepted.</font>
+<font color="red"> 453.             if (200 &lt;= errcode &lt; 300):</font>
+<font color="red"> 454.                 return addinfourl(fp, headers, &quot;https:&quot; + url, errcode)</font>
+<font color="black"> 455.             else:</font>
+<font color="red"> 456.                 if data is None:</font>
+<font color="red"> 457.                     return self.http_error(url, fp, errcode, errmsg, headers)</font>
+<font color="black"> 458.                 else:</font>
+<font color="red"> 459.                     return self.http_error(url, fp, errcode, errmsg, headers,</font>
+<font color="red"> 460.                                            data)</font>
+<font color="black"> 461. </font>
+<font color="red"> 462.     def open_file(self, url):</font>
+<font color="black"> 463.         &quot;&quot;&quot;Use local file or FTP depending on form of URL.&quot;&quot;&quot;</font>
+<font color="red"> 464.         if not isinstance(url, str):</font>
+<font color="red"> 465.             raise IOError, ('file error', 'proxy support for file protocol currently not implemented')</font>
+<font color="red"> 466.         if url[:2] == '//' and url[2:3] != '/' and url[2:12].lower() != 'localhost/':</font>
+<font color="red"> 467.             return self.open_ftp(url)</font>
+<font color="black"> 468.         else:</font>
+<font color="red"> 469.             return self.open_local_file(url)</font>
+<font color="black"> 470. </font>
+<font color="red"> 471.     def open_local_file(self, url):</font>
+<font color="black"> 472.         &quot;&quot;&quot;Use local file.&quot;&quot;&quot;</font>
+<font color="red"> 473.         import mimetypes, mimetools, email.utils</font>
+<font color="red"> 474.         try:</font>
+<font color="red"> 475.             from cStringIO import StringIO</font>
+<font color="red"> 476.         except ImportError:</font>
+<font color="red"> 477.             from StringIO import StringIO</font>
+<font color="red"> 478.         host, file = splithost(url)</font>
+<font color="red"> 479.         localname = url2pathname(file)</font>
+<font color="red"> 480.         try:</font>
+<font color="red"> 481.             stats = os.stat(localname)</font>
+<font color="red"> 482.         except OSError, e:</font>
+<font color="red"> 483.             raise IOError(e.errno, e.strerror, e.filename)</font>
+<font color="red"> 484.         size = stats.st_size</font>
+<font color="red"> 485.         modified = email.utils.formatdate(stats.st_mtime, usegmt=True)</font>
+<font color="red"> 486.         mtype = mimetypes.guess_type(url)[0]</font>
+<font color="red"> 487.         headers = mimetools.Message(StringIO(</font>
+<font color="red"> 488.             'Content-Type: %s\nContent-Length: %d\nLast-modified: %s\n' %</font>
+<font color="red"> 489.             (mtype or 'text/plain', size, modified)))</font>
+<font color="red"> 490.         if not host:</font>
+<font color="red"> 491.             urlfile = file</font>
+<font color="red"> 492.             if file[:1] == '/':</font>
+<font color="red"> 493.                 urlfile = 'file://' + file</font>
+<font color="red"> 494.             elif file[:2] == './':</font>
+<font color="red"> 495.                 raise ValueError(&quot;local file url may start with / or file:. Unknown url of type: %s&quot; % url)</font>
+<font color="red"> 496.             return addinfourl(open(localname, 'rb'),</font>
+<font color="red"> 497.                               headers, urlfile)</font>
+<font color="red"> 498.         host, port = splitport(host)</font>
+<font color="red"> 499.         if not port \</font>
+<font color="red"> 500.            and socket.gethostbyname(host) in (localhost(), thishost()):</font>
+<font color="red"> 501.             urlfile = file</font>
+<font color="red"> 502.             if file[:1] == '/':</font>
+<font color="red"> 503.                 urlfile = 'file://' + file</font>
+<font color="red"> 504.             return addinfourl(open(localname, 'rb'),</font>
+<font color="red"> 505.                               headers, urlfile)</font>
+<font color="red"> 506.         raise IOError, ('local file error', 'not on local host')</font>
+<font color="black"> 507. </font>
+<font color="red"> 508.     def open_ftp(self, url):</font>
+<font color="black"> 509.         &quot;&quot;&quot;Use FTP protocol.&quot;&quot;&quot;</font>
+<font color="red"> 510.         if not isinstance(url, str):</font>
+<font color="red"> 511.             raise IOError, ('ftp error', 'proxy support for ftp protocol currently not implemented')</font>
+<font color="red"> 512.         import mimetypes, mimetools</font>
+<font color="red"> 513.         try:</font>
+<font color="red"> 514.             from cStringIO import StringIO</font>
+<font color="red"> 515.         except ImportError:</font>
+<font color="red"> 516.             from StringIO import StringIO</font>
+<font color="red"> 517.         host, path = splithost(url)</font>
+<font color="red"> 518.         if not host: raise IOError, ('ftp error', 'no host given')</font>
+<font color="red"> 519.         host, port = splitport(host)</font>
+<font color="red"> 520.         user, host = splituser(host)</font>
+<font color="red"> 521.         if user: user, passwd = splitpasswd(user)</font>
+<font color="red"> 522.         else: passwd = None</font>
+<font color="red"> 523.         host = unquote(host)</font>
+<font color="red"> 524.         user = user or ''</font>
+<font color="red"> 525.         passwd = passwd or ''</font>
+<font color="red"> 526.         host = socket.gethostbyname(host)</font>
+<font color="red"> 527.         if not port:</font>
+<font color="red"> 528.             import ftplib</font>
+<font color="red"> 529.             port = ftplib.FTP_PORT</font>
+<font color="black"> 530.         else:</font>
+<font color="red"> 531.             port = int(port)</font>
+<font color="red"> 532.         path, attrs = splitattr(path)</font>
+<font color="red"> 533.         path = unquote(path)</font>
+<font color="red"> 534.         dirs = path.split('/')</font>
+<font color="red"> 535.         dirs, file = dirs[:-1], dirs[-1]</font>
+<font color="red"> 536.         if dirs and not dirs[0]: dirs = dirs[1:]</font>
+<font color="red"> 537.         if dirs and not dirs[0]: dirs[0] = '/'</font>
+<font color="red"> 538.         key = user, host, port, '/'.join(dirs)</font>
+<font color="black"> 539.         # XXX thread unsafe!</font>
+<font color="red"> 540.         if len(self.ftpcache) &gt; MAXFTPCACHE:</font>
+<font color="black"> 541.             # Prune the cache, rather arbitrarily</font>
+<font color="red"> 542.             for k in self.ftpcache.keys():</font>
+<font color="red"> 543.                 if k != key:</font>
+<font color="red"> 544.                     v = self.ftpcache[k]</font>
+<font color="red"> 545.                     del self.ftpcache[k]</font>
+<font color="red"> 546.                     v.close()</font>
+<font color="red"> 547.         try:</font>
+<font color="red"> 548.             if not key in self.ftpcache:</font>
+<font color="black"> 549.                 self.ftpcache[key] = \</font>
+<font color="red"> 550.                     ftpwrapper(user, passwd, host, port, dirs)</font>
+<font color="red"> 551.             if not file: type = 'D'</font>
+<font color="red"> 552.             else: type = 'I'</font>
+<font color="red"> 553.             for attr in attrs:</font>
+<font color="red"> 554.                 attr, value = splitvalue(attr)</font>
+<font color="red"> 555.                 if attr.lower() == 'type' and \</font>
+<font color="red"> 556.                    value in ('a', 'A', 'i', 'I', 'd', 'D'):</font>
+<font color="red"> 557.                     type = value.upper()</font>
+<font color="red"> 558.             (fp, retrlen) = self.ftpcache[key].retrfile(file, type)</font>
+<font color="red"> 559.             mtype = mimetypes.guess_type(&quot;ftp:&quot; + url)[0]</font>
+<font color="red"> 560.             headers = &quot;&quot;</font>
+<font color="red"> 561.             if mtype:</font>
+<font color="red"> 562.                 headers += &quot;Content-Type: %s\n&quot; % mtype</font>
+<font color="red"> 563.             if retrlen is not None and retrlen &gt;= 0:</font>
+<font color="red"> 564.                 headers += &quot;Content-Length: %d\n&quot; % retrlen</font>
+<font color="red"> 565.             headers = mimetools.Message(StringIO(headers))</font>
+<font color="red"> 566.             return addinfourl(fp, headers, &quot;ftp:&quot; + url)</font>
+<font color="red"> 567.         except ftperrors(), msg:</font>
+<font color="red"> 568.             raise IOError, ('ftp error', msg), sys.exc_info()[2]</font>
+<font color="black"> 569. </font>
+<font color="red"> 570.     def open_data(self, url, data=None):</font>
+<font color="black"> 571.         &quot;&quot;&quot;Use &quot;data&quot; URL.&quot;&quot;&quot;</font>
+<font color="red"> 572.         if not isinstance(url, str):</font>
+<font color="red"> 573.             raise IOError, ('data error', 'proxy support for data protocol currently not implemented')</font>
+<font color="black"> 574.         # ignore POSTed data</font>
+<font color="black"> 575.         #</font>
+<font color="black"> 576.         # syntax of data URLs:</font>
+<font color="black"> 577.         # dataurl   := &quot;data:&quot; [ mediatype ] [ &quot;;base64&quot; ] &quot;,&quot; data</font>
+<font color="black"> 578.         # mediatype := [ type &quot;/&quot; subtype ] *( &quot;;&quot; parameter )</font>
+<font color="black"> 579.         # data      := *urlchar</font>
+<font color="black"> 580.         # parameter := attribute &quot;=&quot; value</font>
+<font color="red"> 581.         import mimetools</font>
+<font color="red"> 582.         try:</font>
+<font color="red"> 583.             from cStringIO import StringIO</font>
+<font color="red"> 584.         except ImportError:</font>
+<font color="red"> 585.             from StringIO import StringIO</font>
+<font color="red"> 586.         try:</font>
+<font color="red"> 587.             [type, data] = url.split(',', 1)</font>
+<font color="red"> 588.         except ValueError:</font>
+<font color="red"> 589.             raise IOError, ('data error', 'bad data URL')</font>
+<font color="red"> 590.         if not type:</font>
+<font color="red"> 591.             type = 'text/plain;charset=US-ASCII'</font>
+<font color="red"> 592.         semi = type.rfind(';')</font>
+<font color="red"> 593.         if semi &gt;= 0 and '=' not in type[semi:]:</font>
+<font color="red"> 594.             encoding = type[semi+1:]</font>
+<font color="red"> 595.             type = type[:semi]</font>
+<font color="black"> 596.         else:</font>
+<font color="red"> 597.             encoding = ''</font>
+<font color="red"> 598.         msg = []</font>
+<font color="red"> 599.         msg.append('Date: %s'%time.strftime('%a, %d %b %Y %H:%M:%S GMT',</font>
+<font color="red"> 600.                                             time.gmtime(time.time())))</font>
+<font color="red"> 601.         msg.append('Content-type: %s' % type)</font>
+<font color="red"> 602.         if encoding == 'base64':</font>
+<font color="red"> 603.             data = base64.decodestring(data)</font>
+<font color="black"> 604.         else:</font>
+<font color="red"> 605.             data = unquote(data)</font>
+<font color="red"> 606.         msg.append('Content-Length: %d' % len(data))</font>
+<font color="red"> 607.         msg.append('')</font>
+<font color="red"> 608.         msg.append(data)</font>
+<font color="red"> 609.         msg = '\n'.join(msg)</font>
+<font color="red"> 610.         f = StringIO(msg)</font>
+<font color="red"> 611.         headers = mimetools.Message(f, 0)</font>
+<font color="black"> 612.         #f.fileno = None     # needed for addinfourl</font>
+<font color="red"> 613.         return addinfourl(f, headers, url)</font>
+<font color="black"> 614. </font>
+<font color="black"> 615. </font>
+<font color="red"> 616. class FancyURLopener(URLopener):</font>
+<font color="red"> 617.     &quot;&quot;&quot;Derived class with handlers for errors we can handle (perhaps).&quot;&quot;&quot;</font>
+<font color="black"> 618. </font>
+<font color="red"> 619.     def __init__(self, *args, **kwargs):</font>
+<font color="red"> 620.         URLopener.__init__(self, *args, **kwargs)</font>
+<font color="red"> 621.         self.auth_cache = {}</font>
+<font color="red"> 622.         self.tries = 0</font>
+<font color="red"> 623.         self.maxtries = 10</font>
+<font color="black"> 624. </font>
+<font color="red"> 625.     def http_error_default(self, url, fp, errcode, errmsg, headers):</font>
+<font color="black"> 626.         &quot;&quot;&quot;Default error handling -- don't raise an exception.&quot;&quot;&quot;</font>
+<font color="red"> 627.         return addinfourl(fp, headers, &quot;http:&quot; + url, errcode)</font>
+<font color="black"> 628. </font>
+<font color="red"> 629.     def http_error_302(self, url, fp, errcode, errmsg, headers, data=None):</font>
+<font color="black"> 630.         &quot;&quot;&quot;Error 302 -- relocated (temporarily).&quot;&quot;&quot;</font>
+<font color="red"> 631.         self.tries += 1</font>
+<font color="red"> 632.         try:</font>
+<font color="red"> 633.             if self.maxtries and self.tries &gt;= self.maxtries:</font>
+<font color="red"> 634.                 if hasattr(self, &quot;http_error_500&quot;):</font>
+<font color="red"> 635.                     meth = self.http_error_500</font>
+<font color="black"> 636.                 else:</font>
+<font color="red"> 637.                     meth = self.http_error_default</font>
+<font color="red"> 638.                 return meth(url, fp, 500,</font>
+<font color="red"> 639.                             &quot;Internal Server Error: Redirect Recursion&quot;,</font>
+<font color="red"> 640.                             headers)</font>
+<font color="red"> 641.             result = self.redirect_internal(url, fp, errcode, errmsg,</font>
+<font color="red"> 642.                                             headers, data)</font>
+<font color="red"> 643.             return result</font>
+<font color="black"> 644.         finally:</font>
+<font color="red"> 645.             self.tries = 0</font>
+<font color="black"> 646. </font>
+<font color="red"> 647.     def redirect_internal(self, url, fp, errcode, errmsg, headers, data):</font>
+<font color="red"> 648.         if 'location' in headers:</font>
+<font color="red"> 649.             newurl = headers['location']</font>
+<font color="red"> 650.         elif 'uri' in headers:</font>
+<font color="red"> 651.             newurl = headers['uri']</font>
+<font color="black"> 652.         else:</font>
+<font color="red"> 653.             return</font>
+<font color="red"> 654.         fp.close()</font>
+<font color="black"> 655.         # In case the server sent a relative URL, join with original:</font>
+<font color="red"> 656.         newurl = basejoin(self.type + &quot;:&quot; + url, newurl)</font>
+<font color="black"> 657. </font>
+<font color="black"> 658.         # For security reasons we do not allow redirects to protocols</font>
+<font color="black"> 659.         # other than HTTP, HTTPS or FTP.</font>
+<font color="red"> 660.         newurl_lower = newurl.lower()</font>
+<font color="red"> 661.         if not (newurl_lower.startswith('http://') or</font>
+<font color="red"> 662.                 newurl_lower.startswith('https://') or</font>
+<font color="red"> 663.                 newurl_lower.startswith('ftp://')):</font>
+<font color="red"> 664.             raise IOError('redirect error', errcode,</font>
+<font color="red"> 665.                           errmsg + &quot; - Redirection to url '%s' is not allowed&quot; %</font>
+<font color="red"> 666.                           newurl,</font>
+<font color="red"> 667.                           headers)</font>
+<font color="black"> 668. </font>
+<font color="red"> 669.         return self.open(newurl)</font>
+<font color="black"> 670. </font>
+<font color="red"> 671.     def http_error_301(self, url, fp, errcode, errmsg, headers, data=None):</font>
+<font color="black"> 672.         &quot;&quot;&quot;Error 301 -- also relocated (permanently).&quot;&quot;&quot;</font>
+<font color="red"> 673.         return self.http_error_302(url, fp, errcode, errmsg, headers, data)</font>
+<font color="black"> 674. </font>
+<font color="red"> 675.     def http_error_303(self, url, fp, errcode, errmsg, headers, data=None):</font>
+<font color="black"> 676.         &quot;&quot;&quot;Error 303 -- also relocated (essentially identical to 302).&quot;&quot;&quot;</font>
+<font color="red"> 677.         return self.http_error_302(url, fp, errcode, errmsg, headers, data)</font>
+<font color="black"> 678. </font>
+<font color="red"> 679.     def http_error_307(self, url, fp, errcode, errmsg, headers, data=None):</font>
+<font color="black"> 680.         &quot;&quot;&quot;Error 307 -- relocated, but turn POST into error.&quot;&quot;&quot;</font>
+<font color="red"> 681.         if data is None:</font>
+<font color="red"> 682.             return self.http_error_302(url, fp, errcode, errmsg, headers, data)</font>
+<font color="black"> 683.         else:</font>
+<font color="red"> 684.             return self.http_error_default(url, fp, errcode, errmsg, headers)</font>
+<font color="black"> 685. </font>
+<font color="red"> 686.     def http_error_401(self, url, fp, errcode, errmsg, headers, data=None):</font>
+<font color="black"> 687.         &quot;&quot;&quot;Error 401 -- authentication required.</font>
+<font color="black"> 688.         This function supports Basic authentication only.&quot;&quot;&quot;</font>
+<font color="red"> 689.         if not 'www-authenticate' in headers:</font>
+<font color="red"> 690.             URLopener.http_error_default(self, url, fp,</font>
+<font color="red"> 691.                                          errcode, errmsg, headers)</font>
+<font color="red"> 692.         stuff = headers['www-authenticate']</font>
+<font color="red"> 693.         import re</font>
+<font color="red"> 694.         match = re.match('[ \t]*([^ \t]+)[ \t]+realm=&quot;([^&quot;]*)&quot;', stuff)</font>
+<font color="red"> 695.         if not match:</font>
+<font color="red"> 696.             URLopener.http_error_default(self, url, fp,</font>
+<font color="red"> 697.                                          errcode, errmsg, headers)</font>
+<font color="red"> 698.         scheme, realm = match.groups()</font>
+<font color="red"> 699.         if scheme.lower() != 'basic':</font>
+<font color="red"> 700.             URLopener.http_error_default(self, url, fp,</font>
+<font color="red"> 701.                                          errcode, errmsg, headers)</font>
+<font color="red"> 702.         name = 'retry_' + self.type + '_basic_auth'</font>
+<font color="red"> 703.         if data is None:</font>
+<font color="red"> 704.             return getattr(self,name)(url, realm)</font>
+<font color="black"> 705.         else:</font>
+<font color="red"> 706.             return getattr(self,name)(url, realm, data)</font>
+<font color="black"> 707. </font>
+<font color="red"> 708.     def http_error_407(self, url, fp, errcode, errmsg, headers, data=None):</font>
+<font color="black"> 709.         &quot;&quot;&quot;Error 407 -- proxy authentication required.</font>
+<font color="black"> 710.         This function supports Basic authentication only.&quot;&quot;&quot;</font>
+<font color="red"> 711.         if not 'proxy-authenticate' in headers:</font>
+<font color="red"> 712.             URLopener.http_error_default(self, url, fp,</font>
+<font color="red"> 713.                                          errcode, errmsg, headers)</font>
+<font color="red"> 714.         stuff = headers['proxy-authenticate']</font>
+<font color="red"> 715.         import re</font>
+<font color="red"> 716.         match = re.match('[ \t]*([^ \t]+)[ \t]+realm=&quot;([^&quot;]*)&quot;', stuff)</font>
+<font color="red"> 717.         if not match:</font>
+<font color="red"> 718.             URLopener.http_error_default(self, url, fp,</font>
+<font color="red"> 719.                                          errcode, errmsg, headers)</font>
+<font color="red"> 720.         scheme, realm = match.groups()</font>
+<font color="red"> 721.         if scheme.lower() != 'basic':</font>
+<font color="red"> 722.             URLopener.http_error_default(self, url, fp,</font>
+<font color="red"> 723.                                          errcode, errmsg, headers)</font>
+<font color="red"> 724.         name = 'retry_proxy_' + self.type + '_basic_auth'</font>
+<font color="red"> 725.         if data is None:</font>
+<font color="red"> 726.             return getattr(self,name)(url, realm)</font>
+<font color="black"> 727.         else:</font>
+<font color="red"> 728.             return getattr(self,name)(url, realm, data)</font>
+<font color="black"> 729. </font>
+<font color="red"> 730.     def retry_proxy_http_basic_auth(self, url, realm, data=None):</font>
+<font color="red"> 731.         host, selector = splithost(url)</font>
+<font color="red"> 732.         newurl = 'http://' + host + selector</font>
+<font color="red"> 733.         proxy = self.proxies['http']</font>
+<font color="red"> 734.         urltype, proxyhost = splittype(proxy)</font>
+<font color="red"> 735.         proxyhost, proxyselector = splithost(proxyhost)</font>
+<font color="red"> 736.         i = proxyhost.find('@') + 1</font>
+<font color="red"> 737.         proxyhost = proxyhost[i:]</font>
+<font color="red"> 738.         user, passwd = self.get_user_passwd(proxyhost, realm, i)</font>
+<font color="red"> 739.         if not (user or passwd): return None</font>
+<font color="red"> 740.         proxyhost = quote(user, safe='') + ':' + quote(passwd, safe='') + '@' + proxyhost</font>
+<font color="red"> 741.         self.proxies['http'] = 'http://' + proxyhost + proxyselector</font>
+<font color="red"> 742.         if data is None:</font>
+<font color="red"> 743.             return self.open(newurl)</font>
+<font color="black"> 744.         else:</font>
+<font color="red"> 745.             return self.open(newurl, data)</font>
+<font color="black"> 746. </font>
+<font color="red"> 747.     def retry_proxy_https_basic_auth(self, url, realm, data=None):</font>
+<font color="red"> 748.         host, selector = splithost(url)</font>
+<font color="red"> 749.         newurl = 'https://' + host + selector</font>
+<font color="red"> 750.         proxy = self.proxies['https']</font>
+<font color="red"> 751.         urltype, proxyhost = splittype(proxy)</font>
+<font color="red"> 752.         proxyhost, proxyselector = splithost(proxyhost)</font>
+<font color="red"> 753.         i = proxyhost.find('@') + 1</font>
+<font color="red"> 754.         proxyhost = proxyhost[i:]</font>
+<font color="red"> 755.         user, passwd = self.get_user_passwd(proxyhost, realm, i)</font>
+<font color="red"> 756.         if not (user or passwd): return None</font>
+<font color="red"> 757.         proxyhost = quote(user, safe='') + ':' + quote(passwd, safe='') + '@' + proxyhost</font>
+<font color="red"> 758.         self.proxies['https'] = 'https://' + proxyhost + proxyselector</font>
+<font color="red"> 759.         if data is None:</font>
+<font color="red"> 760.             return self.open(newurl)</font>
+<font color="black"> 761.         else:</font>
+<font color="red"> 762.             return self.open(newurl, data)</font>
+<font color="black"> 763. </font>
+<font color="red"> 764.     def retry_http_basic_auth(self, url, realm, data=None):</font>
+<font color="red"> 765.         host, selector = splithost(url)</font>
+<font color="red"> 766.         i = host.find('@') + 1</font>
+<font color="red"> 767.         host = host[i:]</font>
+<font color="red"> 768.         user, passwd = self.get_user_passwd(host, realm, i)</font>
+<font color="red"> 769.         if not (user or passwd): return None</font>
+<font color="red"> 770.         host = quote(user, safe='') + ':' + quote(passwd, safe='') + '@' + host</font>
+<font color="red"> 771.         newurl = 'http://' + host + selector</font>
+<font color="red"> 772.         if data is None:</font>
+<font color="red"> 773.             return self.open(newurl)</font>
+<font color="black"> 774.         else:</font>
+<font color="red"> 775.             return self.open(newurl, data)</font>
+<font color="black"> 776. </font>
+<font color="red"> 777.     def retry_https_basic_auth(self, url, realm, data=None):</font>
+<font color="red"> 778.         host, selector = splithost(url)</font>
+<font color="red"> 779.         i = host.find('@') + 1</font>
+<font color="red"> 780.         host = host[i:]</font>
+<font color="red"> 781.         user, passwd = self.get_user_passwd(host, realm, i)</font>
+<font color="red"> 782.         if not (user or passwd): return None</font>
+<font color="red"> 783.         host = quote(user, safe='') + ':' + quote(passwd, safe='') + '@' + host</font>
+<font color="red"> 784.         newurl = 'https://' + host + selector</font>
+<font color="red"> 785.         if data is None:</font>
+<font color="red"> 786.             return self.open(newurl)</font>
+<font color="black"> 787.         else:</font>
+<font color="red"> 788.             return self.open(newurl, data)</font>
+<font color="black"> 789. </font>
+<font color="red"> 790.     def get_user_passwd(self, host, realm, clear_cache=0):</font>
+<font color="red"> 791.         key = realm + '@' + host.lower()</font>
+<font color="red"> 792.         if key in self.auth_cache:</font>
+<font color="red"> 793.             if clear_cache:</font>
+<font color="red"> 794.                 del self.auth_cache[key]</font>
+<font color="black"> 795.             else:</font>
+<font color="red"> 796.                 return self.auth_cache[key]</font>
+<font color="red"> 797.         user, passwd = self.prompt_user_passwd(host, realm)</font>
+<font color="red"> 798.         if user or passwd: self.auth_cache[key] = (user, passwd)</font>
+<font color="red"> 799.         return user, passwd</font>
+<font color="black"> 800. </font>
+<font color="red"> 801.     def prompt_user_passwd(self, host, realm):</font>
+<font color="black"> 802.         &quot;&quot;&quot;Override this in a GUI environment!&quot;&quot;&quot;</font>
+<font color="red"> 803.         import getpass</font>
+<font color="red"> 804.         try:</font>
+<font color="red"> 805.             user = raw_input(&quot;Enter username for %s at %s: &quot; % (realm,</font>
+<font color="red"> 806.                                                                 host))</font>
+<font color="red"> 807.             passwd = getpass.getpass(&quot;Enter password for %s in %s at %s: &quot; %</font>
+<font color="red"> 808.                 (user, realm, host))</font>
+<font color="red"> 809.             return user, passwd</font>
+<font color="red"> 810.         except KeyboardInterrupt:</font>
+<font color="red"> 811.             print</font>
+<font color="red"> 812.             return None, None</font>
+<font color="black"> 813. </font>
+<font color="black"> 814. </font>
+<font color="black"> 815. # Utility functions</font>
+<font color="black"> 816. </font>
+<font color="red"> 817. _localhost = None</font>
+<font color="red"> 818. def localhost():</font>
+<font color="black"> 819.     &quot;&quot;&quot;Return the IP address of the magic hostname 'localhost'.&quot;&quot;&quot;</font>
+<font color="black"> 820.     global _localhost</font>
+<font color="red"> 821.     if _localhost is None:</font>
+<font color="red"> 822.         _localhost = socket.gethostbyname('localhost')</font>
+<font color="red"> 823.     return _localhost</font>
+<font color="black"> 824. </font>
+<font color="red"> 825. _thishost = None</font>
+<font color="red"> 826. def thishost():</font>
+<font color="black"> 827.     &quot;&quot;&quot;Return the IP address of the current host.&quot;&quot;&quot;</font>
+<font color="black"> 828.     global _thishost</font>
+<font color="red"> 829.     if _thishost is None:</font>
+<font color="red"> 830.         try:</font>
+<font color="red"> 831.             _thishost = socket.gethostbyname(socket.gethostname())</font>
+<font color="red"> 832.         except socket.gaierror:</font>
+<font color="red"> 833.             _thishost = socket.gethostbyname('localhost')</font>
+<font color="red"> 834.     return _thishost</font>
+<font color="black"> 835. </font>
+<font color="red"> 836. _ftperrors = None</font>
+<font color="red"> 837. def ftperrors():</font>
+<font color="black"> 838.     &quot;&quot;&quot;Return the set of errors raised by the FTP class.&quot;&quot;&quot;</font>
+<font color="black"> 839.     global _ftperrors</font>
+<font color="red"> 840.     if _ftperrors is None:</font>
+<font color="red"> 841.         import ftplib</font>
+<font color="red"> 842.         _ftperrors = ftplib.all_errors</font>
+<font color="red"> 843.     return _ftperrors</font>
+<font color="black"> 844. </font>
+<font color="red"> 845. _noheaders = None</font>
+<font color="red"> 846. def noheaders():</font>
+<font color="black"> 847.     &quot;&quot;&quot;Return an empty mimetools.Message object.&quot;&quot;&quot;</font>
+<font color="black"> 848.     global _noheaders</font>
+<font color="red"> 849.     if _noheaders is None:</font>
+<font color="red"> 850.         import mimetools</font>
+<font color="red"> 851.         try:</font>
+<font color="red"> 852.             from cStringIO import StringIO</font>
+<font color="red"> 853.         except ImportError:</font>
+<font color="red"> 854.             from StringIO import StringIO</font>
+<font color="red"> 855.         _noheaders = mimetools.Message(StringIO(), 0)</font>
+<font color="red"> 856.         _noheaders.fp.close()   # Recycle file descriptor</font>
+<font color="red"> 857.     return _noheaders</font>
+<font color="black"> 858. </font>
+<font color="black"> 859. </font>
+<font color="black"> 860. # Utility classes</font>
+<font color="black"> 861. </font>
+<font color="red"> 862. class ftpwrapper:</font>
+<font color="red"> 863.     &quot;&quot;&quot;Class used by open_ftp() for cache of open FTP connections.&quot;&quot;&quot;</font>
+<font color="black"> 864. </font>
+<font color="black"> 865.     def __init__(self, user, passwd, host, port, dirs,</font>
+<font color="red"> 866.                  timeout=socket._GLOBAL_DEFAULT_TIMEOUT,</font>
+<font color="red"> 867.                  persistent=True):</font>
+<font color="red"> 868.         self.user = user</font>
+<font color="red"> 869.         self.passwd = passwd</font>
+<font color="red"> 870.         self.host = host</font>
+<font color="red"> 871.         self.port = port</font>
+<font color="red"> 872.         self.dirs = dirs</font>
+<font color="red"> 873.         self.timeout = timeout</font>
+<font color="red"> 874.         self.refcount = 0</font>
+<font color="red"> 875.         self.keepalive = persistent</font>
+<font color="red"> 876.         try:</font>
+<font color="red"> 877.             self.init()</font>
+<font color="red"> 878.         except:</font>
+<font color="red"> 879.             self.close()</font>
+<font color="red"> 880.             raise</font>
+<font color="black"> 881. </font>
+<font color="red"> 882.     def init(self):</font>
+<font color="red"> 883.         import ftplib</font>
+<font color="red"> 884.         self.busy = 0</font>
+<font color="red"> 885.         self.ftp = ftplib.FTP()</font>
+<font color="red"> 886.         self.ftp.connect(self.host, self.port, self.timeout)</font>
+<font color="red"> 887.         self.ftp.login(self.user, self.passwd)</font>
+<font color="red"> 888.         _target = '/'.join(self.dirs)</font>
+<font color="red"> 889.         self.ftp.cwd(_target)</font>
+<font color="black"> 890. </font>
+<font color="red"> 891.     def retrfile(self, file, type):</font>
+<font color="red"> 892.         import ftplib</font>
+<font color="red"> 893.         self.endtransfer()</font>
+<font color="red"> 894.         if type in ('d', 'D'): cmd = 'TYPE A'; isdir = 1</font>
+<font color="red"> 895.         else: cmd = 'TYPE ' + type; isdir = 0</font>
+<font color="red"> 896.         try:</font>
+<font color="red"> 897.             self.ftp.voidcmd(cmd)</font>
+<font color="red"> 898.         except ftplib.all_errors:</font>
+<font color="red"> 899.             self.init()</font>
+<font color="red"> 900.             self.ftp.voidcmd(cmd)</font>
+<font color="red"> 901.         conn = None</font>
+<font color="red"> 902.         if file and not isdir:</font>
+<font color="black"> 903.             # Try to retrieve as a file</font>
+<font color="red"> 904.             try:</font>
+<font color="red"> 905.                 cmd = 'RETR ' + file</font>
+<font color="red"> 906.                 conn, retrlen = self.ftp.ntransfercmd(cmd)</font>
+<font color="red"> 907.             except ftplib.error_perm, reason:</font>
+<font color="red"> 908.                 if str(reason)[:3] != '550':</font>
+<font color="red"> 909.                     raise IOError, ('ftp error', reason), sys.exc_info()[2]</font>
+<font color="red"> 910.         if not conn:</font>
+<font color="black"> 911.             # Set transfer mode to ASCII!</font>
+<font color="red"> 912.             self.ftp.voidcmd('TYPE A')</font>
+<font color="black"> 913.             # Try a directory listing. Verify that directory exists.</font>
+<font color="red"> 914.             if file:</font>
+<font color="red"> 915.                 pwd = self.ftp.pwd()</font>
+<font color="red"> 916.                 try:</font>
+<font color="red"> 917.                     try:</font>
+<font color="red"> 918.                         self.ftp.cwd(file)</font>
+<font color="red"> 919.                     except ftplib.error_perm, reason:</font>
+<font color="red"> 920.                         raise IOError, ('ftp error', reason), sys.exc_info()[2]</font>
+<font color="black"> 921.                 finally:</font>
+<font color="red"> 922.                     self.ftp.cwd(pwd)</font>
+<font color="red"> 923.                 cmd = 'LIST ' + file</font>
+<font color="black"> 924.             else:</font>
+<font color="red"> 925.                 cmd = 'LIST'</font>
+<font color="red"> 926.             conn, retrlen = self.ftp.ntransfercmd(cmd)</font>
+<font color="red"> 927.         self.busy = 1</font>
+<font color="red"> 928.         ftpobj = addclosehook(conn.makefile('rb'), self.file_close)</font>
+<font color="red"> 929.         self.refcount += 1</font>
+<font color="red"> 930.         conn.close()</font>
+<font color="black"> 931.         # Pass back both a suitably decorated object and a retrieval length</font>
+<font color="red"> 932.         return (ftpobj, retrlen)</font>
+<font color="black"> 933. </font>
+<font color="red"> 934.     def endtransfer(self):</font>
+<font color="red"> 935.         self.busy = 0</font>
+<font color="black"> 936. </font>
+<font color="red"> 937.     def close(self):</font>
+<font color="red"> 938.         self.keepalive = False</font>
+<font color="red"> 939.         if self.refcount &lt;= 0:</font>
+<font color="red"> 940.             self.real_close()</font>
+<font color="black"> 941. </font>
+<font color="red"> 942.     def file_close(self):</font>
+<font color="red"> 943.         self.endtransfer()</font>
+<font color="red"> 944.         self.refcount -= 1</font>
+<font color="red"> 945.         if self.refcount &lt;= 0 and not self.keepalive:</font>
+<font color="red"> 946.             self.real_close()</font>
+<font color="black"> 947. </font>
+<font color="red"> 948.     def real_close(self):</font>
+<font color="red"> 949.         self.endtransfer()</font>
+<font color="red"> 950.         try:</font>
+<font color="red"> 951.             self.ftp.close()</font>
+<font color="red"> 952.         except ftperrors():</font>
+<font color="red"> 953.             pass</font>
+<font color="black"> 954. </font>
+<font color="red"> 955. class addbase:</font>
+<font color="red"> 956.     &quot;&quot;&quot;Base class for addinfo and addclosehook.&quot;&quot;&quot;</font>
+<font color="black"> 957. </font>
+<font color="red"> 958.     def __init__(self, fp):</font>
+<font color="red"> 959.         self.fp = fp</font>
+<font color="red"> 960.         self.read = self.fp.read</font>
+<font color="red"> 961.         self.readline = self.fp.readline</font>
+<font color="red"> 962.         if hasattr(self.fp, &quot;readlines&quot;): self.readlines = self.fp.readlines</font>
+<font color="red"> 963.         if hasattr(self.fp, &quot;fileno&quot;):</font>
+<font color="red"> 964.             self.fileno = self.fp.fileno</font>
+<font color="black"> 965.         else:</font>
+<font color="red"> 966.             self.fileno = lambda: None</font>
+<font color="red"> 967.         if hasattr(self.fp, &quot;__iter__&quot;):</font>
+<font color="red"> 968.             self.__iter__ = self.fp.__iter__</font>
+<font color="red"> 969.             if hasattr(self.fp, &quot;next&quot;):</font>
+<font color="red"> 970.                 self.next = self.fp.next</font>
+<font color="black"> 971. </font>
+<font color="red"> 972.     def __repr__(self):</font>
+<font color="red"> 973.         return '&lt;%s at %r whose fp = %r&gt;' % (self.__class__.__name__,</font>
+<font color="red"> 974.                                              id(self), self.fp)</font>
+<font color="black"> 975. </font>
+<font color="red"> 976.     def close(self):</font>
+<font color="red"> 977.         self.read = None</font>
+<font color="red"> 978.         self.readline = None</font>
+<font color="red"> 979.         self.readlines = None</font>
+<font color="red"> 980.         self.fileno = None</font>
+<font color="red"> 981.         if self.fp: self.fp.close()</font>
+<font color="red"> 982.         self.fp = None</font>
+<font color="black"> 983. </font>
+<font color="red"> 984. class addclosehook(addbase):</font>
+<font color="red"> 985.     &quot;&quot;&quot;Class to add a close hook to an open file.&quot;&quot;&quot;</font>
+<font color="black"> 986. </font>
+<font color="red"> 987.     def __init__(self, fp, closehook, *hookargs):</font>
+<font color="red"> 988.         addbase.__init__(self, fp)</font>
+<font color="red"> 989.         self.closehook = closehook</font>
+<font color="red"> 990.         self.hookargs = hookargs</font>
+<font color="black"> 991. </font>
+<font color="red"> 992.     def close(self):</font>
+<font color="red"> 993.         try:</font>
+<font color="red"> 994.             closehook = self.closehook</font>
+<font color="red"> 995.             hookargs = self.hookargs</font>
+<font color="red"> 996.             if closehook:</font>
+<font color="red"> 997.                 self.closehook = None</font>
+<font color="red"> 998.                 self.hookargs = None</font>
+<font color="red"> 999.                 closehook(*hookargs)</font>
+<font color="black">1000.         finally:</font>
+<font color="red">1001.             addbase.close(self)</font>
+<font color="black">1002. </font>
+<font color="black">1003. </font>
+<font color="red">1004. class addinfo(addbase):</font>
+<font color="red">1005.     &quot;&quot;&quot;class to add an info() method to an open file.&quot;&quot;&quot;</font>
+<font color="black">1006. </font>
+<font color="red">1007.     def __init__(self, fp, headers):</font>
+<font color="red">1008.         addbase.__init__(self, fp)</font>
+<font color="red">1009.         self.headers = headers</font>
+<font color="black">1010. </font>
+<font color="red">1011.     def info(self):</font>
+<font color="red">1012.         return self.headers</font>
+<font color="black">1013. </font>
+<font color="red">1014. class addinfourl(addbase):</font>
+<font color="red">1015.     &quot;&quot;&quot;class to add info() and geturl() methods to an open file.&quot;&quot;&quot;</font>
+<font color="black">1016. </font>
+<font color="red">1017.     def __init__(self, fp, headers, url, code=None):</font>
+<font color="red">1018.         addbase.__init__(self, fp)</font>
+<font color="red">1019.         self.headers = headers</font>
+<font color="red">1020.         self.url = url</font>
+<font color="red">1021.         self.code = code</font>
+<font color="black">1022. </font>
+<font color="red">1023.     def info(self):</font>
+<font color="red">1024.         return self.headers</font>
+<font color="black">1025. </font>
+<font color="red">1026.     def getcode(self):</font>
+<font color="red">1027.         return self.code</font>
+<font color="black">1028. </font>
+<font color="red">1029.     def geturl(self):</font>
+<font color="red">1030.         return self.url</font>
+<font color="black">1031. </font>
+<font color="black">1032. </font>
+<font color="black">1033. # Utilities to parse URLs (most of these return None for missing parts):</font>
+<font color="black">1034. # unwrap('&lt;URL:type://host/path&gt;') --&gt; 'type://host/path'</font>
+<font color="black">1035. # splittype('type:opaquestring') --&gt; 'type', 'opaquestring'</font>
+<font color="black">1036. # splithost('//host[:port]/path') --&gt; 'host[:port]', '/path'</font>
+<font color="black">1037. # splituser('user[:passwd]@host[:port]') --&gt; 'user[:passwd]', 'host[:port]'</font>
+<font color="black">1038. # splitpasswd('user:passwd') -&gt; 'user', 'passwd'</font>
+<font color="black">1039. # splitport('host:port') --&gt; 'host', 'port'</font>
+<font color="black">1040. # splitquery('/path?query') --&gt; '/path', 'query'</font>
+<font color="black">1041. # splittag('/path#tag') --&gt; '/path', 'tag'</font>
+<font color="black">1042. # splitattr('/path;attr1=value1;attr2=value2;...') -&gt;</font>
+<font color="black">1043. #   '/path', ['attr1=value1', 'attr2=value2', ...]</font>
+<font color="black">1044. # splitvalue('attr=value') --&gt; 'attr', 'value'</font>
+<font color="black">1045. # unquote('abc%20def') -&gt; 'abc def'</font>
+<font color="black">1046. # quote('abc def') -&gt; 'abc%20def')</font>
+<font color="black">1047. </font>
+<font color="red">1048. try:</font>
+<font color="red">1049.     unicode</font>
+<font color="red">1050. except NameError:</font>
+<font color="red">1051.     def _is_unicode(x):</font>
+<font color="red">1052.         return 0</font>
+<font color="black">1053. else:</font>
+<font color="red">1054.     def _is_unicode(x):</font>
+<font color="green">1055.         return isinstance(x, unicode)</font>
+<font color="black">1056. </font>
+<font color="red">1057. def toBytes(url):</font>
+<font color="black">1058.     &quot;&quot;&quot;toBytes(u&quot;URL&quot;) --&gt; 'URL'.&quot;&quot;&quot;</font>
+<font color="black">1059.     # Most URL schemes require ASCII. If that changes, the conversion</font>
+<font color="black">1060.     # can be relaxed</font>
+<font color="red">1061.     if _is_unicode(url):</font>
+<font color="red">1062.         try:</font>
+<font color="red">1063.             url = url.encode(&quot;ASCII&quot;)</font>
+<font color="red">1064.         except UnicodeError:</font>
+<font color="red">1065.             raise UnicodeError(&quot;URL &quot; + repr(url) +</font>
+<font color="red">1066.                                &quot; contains non-ASCII characters&quot;)</font>
+<font color="red">1067.     return url</font>
+<font color="black">1068. </font>
+<font color="red">1069. def unwrap(url):</font>
+<font color="black">1070.     &quot;&quot;&quot;unwrap('&lt;URL:type://host/path&gt;') --&gt; 'type://host/path'.&quot;&quot;&quot;</font>
+<font color="red">1071.     url = url.strip()</font>
+<font color="red">1072.     if url[:1] == '&lt;' and url[-1:] == '&gt;':</font>
+<font color="red">1073.         url = url[1:-1].strip()</font>
+<font color="red">1074.     if url[:4] == 'URL:': url = url[4:].strip()</font>
+<font color="red">1075.     return url</font>
+<font color="black">1076. </font>
+<font color="red">1077. _typeprog = None</font>
+<font color="red">1078. def splittype(url):</font>
+<font color="black">1079.     &quot;&quot;&quot;splittype('type:opaquestring') --&gt; 'type', 'opaquestring'.&quot;&quot;&quot;</font>
+<font color="black">1080.     global _typeprog</font>
+<font color="red">1081.     if _typeprog is None:</font>
+<font color="red">1082.         import re</font>
+<font color="red">1083.         _typeprog = re.compile('^([^/:]+):')</font>
+<font color="black">1084. </font>
+<font color="red">1085.     match = _typeprog.match(url)</font>
+<font color="red">1086.     if match:</font>
+<font color="red">1087.         scheme = match.group(1)</font>
+<font color="red">1088.         return scheme.lower(), url[len(scheme) + 1:]</font>
+<font color="red">1089.     return None, url</font>
+<font color="black">1090. </font>
+<font color="red">1091. _hostprog = None</font>
+<font color="red">1092. def splithost(url):</font>
+<font color="black">1093.     &quot;&quot;&quot;splithost('//host[:port]/path') --&gt; 'host[:port]', '/path'.&quot;&quot;&quot;</font>
+<font color="black">1094.     global _hostprog</font>
+<font color="red">1095.     if _hostprog is None:</font>
+<font color="red">1096.         _hostprog = re.compile('//([^/#?]*)(.*)', re.DOTALL)</font>
+<font color="black">1097. </font>
+<font color="red">1098.     match = _hostprog.match(url)</font>
+<font color="red">1099.     if match:</font>
+<font color="red">1100.         host_port = match.group(1)</font>
+<font color="red">1101.         path = match.group(2)</font>
+<font color="red">1102.         if path and not path.startswith('/'):</font>
+<font color="red">1103.             path = '/' + path</font>
+<font color="red">1104.         return host_port, path</font>
+<font color="red">1105.     return None, url</font>
+<font color="black">1106. </font>
+<font color="red">1107. _userprog = None</font>
+<font color="red">1108. def splituser(host):</font>
+<font color="black">1109.     &quot;&quot;&quot;splituser('user[:passwd]@host[:port]') --&gt; 'user[:passwd]', 'host[:port]'.&quot;&quot;&quot;</font>
+<font color="black">1110.     global _userprog</font>
+<font color="red">1111.     if _userprog is None:</font>
+<font color="red">1112.         import re</font>
+<font color="red">1113.         _userprog = re.compile('^(.*)@(.*)$')</font>
+<font color="black">1114. </font>
+<font color="red">1115.     match = _userprog.match(host)</font>
+<font color="red">1116.     if match: return match.group(1, 2)</font>
+<font color="red">1117.     return None, host</font>
+<font color="black">1118. </font>
+<font color="red">1119. _passwdprog = None</font>
+<font color="red">1120. def splitpasswd(user):</font>
+<font color="black">1121.     &quot;&quot;&quot;splitpasswd('user:passwd') -&gt; 'user', 'passwd'.&quot;&quot;&quot;</font>
+<font color="black">1122.     global _passwdprog</font>
+<font color="red">1123.     if _passwdprog is None:</font>
+<font color="red">1124.         import re</font>
+<font color="red">1125.         _passwdprog = re.compile('^([^:]*):(.*)$',re.S)</font>
+<font color="black">1126. </font>
+<font color="red">1127.     match = _passwdprog.match(user)</font>
+<font color="red">1128.     if match: return match.group(1, 2)</font>
+<font color="red">1129.     return user, None</font>
+<font color="black">1130. </font>
+<font color="black">1131. # splittag('/path#tag') --&gt; '/path', 'tag'</font>
+<font color="red">1132. _portprog = None</font>
+<font color="red">1133. def splitport(host):</font>
+<font color="black">1134.     &quot;&quot;&quot;splitport('host:port') --&gt; 'host', 'port'.&quot;&quot;&quot;</font>
+<font color="black">1135.     global _portprog</font>
+<font color="green">1136.     if _portprog is None:</font>
+<font color="green">1137.         import re</font>
+<font color="green">1138.         _portprog = re.compile('^(.*):([0-9]*)$')</font>
+<font color="black">1139. </font>
+<font color="green">1140.     match = _portprog.match(host)</font>
+<font color="green">1141.     if match:</font>
+<font color="red">1142.         host, port = match.groups()</font>
+<font color="red">1143.         if port:</font>
+<font color="red">1144.             return host, port</font>
+<font color="green">1145.     return host, None</font>
+<font color="black">1146. </font>
+<font color="red">1147. _nportprog = None</font>
+<font color="red">1148. def splitnport(host, defport=-1):</font>
+<font color="black">1149.     &quot;&quot;&quot;Split host and port, returning numeric port.</font>
+<font color="black">1150.     Return given default port if no ':' found; defaults to -1.</font>
+<font color="black">1151.     Return numerical port if a valid number are found after ':'.</font>
+<font color="black">1152.     Return None if ':' but not a valid number.&quot;&quot;&quot;</font>
+<font color="black">1153.     global _nportprog</font>
+<font color="red">1154.     if _nportprog is None:</font>
+<font color="red">1155.         import re</font>
+<font color="red">1156.         _nportprog = re.compile('^(.*):(.*)$')</font>
+<font color="black">1157. </font>
+<font color="red">1158.     match = _nportprog.match(host)</font>
+<font color="red">1159.     if match:</font>
+<font color="red">1160.         host, port = match.group(1, 2)</font>
+<font color="red">1161.         if port:</font>
+<font color="red">1162.             try:</font>
+<font color="red">1163.                 nport = int(port)</font>
+<font color="red">1164.             except ValueError:</font>
+<font color="red">1165.                 nport = None</font>
+<font color="red">1166.             return host, nport</font>
+<font color="red">1167.     return host, defport</font>
+<font color="black">1168. </font>
+<font color="red">1169. _queryprog = None</font>
+<font color="red">1170. def splitquery(url):</font>
+<font color="black">1171.     &quot;&quot;&quot;splitquery('/path?query') --&gt; '/path', 'query'.&quot;&quot;&quot;</font>
+<font color="black">1172.     global _queryprog</font>
+<font color="red">1173.     if _queryprog is None:</font>
+<font color="red">1174.         import re</font>
+<font color="red">1175.         _queryprog = re.compile('^(.*)\?([^?]*)$')</font>
+<font color="black">1176. </font>
+<font color="red">1177.     match = _queryprog.match(url)</font>
+<font color="red">1178.     if match: return match.group(1, 2)</font>
+<font color="red">1179.     return url, None</font>
+<font color="black">1180. </font>
+<font color="red">1181. _tagprog = None</font>
+<font color="red">1182. def splittag(url):</font>
+<font color="black">1183.     &quot;&quot;&quot;splittag('/path#tag') --&gt; '/path', 'tag'.&quot;&quot;&quot;</font>
+<font color="black">1184.     global _tagprog</font>
+<font color="red">1185.     if _tagprog is None:</font>
+<font color="red">1186.         import re</font>
+<font color="red">1187.         _tagprog = re.compile('^(.*)#([^#]*)$')</font>
+<font color="black">1188. </font>
+<font color="red">1189.     match = _tagprog.match(url)</font>
+<font color="red">1190.     if match: return match.group(1, 2)</font>
+<font color="red">1191.     return url, None</font>
+<font color="black">1192. </font>
+<font color="red">1193. def splitattr(url):</font>
+<font color="black">1194.     &quot;&quot;&quot;splitattr('/path;attr1=value1;attr2=value2;...') -&gt;</font>
+<font color="black">1195.         '/path', ['attr1=value1', 'attr2=value2', ...].&quot;&quot;&quot;</font>
+<font color="red">1196.     words = url.split(';')</font>
+<font color="red">1197.     return words[0], words[1:]</font>
+<font color="black">1198. </font>
+<font color="red">1199. _valueprog = None</font>
+<font color="red">1200. def splitvalue(attr):</font>
+<font color="black">1201.     &quot;&quot;&quot;splitvalue('attr=value') --&gt; 'attr', 'value'.&quot;&quot;&quot;</font>
+<font color="black">1202.     global _valueprog</font>
+<font color="red">1203.     if _valueprog is None:</font>
+<font color="red">1204.         import re</font>
+<font color="red">1205.         _valueprog = re.compile('^([^=]*)=(.*)$')</font>
+<font color="black">1206. </font>
+<font color="red">1207.     match = _valueprog.match(attr)</font>
+<font color="red">1208.     if match: return match.group(1, 2)</font>
+<font color="red">1209.     return attr, None</font>
+<font color="black">1210. </font>
+<font color="black">1211. # urlparse contains a duplicate of this method to avoid a circular import.  If</font>
+<font color="black">1212. # you update this method, also update the copy in urlparse.  This code</font>
+<font color="black">1213. # duplication does not exist in Python3.</font>
+<font color="black">1214. </font>
+<font color="red">1215. _hexdig = '0123456789ABCDEFabcdef'</font>
+<font color="red">1216. _hextochr = dict((a + b, chr(int(a + b, 16)))</font>
+<font color="red">1217.                  for a in _hexdig for b in _hexdig)</font>
+<font color="red">1218. _asciire = re.compile('([\x00-\x7f]+)')</font>
+<font color="black">1219. </font>
+<font color="red">1220. def unquote(s):</font>
+<font color="black">1221.     &quot;&quot;&quot;unquote('abc%20def') -&gt; 'abc def'.&quot;&quot;&quot;</font>
+<font color="green">1222.     if _is_unicode(s):</font>
+<font color="red">1223.         if '%' not in s:</font>
+<font color="red">1224.             return s</font>
+<font color="red">1225.         bits = _asciire.split(s)</font>
+<font color="red">1226.         res = [bits[0]]</font>
+<font color="red">1227.         append = res.append</font>
+<font color="red">1228.         for i in range(1, len(bits), 2):</font>
+<font color="red">1229.             append(unquote(str(bits[i])).decode('latin1'))</font>
+<font color="red">1230.             append(bits[i + 1])</font>
+<font color="red">1231.         return ''.join(res)</font>
+<font color="black">1232. </font>
+<font color="green">1233.     bits = s.split('%')</font>
+<font color="black">1234.     # fastpath</font>
+<font color="red">1235.     if len(bits) == 1:</font>
+<font color="red">1236.         return s</font>
+<font color="red">1237.     res = [bits[0]]</font>
+<font color="red">1238.     append = res.append</font>
+<font color="red">1239.     for item in bits[1:]:</font>
+<font color="red">1240.         try:</font>
+<font color="red">1241.             append(_hextochr[item[:2]])</font>
+<font color="red">1242.             append(item[2:])</font>
+<font color="red">1243.         except KeyError:</font>
+<font color="red">1244.             append('%')</font>
+<font color="red">1245.             append(item)</font>
+<font color="red">1246.     return ''.join(res)</font>
+<font color="black">1247. </font>
+<font color="red">1248. def unquote_plus(s):</font>
+<font color="black">1249.     &quot;&quot;&quot;unquote('%7e/abc+def') -&gt; '~/abc def'&quot;&quot;&quot;</font>
+<font color="red">1250.     s = s.replace('+', ' ')</font>
+<font color="red">1251.     return unquote(s)</font>
+<font color="black">1252. </font>
+<font color="red">1253. always_safe = ('ABCDEFGHIJKLMNOPQRSTUVWXYZ'</font>
+<font color="black">1254.                'abcdefghijklmnopqrstuvwxyz'</font>
+<font color="black">1255.                '0123456789' '_.-')</font>
+<font color="red">1256. _safe_map = {}</font>
+<font color="red">1257. for i, c in zip(xrange(256), str(bytearray(xrange(256)))):</font>
+<font color="red">1258.     _safe_map[c] = c if (i &lt; 128 and c in always_safe) else '%{:02X}'.format(i)</font>
+<font color="red">1259. _safe_quoters = {}</font>
+<font color="black">1260. </font>
+<font color="red">1261. def quote(s, safe='/'):</font>
+<font color="black">1262.     &quot;&quot;&quot;quote('abc def') -&gt; 'abc%20def'</font>
+<font color="black">1263. </font>
+<font color="black">1264.     Each part of a URL, e.g. the path info, the query, etc., has a</font>
+<font color="black">1265.     different set of reserved characters that must be quoted.</font>
+<font color="black">1266. </font>
+<font color="black">1267.     RFC 2396 Uniform Resource Identifiers (URI): Generic Syntax lists</font>
+<font color="black">1268.     the following reserved characters.</font>
+<font color="black">1269. </font>
+<font color="black">1270.     reserved    = &quot;;&quot; | &quot;/&quot; | &quot;?&quot; | &quot;:&quot; | &quot;@&quot; | &quot;&amp;&quot; | &quot;=&quot; | &quot;+&quot; |</font>
+<font color="black">1271.                   &quot;$&quot; | &quot;,&quot;</font>
+<font color="black">1272. </font>
+<font color="black">1273.     Each of these characters is reserved in some component of a URL,</font>
+<font color="black">1274.     but not necessarily in all of them.</font>
+<font color="black">1275. </font>
+<font color="black">1276.     By default, the quote function is intended for quoting the path</font>
+<font color="black">1277.     section of a URL.  Thus, it will not encode '/'.  This character</font>
+<font color="black">1278.     is reserved, but in typical usage the quote function is being</font>
+<font color="black">1279.     called on a path where the existing slash characters are used as</font>
+<font color="black">1280.     reserved characters.</font>
+<font color="black">1281.     &quot;&quot;&quot;</font>
+<font color="black">1282.     # fastpath</font>
+<font color="green">1283.     if not s:</font>
+<font color="red">1284.         if s is None:</font>
+<font color="red">1285.             raise TypeError('None object cannot be quoted')</font>
+<font color="red">1286.         return s</font>
+<font color="green">1287.     cachekey = (safe, always_safe)</font>
+<font color="green">1288.     try:</font>
+<font color="green">1289.         (quoter, safe) = _safe_quoters[cachekey]</font>
+<font color="green">1290.     except KeyError:</font>
+<font color="green">1291.         safe_map = _safe_map.copy()</font>
+<font color="green">1292.         safe_map.update([(c, c) for c in safe])</font>
+<font color="green">1293.         quoter = safe_map.__getitem__</font>
+<font color="green">1294.         safe = always_safe + safe</font>
+<font color="green">1295.         _safe_quoters[cachekey] = (quoter, safe)</font>
+<font color="green">1296.     if not s.rstrip(safe):</font>
+<font color="green">1297.         return s</font>
+<font color="red">1298.     return ''.join(map(quoter, s))</font>
+<font color="black">1299. </font>
+<font color="red">1300. def quote_plus(s, safe=''):</font>
+<font color="black">1301.     &quot;&quot;&quot;Quote the query fragment of a URL; replacing ' ' with '+'&quot;&quot;&quot;</font>
+<font color="red">1302.     if ' ' in s:</font>
+<font color="red">1303.         s = quote(s, safe + ' ')</font>
+<font color="red">1304.         return s.replace(' ', '+')</font>
+<font color="red">1305.     return quote(s, safe)</font>
+<font color="black">1306. </font>
+<font color="red">1307. def urlencode(query, doseq=0):</font>
+<font color="black">1308.     &quot;&quot;&quot;Encode a sequence of two-element tuples or dictionary into a URL query string.</font>
+<font color="black">1309. </font>
+<font color="black">1310.     If any values in the query arg are sequences and doseq is true, each</font>
+<font color="black">1311.     sequence element is converted to a separate parameter.</font>
+<font color="black">1312. </font>
+<font color="black">1313.     If the query arg is a sequence of two-element tuples, the order of the</font>
+<font color="black">1314.     parameters in the output will match the order of parameters in the</font>
+<font color="black">1315.     input.</font>
+<font color="black">1316.     &quot;&quot;&quot;</font>
+<font color="black">1317. </font>
+<font color="green">1318.     if hasattr(query,&quot;items&quot;):</font>
+<font color="black">1319.         # mapping objects</font>
+<font color="red">1320.         query = query.items()</font>
+<font color="black">1321.     else:</font>
+<font color="black">1322.         # it's a bother at times that strings and string-like objects are</font>
+<font color="black">1323.         # sequences...</font>
+<font color="green">1324.         try:</font>
+<font color="black">1325.             # non-sequence items should not work with len()</font>
+<font color="black">1326.             # non-empty strings will fail this</font>
+<font color="green">1327.             if len(query) and not isinstance(query[0], tuple):</font>
+<font color="red">1328.                 raise TypeError</font>
+<font color="black">1329.             # zero-length sequences of all types will get here and succeed,</font>
+<font color="black">1330.             # but that's a minor nit - since the original implementation</font>
+<font color="black">1331.             # allowed empty dicts that type of behavior probably should be</font>
+<font color="black">1332.             # preserved for consistency</font>
+<font color="red">1333.         except TypeError:</font>
+<font color="red">1334.             ty,va,tb = sys.exc_info()</font>
+<font color="red">1335.             raise TypeError, &quot;not a valid non-string sequence or mapping object&quot;, tb</font>
+<font color="black">1336. </font>
+<font color="green">1337.     l = []</font>
+<font color="green">1338.     if not doseq:</font>
+<font color="black">1339.         # preserve old behavior</font>
+<font color="red">1340.         for k, v in query:</font>
+<font color="red">1341.             k = quote_plus(str(k))</font>
+<font color="red">1342.             v = quote_plus(str(v))</font>
+<font color="red">1343.             l.append(k + '=' + v)</font>
+<font color="black">1344.     else:</font>
+<font color="green">1345.         for k, v in query:</font>
+<font color="red">1346.             k = quote_plus(str(k))</font>
+<font color="red">1347.             if isinstance(v, str):</font>
+<font color="red">1348.                 v = quote_plus(v)</font>
+<font color="red">1349.                 l.append(k + '=' + v)</font>
+<font color="red">1350.             elif _is_unicode(v):</font>
+<font color="black">1351.                 # is there a reasonable way to convert to ASCII?</font>
+<font color="black">1352.                 # encode generates a string, but &quot;replace&quot; or &quot;ignore&quot;</font>
+<font color="black">1353.                 # lose information and &quot;strict&quot; can raise UnicodeError</font>
+<font color="red">1354.                 v = quote_plus(v.encode(&quot;ASCII&quot;,&quot;replace&quot;))</font>
+<font color="red">1355.                 l.append(k + '=' + v)</font>
+<font color="black">1356.             else:</font>
+<font color="red">1357.                 try:</font>
+<font color="black">1358.                     # is this a sufficient test for sequence-ness?</font>
+<font color="red">1359.                     len(v)</font>
+<font color="red">1360.                 except TypeError:</font>
+<font color="black">1361.                     # not a sequence</font>
+<font color="red">1362.                     v = quote_plus(str(v))</font>
+<font color="red">1363.                     l.append(k + '=' + v)</font>
+<font color="black">1364.                 else:</font>
+<font color="black">1365.                     # loop over the sequence</font>
+<font color="red">1366.                     for elt in v:</font>
+<font color="red">1367.                         l.append(k + '=' + quote_plus(str(elt)))</font>
+<font color="green">1368.     return '&amp;'.join(l)</font>
+<font color="black">1369. </font>
+<font color="black">1370. # Proxy handling</font>
+<font color="red">1371. def getproxies_environment():</font>
+<font color="black">1372.     &quot;&quot;&quot;Return a dictionary of scheme -&gt; proxy server URL mappings.</font>
+<font color="black">1373. </font>
+<font color="black">1374.     Scan the environment for variables named &lt;scheme&gt;_proxy;</font>
+<font color="black">1375.     this seems to be the standard convention.  In order to prefer lowercase</font>
+<font color="black">1376.     variables, we process the environment in two passes, first matches any</font>
+<font color="black">1377.     and second matches only lower case proxies.</font>
+<font color="black">1378. </font>
+<font color="black">1379.     If you need a different way, you can pass a proxies dictionary to the</font>
+<font color="black">1380.     [Fancy]URLopener constructor.</font>
+<font color="black">1381.     &quot;&quot;&quot;</font>
+<font color="black">1382.     # Get all variables</font>
+<font color="green">1383.     proxies = {}</font>
+<font color="green">1384.     for name, value in os.environ.items():</font>
+<font color="green">1385.         name = name.lower()</font>
+<font color="green">1386.         if value and name[-6:] == '_proxy':</font>
+<font color="red">1387.             proxies[name[:-6]] = value</font>
+<font color="black">1388. </font>
+<font color="black">1389.     # CVE-2016-1000110 - If we are running as CGI script, forget HTTP_PROXY</font>
+<font color="black">1390.     # (non-all-lowercase) as it may be set from the web server by a &quot;Proxy:&quot;</font>
+<font color="black">1391.     # header from the client</font>
+<font color="black">1392.     # If &quot;proxy&quot; is lowercase, it will still be used thanks to the next block</font>
+<font color="green">1393.     if 'REQUEST_METHOD' in os.environ:</font>
+<font color="red">1394.         proxies.pop('http', None)</font>
+<font color="black">1395. </font>
+<font color="black">1396.     # Get lowercase variables</font>
+<font color="green">1397.     for name, value in os.environ.items():</font>
+<font color="green">1398.         if name[-6:] == '_proxy':</font>
+<font color="red">1399.             name = name.lower()</font>
+<font color="red">1400.             if value:</font>
+<font color="red">1401.                 proxies[name[:-6]] = value</font>
+<font color="black">1402.             else:</font>
+<font color="red">1403.                 proxies.pop(name[:-6], None)</font>
+<font color="black">1404. </font>
+<font color="green">1405.     return proxies</font>
+<font color="black">1406. </font>
+<font color="red">1407. def proxy_bypass_environment(host, proxies=None):</font>
+<font color="black">1408.     &quot;&quot;&quot;Test if proxies should not be used for a particular host.</font>
+<font color="black">1409. </font>
+<font color="black">1410.     Checks the proxies dict for the value of no_proxy, which should be a</font>
+<font color="black">1411.     list of comma separated DNS suffixes, or '*' for all hosts.</font>
+<font color="black">1412.     &quot;&quot;&quot;</font>
+<font color="red">1413.     if proxies is None:</font>
+<font color="red">1414.         proxies = getproxies_environment()</font>
+<font color="black">1415.     # don't bypass, if no_proxy isn't specified</font>
+<font color="red">1416.     try:</font>
+<font color="red">1417.         no_proxy = proxies['no']</font>
+<font color="red">1418.     except KeyError:</font>
+<font color="red">1419.         return 0</font>
+<font color="black">1420.     # '*' is special case for always bypass</font>
+<font color="red">1421.     if no_proxy == '*':</font>
+<font color="red">1422.         return 1</font>
+<font color="black">1423.     # strip port off host</font>
+<font color="red">1424.     hostonly, port = splitport(host)</font>
+<font color="black">1425.     # check if the host ends with any of the DNS suffixes</font>
+<font color="red">1426.     no_proxy_list = [proxy.strip() for proxy in no_proxy.split(',')]</font>
+<font color="red">1427.     for name in no_proxy_list:</font>
+<font color="red">1428.         if name:</font>
+<font color="red">1429.             name = name.lstrip('.')  # ignore leading dots</font>
+<font color="red">1430.             name = re.escape(name)</font>
+<font color="red">1431.             pattern = r'(.+\.)?%s$' % name</font>
+<font color="red">1432.             if (re.match(pattern, hostonly, re.I)</font>
+<font color="red">1433.                     or re.match(pattern, host, re.I)):</font>
+<font color="red">1434.                 return 1</font>
+<font color="black">1435.     # otherwise, don't bypass</font>
+<font color="red">1436.     return 0</font>
+<font color="black">1437. </font>
+<font color="black">1438. </font>
+<font color="red">1439. if sys.platform == 'darwin':</font>
+<font color="red">1440.     from _scproxy import _get_proxy_settings, _get_proxies</font>
+<font color="black">1441. </font>
+<font color="red">1442.     def proxy_bypass_macosx_sysconf(host):</font>
+<font color="black">1443.         &quot;&quot;&quot;</font>
+<font color="black">1444.         Return True iff this host shouldn't be accessed using a proxy</font>
+<font color="black">1445. </font>
+<font color="black">1446.         This function uses the MacOSX framework SystemConfiguration</font>
+<font color="black">1447.         to fetch the proxy information.</font>
+<font color="black">1448.         &quot;&quot;&quot;</font>
+<font color="green">1449.         import re</font>
+<font color="green">1450.         import socket</font>
+<font color="green">1451.         from fnmatch import fnmatch</font>
+<font color="black">1452. </font>
+<font color="green">1453.         hostonly, port = splitport(host)</font>
+<font color="black">1454. </font>
+<font color="green">1455.         def ip2num(ipAddr):</font>
+<font color="green">1456.             parts = ipAddr.split('.')</font>
+<font color="green">1457.             parts = map(int, parts)</font>
+<font color="green">1458.             if len(parts) != 4:</font>
+<font color="green">1459.                 parts = (parts + [0, 0, 0, 0])[:4]</font>
+<font color="green">1460.             return (parts[0] &lt;&lt; 24) | (parts[1] &lt;&lt; 16) | (parts[2] &lt;&lt; 8) | parts[3]</font>
+<font color="black">1461. </font>
+<font color="green">1462.         proxy_settings = _get_proxy_settings()</font>
+<font color="black">1463. </font>
+<font color="black">1464.         # Check for simple host names:</font>
+<font color="green">1465.         if '.' not in host:</font>
+<font color="red">1466.             if proxy_settings['exclude_simple']:</font>
+<font color="red">1467.                 return True</font>
+<font color="black">1468. </font>
+<font color="green">1469.         hostIP = None</font>
+<font color="black">1470. </font>
+<font color="green">1471.         for value in proxy_settings.get('exceptions', ()):</font>
+<font color="black">1472.             # Items in the list are strings like these: *.local, 169.254/16</font>
+<font color="green">1473.             if not value: continue</font>
+<font color="black">1474. </font>
+<font color="green">1475.             m = re.match(r&quot;(\d+(?:\.\d+)*)(/\d+)?&quot;, value)</font>
+<font color="green">1476.             if m is not None:</font>
+<font color="green">1477.                 if hostIP is None:</font>
+<font color="green">1478.                     try:</font>
+<font color="green">1479.                         hostIP = socket.gethostbyname(hostonly)</font>
+<font color="green">1480.                         hostIP = ip2num(hostIP)</font>
+<font color="red">1481.                     except socket.error:</font>
+<font color="red">1482.                         continue</font>
+<font color="black">1483. </font>
+<font color="green">1484.                 base = ip2num(m.group(1))</font>
+<font color="green">1485.                 mask = m.group(2)</font>
+<font color="green">1486.                 if mask is None:</font>
+<font color="red">1487.                     mask = 8 * (m.group(1).count('.') + 1)</font>
+<font color="black">1488. </font>
+<font color="black">1489.                 else:</font>
+<font color="green">1490.                     mask = int(mask[1:])</font>
+<font color="green">1491.                 mask = 32 - mask</font>
+<font color="black">1492. </font>
+<font color="green">1493.                 if (hostIP &gt;&gt; mask) == (base &gt;&gt; mask):</font>
+<font color="red">1494.                     return True</font>
+<font color="black">1495. </font>
+<font color="green">1496.             elif fnmatch(host, value):</font>
+<font color="red">1497.                 return True</font>
+<font color="black">1498. </font>
+<font color="green">1499.         return False</font>
+<font color="black">1500. </font>
+<font color="red">1501.     def getproxies_macosx_sysconf():</font>
+<font color="black">1502.         &quot;&quot;&quot;Return a dictionary of scheme -&gt; proxy server URL mappings.</font>
+<font color="black">1503. </font>
+<font color="black">1504.         This function uses the MacOSX framework SystemConfiguration</font>
+<font color="black">1505.         to fetch the proxy information.</font>
+<font color="black">1506.         &quot;&quot;&quot;</font>
+<font color="green">1507.         return _get_proxies()</font>
+<font color="black">1508. </font>
+<font color="red">1509.     def proxy_bypass(host):</font>
+<font color="black">1510.         &quot;&quot;&quot;Return True, if a host should be bypassed.</font>
+<font color="black">1511. </font>
+<font color="black">1512.         Checks proxy settings gathered from the environment, if specified, or</font>
+<font color="black">1513.         from the MacOSX framework SystemConfiguration.</font>
+<font color="black">1514.         &quot;&quot;&quot;</font>
+<font color="green">1515.         proxies = getproxies_environment()</font>
+<font color="green">1516.         if proxies:</font>
+<font color="red">1517.             return proxy_bypass_environment(host, proxies)</font>
+<font color="black">1518.         else:</font>
+<font color="green">1519.             return proxy_bypass_macosx_sysconf(host)</font>
+<font color="black">1520. </font>
+<font color="red">1521.     def getproxies():</font>
+<font color="green">1522.         return getproxies_environment() or getproxies_macosx_sysconf()</font>
+<font color="black">1523. </font>
+<font color="red">1524. elif os.name == 'nt':</font>
+<font color="red">1525.     def getproxies_registry():</font>
+<font color="black">1526.         &quot;&quot;&quot;Return a dictionary of scheme -&gt; proxy server URL mappings.</font>
+<font color="black">1527. </font>
+<font color="black">1528.         Win32 uses the registry to store proxies.</font>
+<font color="black">1529. </font>
+<font color="black">1530.         &quot;&quot;&quot;</font>
+<font color="red">1531.         proxies = {}</font>
+<font color="red">1532.         try:</font>
+<font color="red">1533.             import _winreg</font>
+<font color="red">1534.         except ImportError:</font>
+<font color="black">1535.             # Std module, so should be around - but you never know!</font>
+<font color="red">1536.             return proxies</font>
+<font color="red">1537.         try:</font>
+<font color="red">1538.             internetSettings = _winreg.OpenKey(_winreg.HKEY_CURRENT_USER,</font>
+<font color="red">1539.                 r'Software\Microsoft\Windows\CurrentVersion\Internet Settings')</font>
+<font color="red">1540.             proxyEnable = _winreg.QueryValueEx(internetSettings,</font>
+<font color="red">1541.                                                'ProxyEnable')[0]</font>
+<font color="red">1542.             if proxyEnable:</font>
+<font color="black">1543.                 # Returned as Unicode but problems if not converted to ASCII</font>
+<font color="red">1544.                 proxyServer = str(_winreg.QueryValueEx(internetSettings,</font>
+<font color="red">1545.                                                        'ProxyServer')[0])</font>
+<font color="red">1546.                 if '=' in proxyServer:</font>
+<font color="black">1547.                     # Per-protocol settings</font>
+<font color="red">1548.                     for p in proxyServer.split(';'):</font>
+<font color="red">1549.                         protocol, address = p.split('=', 1)</font>
+<font color="black">1550.                         # See if address has a type:// prefix</font>
+<font color="red">1551.                         import re</font>
+<font color="red">1552.                         if not re.match('^([^/:]+)://', address):</font>
+<font color="red">1553.                             address = '%s://%s' % (protocol, address)</font>
+<font color="red">1554.                         proxies[protocol] = address</font>
+<font color="black">1555.                 else:</font>
+<font color="black">1556.                     # Use one setting for all protocols</font>
+<font color="red">1557.                     if proxyServer[:5] == 'http:':</font>
+<font color="red">1558.                         proxies['http'] = proxyServer</font>
+<font color="black">1559.                     else:</font>
+<font color="red">1560.                         proxies['http'] = 'http://%s' % proxyServer</font>
+<font color="red">1561.                         proxies['https'] = 'https://%s' % proxyServer</font>
+<font color="red">1562.                         proxies['ftp'] = 'ftp://%s' % proxyServer</font>
+<font color="red">1563.             internetSettings.Close()</font>
+<font color="red">1564.         except (WindowsError, ValueError, TypeError):</font>
+<font color="black">1565.             # Either registry key not found etc, or the value in an</font>
+<font color="black">1566.             # unexpected format.</font>
+<font color="black">1567.             # proxies already set up to be empty so nothing to do</font>
+<font color="red">1568.             pass</font>
+<font color="red">1569.         return proxies</font>
+<font color="black">1570. </font>
+<font color="red">1571.     def getproxies():</font>
+<font color="black">1572.         &quot;&quot;&quot;Return a dictionary of scheme -&gt; proxy server URL mappings.</font>
+<font color="black">1573. </font>
+<font color="black">1574.         Returns settings gathered from the environment, if specified,</font>
+<font color="black">1575.         or the registry.</font>
+<font color="black">1576. </font>
+<font color="black">1577.         &quot;&quot;&quot;</font>
+<font color="red">1578.         return getproxies_environment() or getproxies_registry()</font>
+<font color="black">1579. </font>
+<font color="red">1580.     def proxy_bypass_registry(host):</font>
+<font color="red">1581.         try:</font>
+<font color="red">1582.             import _winreg</font>
+<font color="red">1583.             import re</font>
+<font color="red">1584.         except ImportError:</font>
+<font color="black">1585.             # Std modules, so should be around - but you never know!</font>
+<font color="red">1586.             return 0</font>
+<font color="red">1587.         try:</font>
+<font color="red">1588.             internetSettings = _winreg.OpenKey(_winreg.HKEY_CURRENT_USER,</font>
+<font color="red">1589.                 r'Software\Microsoft\Windows\CurrentVersion\Internet Settings')</font>
+<font color="red">1590.             proxyEnable = _winreg.QueryValueEx(internetSettings,</font>
+<font color="red">1591.                                                'ProxyEnable')[0]</font>
+<font color="red">1592.             proxyOverride = str(_winreg.QueryValueEx(internetSettings,</font>
+<font color="red">1593.                                                      'ProxyOverride')[0])</font>
+<font color="black">1594.             # ^^^^ Returned as Unicode but problems if not converted to ASCII</font>
+<font color="red">1595.         except WindowsError:</font>
+<font color="red">1596.             return 0</font>
+<font color="red">1597.         if not proxyEnable or not proxyOverride:</font>
+<font color="red">1598.             return 0</font>
+<font color="black">1599.         # try to make a host list from name and IP address.</font>
+<font color="red">1600.         rawHost, port = splitport(host)</font>
+<font color="red">1601.         host = [rawHost]</font>
+<font color="red">1602.         try:</font>
+<font color="red">1603.             addr = socket.gethostbyname(rawHost)</font>
+<font color="red">1604.             if addr != rawHost:</font>
+<font color="red">1605.                 host.append(addr)</font>
+<font color="red">1606.         except socket.error:</font>
+<font color="red">1607.             pass</font>
+<font color="red">1608.         try:</font>
+<font color="red">1609.             fqdn = socket.getfqdn(rawHost)</font>
+<font color="red">1610.             if fqdn != rawHost:</font>
+<font color="red">1611.                 host.append(fqdn)</font>
+<font color="red">1612.         except socket.error:</font>
+<font color="red">1613.             pass</font>
+<font color="black">1614.         # make a check value list from the registry entry: replace the</font>
+<font color="black">1615.         # '&lt;local&gt;' string by the localhost entry and the corresponding</font>
+<font color="black">1616.         # canonical entry.</font>
+<font color="red">1617.         proxyOverride = proxyOverride.split(';')</font>
+<font color="black">1618.         # now check if we match one of the registry values.</font>
+<font color="red">1619.         for test in proxyOverride:</font>
+<font color="red">1620.             if test == '&lt;local&gt;':</font>
+<font color="red">1621.                 if '.' not in rawHost:</font>
+<font color="red">1622.                     return 1</font>
+<font color="red">1623.             test = test.replace(&quot;.&quot;, r&quot;\.&quot;)     # mask dots</font>
+<font color="red">1624.             test = test.replace(&quot;*&quot;, r&quot;.*&quot;)     # change glob sequence</font>
+<font color="red">1625.             test = test.replace(&quot;?&quot;, r&quot;.&quot;)      # change glob char</font>
+<font color="red">1626.             for val in host:</font>
+<font color="black">1627.                 # print &quot;%s &lt;--&gt; %s&quot; %( test, val )</font>
+<font color="red">1628.                 if re.match(test, val, re.I):</font>
+<font color="red">1629.                     return 1</font>
+<font color="red">1630.         return 0</font>
+<font color="black">1631. </font>
+<font color="red">1632.     def proxy_bypass(host):</font>
+<font color="black">1633.         &quot;&quot;&quot;Return True, if the host should be bypassed.</font>
+<font color="black">1634. </font>
+<font color="black">1635.         Checks proxy settings gathered from the environment, if specified,</font>
+<font color="black">1636.         or the registry.</font>
+<font color="black">1637.         &quot;&quot;&quot;</font>
+<font color="red">1638.         proxies = getproxies_environment()</font>
+<font color="red">1639.         if proxies:</font>
+<font color="red">1640.             return proxy_bypass_environment(host, proxies)</font>
+<font color="black">1641.         else:</font>
+<font color="red">1642.             return proxy_bypass_registry(host)</font>
+<font color="black">1643. </font>
+<font color="black">1644. else:</font>
+<font color="black">1645.     # By default use environment variables</font>
+<font color="red">1646.     getproxies = getproxies_environment</font>
+<font color="red">1647.     proxy_bypass = proxy_bypass_environment</font>
+<font color="black">1648. </font>
+<font color="black">1649. # Test and time quote() and unquote()</font>
+<font color="red">1650. def test1():</font>
+<font color="red">1651.     s = ''</font>
+<font color="red">1652.     for i in range(256): s = s + chr(i)</font>
+<font color="red">1653.     s = s*4</font>
+<font color="red">1654.     t0 = time.time()</font>
+<font color="red">1655.     qs = quote(s)</font>
+<font color="red">1656.     uqs = unquote(qs)</font>
+<font color="red">1657.     t1 = time.time()</font>
+<font color="red">1658.     if uqs != s:</font>
+<font color="red">1659.         print 'Wrong!'</font>
+<font color="red">1660.     print repr(s)</font>
+<font color="red">1661.     print repr(qs)</font>
+<font color="red">1662.     print repr(uqs)</font>
+<font color="red">1663.     print round(t1 - t0, 3), 'sec'</font>
+<font color="black">1664. </font>
+<font color="black">1665. </font>
+<font color="red">1666. def reporthook(blocknum, blocksize, totalsize):</font>
+<font color="black">1667.     # Report during remote transfers</font>
+<font color="red">1668.     print &quot;Block number: %d, Block size: %d, Total size: %d&quot; % (</font>
+<font color="red">1669.         blocknum, blocksize, totalsize)</font>
+</pre>
+

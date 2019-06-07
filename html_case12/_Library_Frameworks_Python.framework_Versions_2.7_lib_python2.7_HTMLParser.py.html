@@ -1,0 +1,483 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/HTMLParser.py</b><br>
+
+
+file stats: <b>314 lines, 53 executed: 16.9% covered</b>
+<pre>
+<font color="green">   1. &quot;&quot;&quot;A parser for HTML and XHTML.&quot;&quot;&quot;</font>
+<font color="black">   2. </font>
+<font color="black">   3. # This file is based on sgmllib.py, but the API is slightly different.</font>
+<font color="black">   4. </font>
+<font color="black">   5. # XXX There should be a way to distinguish between PCDATA (parsed</font>
+<font color="black">   6. # character data -- the normal case), RCDATA (replaceable character</font>
+<font color="black">   7. # data -- only char and entity references and end tags are special)</font>
+<font color="black">   8. # and CDATA (character data -- only end tags are special).</font>
+<font color="black">   9. </font>
+<font color="black">  10. </font>
+<font color="green">  11. import markupbase</font>
+<font color="green">  12. import re</font>
+<font color="black">  13. </font>
+<font color="black">  14. # Regular expressions used for parsing</font>
+<font color="black">  15. </font>
+<font color="green">  16. interesting_normal = re.compile('[&amp;&lt;]')</font>
+<font color="green">  17. incomplete = re.compile('&amp;[a-zA-Z#]')</font>
+<font color="black">  18. </font>
+<font color="green">  19. entityref = re.compile('&amp;([a-zA-Z][-.a-zA-Z0-9]*)[^a-zA-Z0-9]')</font>
+<font color="green">  20. charref = re.compile('&amp;#(?:[0-9]+|[xX][0-9a-fA-F]+)[^0-9a-fA-F]')</font>
+<font color="black">  21. </font>
+<font color="green">  22. starttagopen = re.compile('&lt;[a-zA-Z]')</font>
+<font color="green">  23. piclose = re.compile('&gt;')</font>
+<font color="green">  24. commentclose = re.compile(r'--\s*&gt;')</font>
+<font color="black">  25. </font>
+<font color="black">  26. # see http://www.w3.org/TR/html5/tokenization.html#tag-open-state</font>
+<font color="black">  27. # and http://www.w3.org/TR/html5/tokenization.html#tag-name-state</font>
+<font color="black">  28. # note: if you change tagfind/attrfind remember to update locatestarttagend too</font>
+<font color="green">  29. tagfind = re.compile('([a-zA-Z][^\t\n\r\f /&gt;\x00]*)(?:\s|/(?!&gt;))*')</font>
+<font color="black">  30. # this regex is currently unused, but left for backward compatibility</font>
+<font color="green">  31. tagfind_tolerant = re.compile('[a-zA-Z][^\t\n\r\f /&gt;\x00]*')</font>
+<font color="black">  32. </font>
+<font color="green">  33. attrfind = re.compile(</font>
+<font color="green">  34.     r'((?&lt;=[\'&quot;\s/])[^\s/&gt;][^\s/=&gt;]*)(\s*=+\s*'</font>
+<font color="black">  35.     r'(\'[^\']*\'|&quot;[^&quot;]*&quot;|(?![\'&quot;])[^&gt;\s]*))?(?:\s|/(?!&gt;))*')</font>
+<font color="black">  36. </font>
+<font color="green">  37. locatestarttagend = re.compile(r&quot;&quot;&quot;</font>
+<font color="black">  38.   &lt;[a-zA-Z][^\t\n\r\f /&gt;\x00]*       # tag name</font>
+<font color="black">  39.   (?:[\s/]*                          # optional whitespace before attribute name</font>
+<font color="black">  40.     (?:(?&lt;=['&quot;\s/])[^\s/&gt;][^\s/=&gt;]*  # attribute name</font>
+<font color="black">  41.       (?:\s*=+\s*                    # value indicator</font>
+<font color="black">  42.         (?:'[^']*'                   # LITA-enclosed value</font>
+<font color="black">  43.           |&quot;[^&quot;]*&quot;                   # LIT-enclosed value</font>
+<font color="black">  44.           |(?!['&quot;])[^&gt;\s]*           # bare value</font>
+<font color="black">  45.          )</font>
+<font color="black">  46.        )?(?:\s|/(?!&gt;))*</font>
+<font color="black">  47.      )*</font>
+<font color="black">  48.    )?</font>
+<font color="black">  49.   \s*                                # trailing whitespace</font>
+<font color="green">  50. &quot;&quot;&quot;, re.VERBOSE)</font>
+<font color="green">  51. endendtag = re.compile('&gt;')</font>
+<font color="black">  52. # the HTML 5 spec, section 8.1.2.2, doesn't allow spaces between</font>
+<font color="black">  53. # &lt;/ and the tag name, so maybe this should be fixed</font>
+<font color="green">  54. endtagfind = re.compile('&lt;/\s*([a-zA-Z][-.a-zA-Z0-9:_]*)\s*&gt;')</font>
+<font color="black">  55. </font>
+<font color="black">  56. </font>
+<font color="green">  57. class HTMLParseError(Exception):</font>
+<font color="green">  58.     &quot;&quot;&quot;Exception raised for all parse errors.&quot;&quot;&quot;</font>
+<font color="black">  59. </font>
+<font color="green">  60.     def __init__(self, msg, position=(None, None)):</font>
+<font color="red">  61.         assert msg</font>
+<font color="red">  62.         self.msg = msg</font>
+<font color="red">  63.         self.lineno = position[0]</font>
+<font color="red">  64.         self.offset = position[1]</font>
+<font color="black">  65. </font>
+<font color="green">  66.     def __str__(self):</font>
+<font color="red">  67.         result = self.msg</font>
+<font color="red">  68.         if self.lineno is not None:</font>
+<font color="red">  69.             result = result + &quot;, at line %d&quot; % self.lineno</font>
+<font color="red">  70.         if self.offset is not None:</font>
+<font color="red">  71.             result = result + &quot;, column %d&quot; % (self.offset + 1)</font>
+<font color="red">  72.         return result</font>
+<font color="black">  73. </font>
+<font color="black">  74. </font>
+<font color="green">  75. class HTMLParser(markupbase.ParserBase):</font>
+<font color="black">  76.     &quot;&quot;&quot;Find tags and other markup and call handler functions.</font>
+<font color="black">  77. </font>
+<font color="black">  78.     Usage:</font>
+<font color="black">  79.         p = HTMLParser()</font>
+<font color="black">  80.         p.feed(data)</font>
+<font color="black">  81.         ...</font>
+<font color="black">  82.         p.close()</font>
+<font color="black">  83. </font>
+<font color="black">  84.     Start tags are handled by calling self.handle_starttag() or</font>
+<font color="black">  85.     self.handle_startendtag(); end tags by self.handle_endtag().  The</font>
+<font color="black">  86.     data between tags is passed from the parser to the derived class</font>
+<font color="black">  87.     by calling self.handle_data() with the data as argument (the data</font>
+<font color="black">  88.     may be split up in arbitrary chunks).  Entity references are</font>
+<font color="black">  89.     passed by calling self.handle_entityref() with the entity</font>
+<font color="black">  90.     reference as the argument.  Numeric character references are</font>
+<font color="black">  91.     passed to self.handle_charref() with the string containing the</font>
+<font color="black">  92.     reference as the argument.</font>
+<font color="green">  93.     &quot;&quot;&quot;</font>
+<font color="black">  94. </font>
+<font color="green">  95.     CDATA_CONTENT_ELEMENTS = (&quot;script&quot;, &quot;style&quot;)</font>
+<font color="black">  96. </font>
+<font color="black">  97. </font>
+<font color="green">  98.     def __init__(self):</font>
+<font color="black">  99.         &quot;&quot;&quot;Initialize and reset this instance.&quot;&quot;&quot;</font>
+<font color="red"> 100.         self.reset()</font>
+<font color="black"> 101. </font>
+<font color="green"> 102.     def reset(self):</font>
+<font color="black"> 103.         &quot;&quot;&quot;Reset this instance.  Loses all unprocessed data.&quot;&quot;&quot;</font>
+<font color="red"> 104.         self.rawdata = ''</font>
+<font color="red"> 105.         self.lasttag = '???'</font>
+<font color="red"> 106.         self.interesting = interesting_normal</font>
+<font color="red"> 107.         self.cdata_elem = None</font>
+<font color="red"> 108.         markupbase.ParserBase.reset(self)</font>
+<font color="black"> 109. </font>
+<font color="green"> 110.     def feed(self, data):</font>
+<font color="black"> 111.         r&quot;&quot;&quot;Feed data to the parser.</font>
+<font color="black"> 112. </font>
+<font color="black"> 113.         Call this as often as you want, with as little or as much text</font>
+<font color="black"> 114.         as you want (may include '\n').</font>
+<font color="black"> 115.         &quot;&quot;&quot;</font>
+<font color="red"> 116.         self.rawdata = self.rawdata + data</font>
+<font color="red"> 117.         self.goahead(0)</font>
+<font color="black"> 118. </font>
+<font color="green"> 119.     def close(self):</font>
+<font color="black"> 120.         &quot;&quot;&quot;Handle any buffered data.&quot;&quot;&quot;</font>
+<font color="red"> 121.         self.goahead(1)</font>
+<font color="black"> 122. </font>
+<font color="green"> 123.     def error(self, message):</font>
+<font color="red"> 124.         raise HTMLParseError(message, self.getpos())</font>
+<font color="black"> 125. </font>
+<font color="green"> 126.     __starttag_text = None</font>
+<font color="black"> 127. </font>
+<font color="green"> 128.     def get_starttag_text(self):</font>
+<font color="black"> 129.         &quot;&quot;&quot;Return full source of start tag: '&lt;...&gt;'.&quot;&quot;&quot;</font>
+<font color="red"> 130.         return self.__starttag_text</font>
+<font color="black"> 131. </font>
+<font color="green"> 132.     def set_cdata_mode(self, elem):</font>
+<font color="red"> 133.         self.cdata_elem = elem.lower()</font>
+<font color="red"> 134.         self.interesting = re.compile(r'&lt;/\s*%s\s*&gt;' % self.cdata_elem, re.I)</font>
+<font color="black"> 135. </font>
+<font color="green"> 136.     def clear_cdata_mode(self):</font>
+<font color="red"> 137.         self.interesting = interesting_normal</font>
+<font color="red"> 138.         self.cdata_elem = None</font>
+<font color="black"> 139. </font>
+<font color="black"> 140.     # Internal -- handle data as far as reasonable.  May leave state</font>
+<font color="black"> 141.     # and data to be processed by a subsequent call.  If 'end' is</font>
+<font color="black"> 142.     # true, force handling all data as if followed by EOF marker.</font>
+<font color="green"> 143.     def goahead(self, end):</font>
+<font color="red"> 144.         rawdata = self.rawdata</font>
+<font color="red"> 145.         i = 0</font>
+<font color="red"> 146.         n = len(rawdata)</font>
+<font color="red"> 147.         while i &lt; n:</font>
+<font color="red"> 148.             match = self.interesting.search(rawdata, i) # &lt; or &amp;</font>
+<font color="red"> 149.             if match:</font>
+<font color="red"> 150.                 j = match.start()</font>
+<font color="black"> 151.             else:</font>
+<font color="red"> 152.                 if self.cdata_elem:</font>
+<font color="red"> 153.                     break</font>
+<font color="red"> 154.                 j = n</font>
+<font color="red"> 155.             if i &lt; j: self.handle_data(rawdata[i:j])</font>
+<font color="red"> 156.             i = self.updatepos(i, j)</font>
+<font color="red"> 157.             if i == n: break</font>
+<font color="red"> 158.             startswith = rawdata.startswith</font>
+<font color="red"> 159.             if startswith('&lt;', i):</font>
+<font color="red"> 160.                 if starttagopen.match(rawdata, i): # &lt; + letter</font>
+<font color="red"> 161.                     k = self.parse_starttag(i)</font>
+<font color="red"> 162.                 elif startswith(&quot;&lt;/&quot;, i):</font>
+<font color="red"> 163.                     k = self.parse_endtag(i)</font>
+<font color="red"> 164.                 elif startswith(&quot;&lt;!--&quot;, i):</font>
+<font color="red"> 165.                     k = self.parse_comment(i)</font>
+<font color="red"> 166.                 elif startswith(&quot;&lt;?&quot;, i):</font>
+<font color="red"> 167.                     k = self.parse_pi(i)</font>
+<font color="red"> 168.                 elif startswith(&quot;&lt;!&quot;, i):</font>
+<font color="red"> 169.                     k = self.parse_html_declaration(i)</font>
+<font color="red"> 170.                 elif (i + 1) &lt; n:</font>
+<font color="red"> 171.                     self.handle_data(&quot;&lt;&quot;)</font>
+<font color="red"> 172.                     k = i + 1</font>
+<font color="black"> 173.                 else:</font>
+<font color="red"> 174.                     break</font>
+<font color="red"> 175.                 if k &lt; 0:</font>
+<font color="red"> 176.                     if not end:</font>
+<font color="red"> 177.                         break</font>
+<font color="red"> 178.                     k = rawdata.find('&gt;', i + 1)</font>
+<font color="red"> 179.                     if k &lt; 0:</font>
+<font color="red"> 180.                         k = rawdata.find('&lt;', i + 1)</font>
+<font color="red"> 181.                         if k &lt; 0:</font>
+<font color="red"> 182.                             k = i + 1</font>
+<font color="black"> 183.                     else:</font>
+<font color="red"> 184.                         k += 1</font>
+<font color="red"> 185.                     self.handle_data(rawdata[i:k])</font>
+<font color="red"> 186.                 i = self.updatepos(i, k)</font>
+<font color="red"> 187.             elif startswith(&quot;&amp;#&quot;, i):</font>
+<font color="red"> 188.                 match = charref.match(rawdata, i)</font>
+<font color="red"> 189.                 if match:</font>
+<font color="red"> 190.                     name = match.group()[2:-1]</font>
+<font color="red"> 191.                     self.handle_charref(name)</font>
+<font color="red"> 192.                     k = match.end()</font>
+<font color="red"> 193.                     if not startswith(';', k-1):</font>
+<font color="red"> 194.                         k = k - 1</font>
+<font color="red"> 195.                     i = self.updatepos(i, k)</font>
+<font color="red"> 196.                     continue</font>
+<font color="black"> 197.                 else:</font>
+<font color="red"> 198.                     if &quot;;&quot; in rawdata[i:]:  # bail by consuming '&amp;#'</font>
+<font color="red"> 199.                         self.handle_data(rawdata[i:i+2])</font>
+<font color="red"> 200.                         i = self.updatepos(i, i+2)</font>
+<font color="red"> 201.                     break</font>
+<font color="red"> 202.             elif startswith('&amp;', i):</font>
+<font color="red"> 203.                 match = entityref.match(rawdata, i)</font>
+<font color="red"> 204.                 if match:</font>
+<font color="red"> 205.                     name = match.group(1)</font>
+<font color="red"> 206.                     self.handle_entityref(name)</font>
+<font color="red"> 207.                     k = match.end()</font>
+<font color="red"> 208.                     if not startswith(';', k-1):</font>
+<font color="red"> 209.                         k = k - 1</font>
+<font color="red"> 210.                     i = self.updatepos(i, k)</font>
+<font color="red"> 211.                     continue</font>
+<font color="red"> 212.                 match = incomplete.match(rawdata, i)</font>
+<font color="red"> 213.                 if match:</font>
+<font color="black"> 214.                     # match.group() will contain at least 2 chars</font>
+<font color="red"> 215.                     if end and match.group() == rawdata[i:]:</font>
+<font color="red"> 216.                         self.error(&quot;EOF in middle of entity or char ref&quot;)</font>
+<font color="black"> 217.                     # incomplete</font>
+<font color="red"> 218.                     break</font>
+<font color="red"> 219.                 elif (i + 1) &lt; n:</font>
+<font color="black"> 220.                     # not the end of the buffer, and can't be confused</font>
+<font color="black"> 221.                     # with some other construct</font>
+<font color="red"> 222.                     self.handle_data(&quot;&amp;&quot;)</font>
+<font color="red"> 223.                     i = self.updatepos(i, i + 1)</font>
+<font color="black"> 224.                 else:</font>
+<font color="red"> 225.                     break</font>
+<font color="black"> 226.             else:</font>
+<font color="red"> 227.                 assert 0, &quot;interesting.search() lied&quot;</font>
+<font color="black"> 228.         # end while</font>
+<font color="red"> 229.         if end and i &lt; n and not self.cdata_elem:</font>
+<font color="red"> 230.             self.handle_data(rawdata[i:n])</font>
+<font color="red"> 231.             i = self.updatepos(i, n)</font>
+<font color="red"> 232.         self.rawdata = rawdata[i:]</font>
+<font color="black"> 233. </font>
+<font color="black"> 234.     # Internal -- parse html declarations, return length or -1 if not terminated</font>
+<font color="black"> 235.     # See w3.org/TR/html5/tokenization.html#markup-declaration-open-state</font>
+<font color="black"> 236.     # See also parse_declaration in _markupbase</font>
+<font color="green"> 237.     def parse_html_declaration(self, i):</font>
+<font color="red"> 238.         rawdata = self.rawdata</font>
+<font color="red"> 239.         if rawdata[i:i+2] != '&lt;!':</font>
+<font color="red"> 240.             self.error('unexpected call to parse_html_declaration()')</font>
+<font color="red"> 241.         if rawdata[i:i+4] == '&lt;!--':</font>
+<font color="black"> 242.             # this case is actually already handled in goahead()</font>
+<font color="red"> 243.             return self.parse_comment(i)</font>
+<font color="red"> 244.         elif rawdata[i:i+3] == '&lt;![':</font>
+<font color="red"> 245.             return self.parse_marked_section(i)</font>
+<font color="red"> 246.         elif rawdata[i:i+9].lower() == '&lt;!doctype':</font>
+<font color="black"> 247.             # find the closing &gt;</font>
+<font color="red"> 248.             gtpos = rawdata.find('&gt;', i+9)</font>
+<font color="red"> 249.             if gtpos == -1:</font>
+<font color="red"> 250.                 return -1</font>
+<font color="red"> 251.             self.handle_decl(rawdata[i+2:gtpos])</font>
+<font color="red"> 252.             return gtpos+1</font>
+<font color="black"> 253.         else:</font>
+<font color="red"> 254.             return self.parse_bogus_comment(i)</font>
+<font color="black"> 255. </font>
+<font color="black"> 256.     # Internal -- parse bogus comment, return length or -1 if not terminated</font>
+<font color="black"> 257.     # see http://www.w3.org/TR/html5/tokenization.html#bogus-comment-state</font>
+<font color="green"> 258.     def parse_bogus_comment(self, i, report=1):</font>
+<font color="red"> 259.         rawdata = self.rawdata</font>
+<font color="red"> 260.         if rawdata[i:i+2] not in ('&lt;!', '&lt;/'):</font>
+<font color="red"> 261.             self.error('unexpected call to parse_comment()')</font>
+<font color="red"> 262.         pos = rawdata.find('&gt;', i+2)</font>
+<font color="red"> 263.         if pos == -1:</font>
+<font color="red"> 264.             return -1</font>
+<font color="red"> 265.         if report:</font>
+<font color="red"> 266.             self.handle_comment(rawdata[i+2:pos])</font>
+<font color="red"> 267.         return pos + 1</font>
+<font color="black"> 268. </font>
+<font color="black"> 269.     # Internal -- parse processing instr, return end or -1 if not terminated</font>
+<font color="green"> 270.     def parse_pi(self, i):</font>
+<font color="red"> 271.         rawdata = self.rawdata</font>
+<font color="red"> 272.         assert rawdata[i:i+2] == '&lt;?', 'unexpected call to parse_pi()'</font>
+<font color="red"> 273.         match = piclose.search(rawdata, i+2) # &gt;</font>
+<font color="red"> 274.         if not match:</font>
+<font color="red"> 275.             return -1</font>
+<font color="red"> 276.         j = match.start()</font>
+<font color="red"> 277.         self.handle_pi(rawdata[i+2: j])</font>
+<font color="red"> 278.         j = match.end()</font>
+<font color="red"> 279.         return j</font>
+<font color="black"> 280. </font>
+<font color="black"> 281.     # Internal -- handle starttag, return end or -1 if not terminated</font>
+<font color="green"> 282.     def parse_starttag(self, i):</font>
+<font color="red"> 283.         self.__starttag_text = None</font>
+<font color="red"> 284.         endpos = self.check_for_whole_start_tag(i)</font>
+<font color="red"> 285.         if endpos &lt; 0:</font>
+<font color="red"> 286.             return endpos</font>
+<font color="red"> 287.         rawdata = self.rawdata</font>
+<font color="red"> 288.         self.__starttag_text = rawdata[i:endpos]</font>
+<font color="black"> 289. </font>
+<font color="black"> 290.         # Now parse the data between i+1 and j into a tag and attrs</font>
+<font color="red"> 291.         attrs = []</font>
+<font color="red"> 292.         match = tagfind.match(rawdata, i+1)</font>
+<font color="red"> 293.         assert match, 'unexpected call to parse_starttag()'</font>
+<font color="red"> 294.         k = match.end()</font>
+<font color="red"> 295.         self.lasttag = tag = match.group(1).lower()</font>
+<font color="black"> 296. </font>
+<font color="red"> 297.         while k &lt; endpos:</font>
+<font color="red"> 298.             m = attrfind.match(rawdata, k)</font>
+<font color="red"> 299.             if not m:</font>
+<font color="red"> 300.                 break</font>
+<font color="red"> 301.             attrname, rest, attrvalue = m.group(1, 2, 3)</font>
+<font color="red"> 302.             if not rest:</font>
+<font color="red"> 303.                 attrvalue = None</font>
+<font color="red"> 304.             elif attrvalue[:1] == '\'' == attrvalue[-1:] or \</font>
+<font color="red"> 305.                  attrvalue[:1] == '&quot;' == attrvalue[-1:]:</font>
+<font color="red"> 306.                 attrvalue = attrvalue[1:-1]</font>
+<font color="red"> 307.             if attrvalue:</font>
+<font color="red"> 308.                 attrvalue = self.unescape(attrvalue)</font>
+<font color="red"> 309.             attrs.append((attrname.lower(), attrvalue))</font>
+<font color="red"> 310.             k = m.end()</font>
+<font color="black"> 311. </font>
+<font color="red"> 312.         end = rawdata[k:endpos].strip()</font>
+<font color="red"> 313.         if end not in (&quot;&gt;&quot;, &quot;/&gt;&quot;):</font>
+<font color="red"> 314.             lineno, offset = self.getpos()</font>
+<font color="red"> 315.             if &quot;\n&quot; in self.__starttag_text:</font>
+<font color="red"> 316.                 lineno = lineno + self.__starttag_text.count(&quot;\n&quot;)</font>
+<font color="red"> 317.                 offset = len(self.__starttag_text) \</font>
+<font color="red"> 318.                          - self.__starttag_text.rfind(&quot;\n&quot;)</font>
+<font color="black"> 319.             else:</font>
+<font color="red"> 320.                 offset = offset + len(self.__starttag_text)</font>
+<font color="red"> 321.             self.handle_data(rawdata[i:endpos])</font>
+<font color="red"> 322.             return endpos</font>
+<font color="red"> 323.         if end.endswith('/&gt;'):</font>
+<font color="black"> 324.             # XHTML-style empty tag: &lt;span attr=&quot;value&quot; /&gt;</font>
+<font color="red"> 325.             self.handle_startendtag(tag, attrs)</font>
+<font color="black"> 326.         else:</font>
+<font color="red"> 327.             self.handle_starttag(tag, attrs)</font>
+<font color="red"> 328.             if tag in self.CDATA_CONTENT_ELEMENTS:</font>
+<font color="red"> 329.                 self.set_cdata_mode(tag)</font>
+<font color="red"> 330.         return endpos</font>
+<font color="black"> 331. </font>
+<font color="black"> 332.     # Internal -- check to see if we have a complete starttag; return end</font>
+<font color="black"> 333.     # or -1 if incomplete.</font>
+<font color="green"> 334.     def check_for_whole_start_tag(self, i):</font>
+<font color="red"> 335.         rawdata = self.rawdata</font>
+<font color="red"> 336.         m = locatestarttagend.match(rawdata, i)</font>
+<font color="red"> 337.         if m:</font>
+<font color="red"> 338.             j = m.end()</font>
+<font color="red"> 339.             next = rawdata[j:j+1]</font>
+<font color="red"> 340.             if next == &quot;&gt;&quot;:</font>
+<font color="red"> 341.                 return j + 1</font>
+<font color="red"> 342.             if next == &quot;/&quot;:</font>
+<font color="red"> 343.                 if rawdata.startswith(&quot;/&gt;&quot;, j):</font>
+<font color="red"> 344.                     return j + 2</font>
+<font color="red"> 345.                 if rawdata.startswith(&quot;/&quot;, j):</font>
+<font color="black"> 346.                     # buffer boundary</font>
+<font color="red"> 347.                     return -1</font>
+<font color="black"> 348.                 # else bogus input</font>
+<font color="red"> 349.                 self.updatepos(i, j + 1)</font>
+<font color="red"> 350.                 self.error(&quot;malformed empty start tag&quot;)</font>
+<font color="red"> 351.             if next == &quot;&quot;:</font>
+<font color="black"> 352.                 # end of input</font>
+<font color="red"> 353.                 return -1</font>
+<font color="red"> 354.             if next in (&quot;abcdefghijklmnopqrstuvwxyz=/&quot;</font>
+<font color="black"> 355.                         &quot;ABCDEFGHIJKLMNOPQRSTUVWXYZ&quot;):</font>
+<font color="black"> 356.                 # end of input in or before attribute value, or we have the</font>
+<font color="black"> 357.                 # '/' from a '/&gt;' ending</font>
+<font color="red"> 358.                 return -1</font>
+<font color="red"> 359.             if j &gt; i:</font>
+<font color="red"> 360.                 return j</font>
+<font color="black"> 361.             else:</font>
+<font color="red"> 362.                 return i + 1</font>
+<font color="red"> 363.         raise AssertionError(&quot;we should not get here!&quot;)</font>
+<font color="black"> 364. </font>
+<font color="black"> 365.     # Internal -- parse endtag, return end or -1 if incomplete</font>
+<font color="green"> 366.     def parse_endtag(self, i):</font>
+<font color="red"> 367.         rawdata = self.rawdata</font>
+<font color="red"> 368.         assert rawdata[i:i+2] == &quot;&lt;/&quot;, &quot;unexpected call to parse_endtag&quot;</font>
+<font color="red"> 369.         match = endendtag.search(rawdata, i+1) # &gt;</font>
+<font color="red"> 370.         if not match:</font>
+<font color="red"> 371.             return -1</font>
+<font color="red"> 372.         gtpos = match.end()</font>
+<font color="red"> 373.         match = endtagfind.match(rawdata, i) # &lt;/ + tag + &gt;</font>
+<font color="red"> 374.         if not match:</font>
+<font color="red"> 375.             if self.cdata_elem is not None:</font>
+<font color="red"> 376.                 self.handle_data(rawdata[i:gtpos])</font>
+<font color="red"> 377.                 return gtpos</font>
+<font color="black"> 378.             # find the name: w3.org/TR/html5/tokenization.html#tag-name-state</font>
+<font color="red"> 379.             namematch = tagfind.match(rawdata, i+2)</font>
+<font color="red"> 380.             if not namematch:</font>
+<font color="black"> 381.                 # w3.org/TR/html5/tokenization.html#end-tag-open-state</font>
+<font color="red"> 382.                 if rawdata[i:i+3] == '&lt;/&gt;':</font>
+<font color="red"> 383.                     return i+3</font>
+<font color="black"> 384.                 else:</font>
+<font color="red"> 385.                     return self.parse_bogus_comment(i)</font>
+<font color="red"> 386.             tagname = namematch.group(1).lower()</font>
+<font color="black"> 387.             # consume and ignore other stuff between the name and the &gt;</font>
+<font color="black"> 388.             # Note: this is not 100% correct, since we might have things like</font>
+<font color="black"> 389.             # &lt;/tag attr=&quot;&gt;&quot;&gt;, but looking for &gt; after tha name should cover</font>
+<font color="black"> 390.             # most of the cases and is much simpler</font>
+<font color="red"> 391.             gtpos = rawdata.find('&gt;', namematch.end())</font>
+<font color="red"> 392.             self.handle_endtag(tagname)</font>
+<font color="red"> 393.             return gtpos+1</font>
+<font color="black"> 394. </font>
+<font color="red"> 395.         elem = match.group(1).lower() # script or style</font>
+<font color="red"> 396.         if self.cdata_elem is not None:</font>
+<font color="red"> 397.             if elem != self.cdata_elem:</font>
+<font color="red"> 398.                 self.handle_data(rawdata[i:gtpos])</font>
+<font color="red"> 399.                 return gtpos</font>
+<font color="black"> 400. </font>
+<font color="red"> 401.         self.handle_endtag(elem)</font>
+<font color="red"> 402.         self.clear_cdata_mode()</font>
+<font color="red"> 403.         return gtpos</font>
+<font color="black"> 404. </font>
+<font color="black"> 405.     # Overridable -- finish processing of start+end tag: &lt;tag.../&gt;</font>
+<font color="green"> 406.     def handle_startendtag(self, tag, attrs):</font>
+<font color="red"> 407.         self.handle_starttag(tag, attrs)</font>
+<font color="red"> 408.         self.handle_endtag(tag)</font>
+<font color="black"> 409. </font>
+<font color="black"> 410.     # Overridable -- handle start tag</font>
+<font color="green"> 411.     def handle_starttag(self, tag, attrs):</font>
+<font color="red"> 412.         pass</font>
+<font color="black"> 413. </font>
+<font color="black"> 414.     # Overridable -- handle end tag</font>
+<font color="green"> 415.     def handle_endtag(self, tag):</font>
+<font color="red"> 416.         pass</font>
+<font color="black"> 417. </font>
+<font color="black"> 418.     # Overridable -- handle character reference</font>
+<font color="green"> 419.     def handle_charref(self, name):</font>
+<font color="red"> 420.         pass</font>
+<font color="black"> 421. </font>
+<font color="black"> 422.     # Overridable -- handle entity reference</font>
+<font color="green"> 423.     def handle_entityref(self, name):</font>
+<font color="red"> 424.         pass</font>
+<font color="black"> 425. </font>
+<font color="black"> 426.     # Overridable -- handle data</font>
+<font color="green"> 427.     def handle_data(self, data):</font>
+<font color="red"> 428.         pass</font>
+<font color="black"> 429. </font>
+<font color="black"> 430.     # Overridable -- handle comment</font>
+<font color="green"> 431.     def handle_comment(self, data):</font>
+<font color="red"> 432.         pass</font>
+<font color="black"> 433. </font>
+<font color="black"> 434.     # Overridable -- handle declaration</font>
+<font color="green"> 435.     def handle_decl(self, decl):</font>
+<font color="red"> 436.         pass</font>
+<font color="black"> 437. </font>
+<font color="black"> 438.     # Overridable -- handle processing instruction</font>
+<font color="green"> 439.     def handle_pi(self, data):</font>
+<font color="red"> 440.         pass</font>
+<font color="black"> 441. </font>
+<font color="green"> 442.     def unknown_decl(self, data):</font>
+<font color="red"> 443.         pass</font>
+<font color="black"> 444. </font>
+<font color="black"> 445.     # Internal -- helper to remove special character quoting</font>
+<font color="green"> 446.     entitydefs = None</font>
+<font color="green"> 447.     def unescape(self, s):</font>
+<font color="red"> 448.         if '&amp;' not in s:</font>
+<font color="red"> 449.             return s</font>
+<font color="red"> 450.         def replaceEntities(s):</font>
+<font color="red"> 451.             s = s.groups()[0]</font>
+<font color="red"> 452.             try:</font>
+<font color="red"> 453.                 if s[0] == &quot;#&quot;:</font>
+<font color="red"> 454.                     s = s[1:]</font>
+<font color="red"> 455.                     if s[0] in ['x','X']:</font>
+<font color="red"> 456.                         c = int(s[1:], 16)</font>
+<font color="black"> 457.                     else:</font>
+<font color="red"> 458.                         c = int(s)</font>
+<font color="red"> 459.                     return unichr(c)</font>
+<font color="red"> 460.             except ValueError:</font>
+<font color="red"> 461.                 return '&amp;#'+s+';'</font>
+<font color="black"> 462.             else:</font>
+<font color="black"> 463.                 # Cannot use name2codepoint directly, because HTMLParser supports apos,</font>
+<font color="black"> 464.                 # which is not part of HTML 4</font>
+<font color="red"> 465.                 if HTMLParser.entitydefs is None:</font>
+<font color="red"> 466.                     import htmlentitydefs</font>
+<font color="red"> 467.                     entitydefs = {'apos':u&quot;'&quot;}</font>
+<font color="red"> 468.                     for k, v in htmlentitydefs.name2codepoint.iteritems():</font>
+<font color="red"> 469.                         entitydefs[k] = unichr(v)</font>
+<font color="red"> 470.                     HTMLParser.entitydefs = entitydefs</font>
+<font color="red"> 471.                 try:</font>
+<font color="red"> 472.                     return self.entitydefs[s]</font>
+<font color="red"> 473.                 except KeyError:</font>
+<font color="red"> 474.                     return '&amp;'+s+';'</font>
+<font color="black"> 475. </font>
+<font color="red"> 476.         return re.sub(r&quot;&amp;(#?[xX]?(?:[0-9a-fA-F]+|\w{1,8}));&quot;, replaceEntities, s)</font>
+</pre>
+

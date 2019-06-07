@@ -1,0 +1,295 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/encodings/idna.py</b><br>
+
+
+file stats: <b>179 lines, 41 executed: 22.9% covered</b>
+<pre>
+<font color="black">   1. # This module implements the RFCs 3490 (IDNA) and 3491 (Nameprep)</font>
+<font color="black">   2. </font>
+<font color="green">   3. import stringprep, re, codecs</font>
+<font color="green">   4. from unicodedata import ucd_3_2_0 as unicodedata</font>
+<font color="black">   5. </font>
+<font color="black">   6. # IDNA section 3.1</font>
+<font color="green">   7. dots = re.compile(u&quot;[\u002E\u3002\uFF0E\uFF61]&quot;)</font>
+<font color="black">   8. </font>
+<font color="black">   9. # IDNA section 5</font>
+<font color="green">  10. ace_prefix = &quot;xn--&quot;</font>
+<font color="green">  11. uace_prefix = unicode(ace_prefix, &quot;ascii&quot;)</font>
+<font color="black">  12. </font>
+<font color="black">  13. # This assumes query strings, so AllowUnassigned is true</font>
+<font color="green">  14. def nameprep(label):</font>
+<font color="black">  15.     # Map</font>
+<font color="red">  16.     newlabel = []</font>
+<font color="red">  17.     for c in label:</font>
+<font color="red">  18.         if stringprep.in_table_b1(c):</font>
+<font color="black">  19.             # Map to nothing</font>
+<font color="red">  20.             continue</font>
+<font color="red">  21.         newlabel.append(stringprep.map_table_b2(c))</font>
+<font color="red">  22.     label = u&quot;&quot;.join(newlabel)</font>
+<font color="black">  23. </font>
+<font color="black">  24.     # Normalize</font>
+<font color="red">  25.     label = unicodedata.normalize(&quot;NFKC&quot;, label)</font>
+<font color="black">  26. </font>
+<font color="black">  27.     # Prohibit</font>
+<font color="red">  28.     for c in label:</font>
+<font color="red">  29.         if stringprep.in_table_c12(c) or \</font>
+<font color="red">  30.            stringprep.in_table_c22(c) or \</font>
+<font color="red">  31.            stringprep.in_table_c3(c) or \</font>
+<font color="red">  32.            stringprep.in_table_c4(c) or \</font>
+<font color="red">  33.            stringprep.in_table_c5(c) or \</font>
+<font color="red">  34.            stringprep.in_table_c6(c) or \</font>
+<font color="red">  35.            stringprep.in_table_c7(c) or \</font>
+<font color="red">  36.            stringprep.in_table_c8(c) or \</font>
+<font color="red">  37.            stringprep.in_table_c9(c):</font>
+<font color="red">  38.             raise UnicodeError(&quot;Invalid character %r&quot; % c)</font>
+<font color="black">  39. </font>
+<font color="black">  40.     # Check bidi</font>
+<font color="red">  41.     RandAL = map(stringprep.in_table_d1, label)</font>
+<font color="red">  42.     for c in RandAL:</font>
+<font color="red">  43.         if c:</font>
+<font color="black">  44.             # There is a RandAL char in the string. Must perform further</font>
+<font color="black">  45.             # tests:</font>
+<font color="black">  46.             # 1) The characters in section 5.8 MUST be prohibited.</font>
+<font color="black">  47.             # This is table C.8, which was already checked</font>
+<font color="black">  48.             # 2) If a string contains any RandALCat character, the string</font>
+<font color="black">  49.             # MUST NOT contain any LCat character.</font>
+<font color="red">  50.             if filter(stringprep.in_table_d2, label):</font>
+<font color="red">  51.                 raise UnicodeError(&quot;Violation of BIDI requirement 2&quot;)</font>
+<font color="black">  52. </font>
+<font color="black">  53.             # 3) If a string contains any RandALCat character, a</font>
+<font color="black">  54.             # RandALCat character MUST be the first character of the</font>
+<font color="black">  55.             # string, and a RandALCat character MUST be the last</font>
+<font color="black">  56.             # character of the string.</font>
+<font color="red">  57.             if not RandAL[0] or not RandAL[-1]:</font>
+<font color="red">  58.                 raise UnicodeError(&quot;Violation of BIDI requirement 3&quot;)</font>
+<font color="black">  59. </font>
+<font color="red">  60.     return label</font>
+<font color="black">  61. </font>
+<font color="green">  62. def ToASCII(label):</font>
+<font color="green">  63.     try:</font>
+<font color="black">  64.         # Step 1: try ASCII</font>
+<font color="green">  65.         label = label.encode(&quot;ascii&quot;)</font>
+<font color="red">  66.     except UnicodeError:</font>
+<font color="red">  67.         pass</font>
+<font color="black">  68.     else:</font>
+<font color="black">  69.         # Skip to step 3: UseSTD3ASCIIRules is false, so</font>
+<font color="black">  70.         # Skip to step 8.</font>
+<font color="green">  71.         if 0 &lt; len(label) &lt; 64:</font>
+<font color="green">  72.             return label</font>
+<font color="red">  73.         raise UnicodeError(&quot;label empty or too long&quot;)</font>
+<font color="black">  74. </font>
+<font color="black">  75.     # Step 2: nameprep</font>
+<font color="red">  76.     label = nameprep(label)</font>
+<font color="black">  77. </font>
+<font color="black">  78.     # Step 3: UseSTD3ASCIIRules is false</font>
+<font color="black">  79.     # Step 4: try ASCII</font>
+<font color="red">  80.     try:</font>
+<font color="red">  81.         label = label.encode(&quot;ascii&quot;)</font>
+<font color="red">  82.     except UnicodeError:</font>
+<font color="red">  83.         pass</font>
+<font color="black">  84.     else:</font>
+<font color="black">  85.         # Skip to step 8.</font>
+<font color="red">  86.         if 0 &lt; len(label) &lt; 64:</font>
+<font color="red">  87.             return label</font>
+<font color="red">  88.         raise UnicodeError(&quot;label empty or too long&quot;)</font>
+<font color="black">  89. </font>
+<font color="black">  90.     # Step 5: Check ACE prefix</font>
+<font color="red">  91.     if label.startswith(uace_prefix):</font>
+<font color="red">  92.         raise UnicodeError(&quot;Label starts with ACE prefix&quot;)</font>
+<font color="black">  93. </font>
+<font color="black">  94.     # Step 6: Encode with PUNYCODE</font>
+<font color="red">  95.     label = label.encode(&quot;punycode&quot;)</font>
+<font color="black">  96. </font>
+<font color="black">  97.     # Step 7: Prepend ACE prefix</font>
+<font color="red">  98.     label = ace_prefix + label</font>
+<font color="black">  99. </font>
+<font color="black"> 100.     # Step 8: Check size</font>
+<font color="red"> 101.     if 0 &lt; len(label) &lt; 64:</font>
+<font color="red"> 102.         return label</font>
+<font color="red"> 103.     raise UnicodeError(&quot;label empty or too long&quot;)</font>
+<font color="black"> 104. </font>
+<font color="green"> 105. def ToUnicode(label):</font>
+<font color="black"> 106.     # Step 1: Check for ASCII</font>
+<font color="red"> 107.     if isinstance(label, str):</font>
+<font color="red"> 108.         pure_ascii = True</font>
+<font color="black"> 109.     else:</font>
+<font color="red"> 110.         try:</font>
+<font color="red"> 111.             label = label.encode(&quot;ascii&quot;)</font>
+<font color="red"> 112.             pure_ascii = True</font>
+<font color="red"> 113.         except UnicodeError:</font>
+<font color="red"> 114.             pure_ascii = False</font>
+<font color="red"> 115.     if not pure_ascii:</font>
+<font color="black"> 116.         # Step 2: Perform nameprep</font>
+<font color="red"> 117.         label = nameprep(label)</font>
+<font color="black"> 118.         # It doesn't say this, but apparently, it should be ASCII now</font>
+<font color="red"> 119.         try:</font>
+<font color="red"> 120.             label = label.encode(&quot;ascii&quot;)</font>
+<font color="red"> 121.         except UnicodeError:</font>
+<font color="red"> 122.             raise UnicodeError(&quot;Invalid character in IDN label&quot;)</font>
+<font color="black"> 123.     # Step 3: Check for ACE prefix</font>
+<font color="red"> 124.     if not label.startswith(ace_prefix):</font>
+<font color="red"> 125.         return unicode(label, &quot;ascii&quot;)</font>
+<font color="black"> 126. </font>
+<font color="black"> 127.     # Step 4: Remove ACE prefix</font>
+<font color="red"> 128.     label1 = label[len(ace_prefix):]</font>
+<font color="black"> 129. </font>
+<font color="black"> 130.     # Step 5: Decode using PUNYCODE</font>
+<font color="red"> 131.     result = label1.decode(&quot;punycode&quot;)</font>
+<font color="black"> 132. </font>
+<font color="black"> 133.     # Step 6: Apply ToASCII</font>
+<font color="red"> 134.     label2 = ToASCII(result)</font>
+<font color="black"> 135. </font>
+<font color="black"> 136.     # Step 7: Compare the result of step 6 with the one of step 3</font>
+<font color="black"> 137.     # label2 will already be in lower case.</font>
+<font color="red"> 138.     if label.lower() != label2:</font>
+<font color="red"> 139.         raise UnicodeError(&quot;IDNA does not round-trip&quot;, label, label2)</font>
+<font color="black"> 140. </font>
+<font color="black"> 141.     # Step 8: return the result of step 5</font>
+<font color="red"> 142.     return result</font>
+<font color="black"> 143. </font>
+<font color="black"> 144. ### Codec APIs</font>
+<font color="black"> 145. </font>
+<font color="green"> 146. class Codec(codecs.Codec):</font>
+<font color="green"> 147.     def encode(self,input,errors='strict'):</font>
+<font color="black"> 148. </font>
+<font color="green"> 149.         if errors != 'strict':</font>
+<font color="black"> 150.             # IDNA is quite clear that implementations must be strict</font>
+<font color="red"> 151.             raise UnicodeError(&quot;unsupported error handling &quot;+errors)</font>
+<font color="black"> 152. </font>
+<font color="green"> 153.         if not input:</font>
+<font color="red"> 154.             return &quot;&quot;, 0</font>
+<font color="black"> 155. </font>
+<font color="green"> 156.         result = []</font>
+<font color="green"> 157.         labels = dots.split(input)</font>
+<font color="green"> 158.         if labels and len(labels[-1])==0:</font>
+<font color="red"> 159.             trailing_dot = '.'</font>
+<font color="red"> 160.             del labels[-1]</font>
+<font color="black"> 161.         else:</font>
+<font color="green"> 162.             trailing_dot = ''</font>
+<font color="green"> 163.         for label in labels:</font>
+<font color="green"> 164.             result.append(ToASCII(label))</font>
+<font color="black"> 165.         # Join with U+002E</font>
+<font color="green"> 166.         return &quot;.&quot;.join(result)+trailing_dot, len(input)</font>
+<font color="black"> 167. </font>
+<font color="green"> 168.     def decode(self,input,errors='strict'):</font>
+<font color="black"> 169. </font>
+<font color="red"> 170.         if errors != 'strict':</font>
+<font color="red"> 171.             raise UnicodeError(&quot;Unsupported error handling &quot;+errors)</font>
+<font color="black"> 172. </font>
+<font color="red"> 173.         if not input:</font>
+<font color="red"> 174.             return u&quot;&quot;, 0</font>
+<font color="black"> 175. </font>
+<font color="black"> 176.         # IDNA allows decoding to operate on Unicode strings, too.</font>
+<font color="red"> 177.         if isinstance(input, unicode):</font>
+<font color="red"> 178.             labels = dots.split(input)</font>
+<font color="black"> 179.         else:</font>
+<font color="black"> 180.             # Must be ASCII string</font>
+<font color="red"> 181.             input = str(input)</font>
+<font color="red"> 182.             unicode(input, &quot;ascii&quot;)</font>
+<font color="red"> 183.             labels = input.split(&quot;.&quot;)</font>
+<font color="black"> 184. </font>
+<font color="red"> 185.         if labels and len(labels[-1]) == 0:</font>
+<font color="red"> 186.             trailing_dot = u'.'</font>
+<font color="red"> 187.             del labels[-1]</font>
+<font color="black"> 188.         else:</font>
+<font color="red"> 189.             trailing_dot = u''</font>
+<font color="black"> 190. </font>
+<font color="red"> 191.         result = []</font>
+<font color="red"> 192.         for label in labels:</font>
+<font color="red"> 193.             result.append(ToUnicode(label))</font>
+<font color="black"> 194. </font>
+<font color="red"> 195.         return u&quot;.&quot;.join(result)+trailing_dot, len(input)</font>
+<font color="black"> 196. </font>
+<font color="green"> 197. class IncrementalEncoder(codecs.BufferedIncrementalEncoder):</font>
+<font color="green"> 198.     def _buffer_encode(self, input, errors, final):</font>
+<font color="red"> 199.         if errors != 'strict':</font>
+<font color="black"> 200.             # IDNA is quite clear that implementations must be strict</font>
+<font color="red"> 201.             raise UnicodeError(&quot;unsupported error handling &quot;+errors)</font>
+<font color="black"> 202. </font>
+<font color="red"> 203.         if not input:</font>
+<font color="red"> 204.             return (&quot;&quot;, 0)</font>
+<font color="black"> 205. </font>
+<font color="red"> 206.         labels = dots.split(input)</font>
+<font color="red"> 207.         trailing_dot = u''</font>
+<font color="red"> 208.         if labels:</font>
+<font color="red"> 209.             if not labels[-1]:</font>
+<font color="red"> 210.                 trailing_dot = '.'</font>
+<font color="red"> 211.                 del labels[-1]</font>
+<font color="red"> 212.             elif not final:</font>
+<font color="black"> 213.                 # Keep potentially unfinished label until the next call</font>
+<font color="red"> 214.                 del labels[-1]</font>
+<font color="red"> 215.                 if labels:</font>
+<font color="red"> 216.                     trailing_dot = '.'</font>
+<font color="black"> 217. </font>
+<font color="red"> 218.         result = []</font>
+<font color="red"> 219.         size = 0</font>
+<font color="red"> 220.         for label in labels:</font>
+<font color="red"> 221.             result.append(ToASCII(label))</font>
+<font color="red"> 222.             if size:</font>
+<font color="red"> 223.                 size += 1</font>
+<font color="red"> 224.             size += len(label)</font>
+<font color="black"> 225. </font>
+<font color="black"> 226.         # Join with U+002E</font>
+<font color="red"> 227.         result = &quot;.&quot;.join(result) + trailing_dot</font>
+<font color="red"> 228.         size += len(trailing_dot)</font>
+<font color="red"> 229.         return (result, size)</font>
+<font color="black"> 230. </font>
+<font color="green"> 231. class IncrementalDecoder(codecs.BufferedIncrementalDecoder):</font>
+<font color="green"> 232.     def _buffer_decode(self, input, errors, final):</font>
+<font color="red"> 233.         if errors != 'strict':</font>
+<font color="red"> 234.             raise UnicodeError(&quot;Unsupported error handling &quot;+errors)</font>
+<font color="black"> 235. </font>
+<font color="red"> 236.         if not input:</font>
+<font color="red"> 237.             return (u&quot;&quot;, 0)</font>
+<font color="black"> 238. </font>
+<font color="black"> 239.         # IDNA allows decoding to operate on Unicode strings, too.</font>
+<font color="red"> 240.         if isinstance(input, unicode):</font>
+<font color="red"> 241.             labels = dots.split(input)</font>
+<font color="black"> 242.         else:</font>
+<font color="black"> 243.             # Must be ASCII string</font>
+<font color="red"> 244.             input = str(input)</font>
+<font color="red"> 245.             unicode(input, &quot;ascii&quot;)</font>
+<font color="red"> 246.             labels = input.split(&quot;.&quot;)</font>
+<font color="black"> 247. </font>
+<font color="red"> 248.         trailing_dot = u''</font>
+<font color="red"> 249.         if labels:</font>
+<font color="red"> 250.             if not labels[-1]:</font>
+<font color="red"> 251.                 trailing_dot = u'.'</font>
+<font color="red"> 252.                 del labels[-1]</font>
+<font color="red"> 253.             elif not final:</font>
+<font color="black"> 254.                 # Keep potentially unfinished label until the next call</font>
+<font color="red"> 255.                 del labels[-1]</font>
+<font color="red"> 256.                 if labels:</font>
+<font color="red"> 257.                     trailing_dot = u'.'</font>
+<font color="black"> 258. </font>
+<font color="red"> 259.         result = []</font>
+<font color="red"> 260.         size = 0</font>
+<font color="red"> 261.         for label in labels:</font>
+<font color="red"> 262.             result.append(ToUnicode(label))</font>
+<font color="red"> 263.             if size:</font>
+<font color="red"> 264.                 size += 1</font>
+<font color="red"> 265.             size += len(label)</font>
+<font color="black"> 266. </font>
+<font color="red"> 267.         result = u&quot;.&quot;.join(result) + trailing_dot</font>
+<font color="red"> 268.         size += len(trailing_dot)</font>
+<font color="red"> 269.         return (result, size)</font>
+<font color="black"> 270. </font>
+<font color="green"> 271. class StreamWriter(Codec,codecs.StreamWriter):</font>
+<font color="green"> 272.     pass</font>
+<font color="black"> 273. </font>
+<font color="green"> 274. class StreamReader(Codec,codecs.StreamReader):</font>
+<font color="green"> 275.     pass</font>
+<font color="black"> 276. </font>
+<font color="black"> 277. ### encodings module API</font>
+<font color="black"> 278. </font>
+<font color="green"> 279. def getregentry():</font>
+<font color="green"> 280.     return codecs.CodecInfo(</font>
+<font color="green"> 281.         name='idna',</font>
+<font color="green"> 282.         encode=Codec().encode,</font>
+<font color="green"> 283.         decode=Codec().decode,</font>
+<font color="green"> 284.         incrementalencoder=IncrementalEncoder,</font>
+<font color="green"> 285.         incrementaldecoder=IncrementalDecoder,</font>
+<font color="green"> 286.         streamwriter=StreamWriter,</font>
+<font color="green"> 287.         streamreader=StreamReader,</font>
+<font color="black"> 288.     )</font>
+</pre>
+

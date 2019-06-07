@@ -1,0 +1,1404 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/pickle.py</b><br>
+
+
+file stats: <b>882 lines, 272 executed: 30.8% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Create portable serialized representations of Python objects.</font>
+<font color="black">   2. </font>
+<font color="black">   3. See module cPickle for a (much) faster implementation.</font>
+<font color="black">   4. See module copy_reg for a mechanism for registering custom picklers.</font>
+<font color="black">   5. See module pickletools source for extensive comments.</font>
+<font color="black">   6. </font>
+<font color="black">   7. Classes:</font>
+<font color="black">   8. </font>
+<font color="black">   9.     Pickler</font>
+<font color="black">  10.     Unpickler</font>
+<font color="black">  11. </font>
+<font color="black">  12. Functions:</font>
+<font color="black">  13. </font>
+<font color="black">  14.     dump(object, file)</font>
+<font color="black">  15.     dumps(object) -&gt; string</font>
+<font color="black">  16.     load(file) -&gt; object</font>
+<font color="black">  17.     loads(string) -&gt; object</font>
+<font color="black">  18. </font>
+<font color="black">  19. Misc variables:</font>
+<font color="black">  20. </font>
+<font color="black">  21.     __version__</font>
+<font color="black">  22.     format_version</font>
+<font color="black">  23.     compatible_formats</font>
+<font color="black">  24. </font>
+<font color="green">  25. &quot;&quot;&quot;</font>
+<font color="black">  26. </font>
+<font color="green">  27. __version__ = &quot;$Revision: 72223 $&quot;       # Code version</font>
+<font color="black">  28. </font>
+<font color="green">  29. from types import *</font>
+<font color="green">  30. from copy_reg import dispatch_table</font>
+<font color="green">  31. from copy_reg import _extension_registry, _inverted_registry, _extension_cache</font>
+<font color="green">  32. import marshal</font>
+<font color="green">  33. import sys</font>
+<font color="green">  34. import struct</font>
+<font color="green">  35. import re</font>
+<font color="black">  36. </font>
+<font color="green">  37. __all__ = [&quot;PickleError&quot;, &quot;PicklingError&quot;, &quot;UnpicklingError&quot;, &quot;Pickler&quot;,</font>
+<font color="green">  38.            &quot;Unpickler&quot;, &quot;dump&quot;, &quot;dumps&quot;, &quot;load&quot;, &quot;loads&quot;]</font>
+<font color="black">  39. </font>
+<font color="black">  40. # These are purely informational; no code uses these.</font>
+<font color="green">  41. format_version = &quot;2.0&quot;                  # File format version we write</font>
+<font color="green">  42. compatible_formats = [&quot;1.0&quot;,            # Original protocol 0</font>
+<font color="green">  43.                       &quot;1.1&quot;,            # Protocol 0 with INST added</font>
+<font color="green">  44.                       &quot;1.2&quot;,            # Original protocol 1</font>
+<font color="green">  45.                       &quot;1.3&quot;,            # Protocol 1 with BINFLOAT added</font>
+<font color="green">  46.                       &quot;2.0&quot;,            # Protocol 2</font>
+<font color="black">  47.                       ]                 # Old format versions we can read</font>
+<font color="black">  48. </font>
+<font color="black">  49. # Keep in synch with cPickle.  This is the highest protocol number we</font>
+<font color="black">  50. # know how to read.</font>
+<font color="green">  51. HIGHEST_PROTOCOL = 2</font>
+<font color="black">  52. </font>
+<font color="black">  53. # Why use struct.pack() for pickling but marshal.loads() for</font>
+<font color="black">  54. # unpickling?  struct.pack() is 40% faster than marshal.dumps(), but</font>
+<font color="black">  55. # marshal.loads() is twice as fast as struct.unpack()!</font>
+<font color="green">  56. mloads = marshal.loads</font>
+<font color="black">  57. </font>
+<font color="green">  58. class PickleError(Exception):</font>
+<font color="green">  59.     &quot;&quot;&quot;A common base class for the other pickling exceptions.&quot;&quot;&quot;</font>
+<font color="green">  60.     pass</font>
+<font color="black">  61. </font>
+<font color="green">  62. class PicklingError(PickleError):</font>
+<font color="black">  63.     &quot;&quot;&quot;This exception is raised when an unpicklable object is passed to the</font>
+<font color="black">  64.     dump() method.</font>
+<font color="black">  65. </font>
+<font color="green">  66.     &quot;&quot;&quot;</font>
+<font color="green">  67.     pass</font>
+<font color="black">  68. </font>
+<font color="green">  69. class UnpicklingError(PickleError):</font>
+<font color="black">  70.     &quot;&quot;&quot;This exception is raised when there is a problem unpickling an object,</font>
+<font color="black">  71.     such as a security violation.</font>
+<font color="black">  72. </font>
+<font color="black">  73.     Note that other exceptions may also be raised during unpickling, including</font>
+<font color="black">  74.     (but not necessarily limited to) AttributeError, EOFError, ImportError,</font>
+<font color="black">  75.     and IndexError.</font>
+<font color="black">  76. </font>
+<font color="green">  77.     &quot;&quot;&quot;</font>
+<font color="green">  78.     pass</font>
+<font color="black">  79. </font>
+<font color="black">  80. # An instance of _Stop is raised by Unpickler.load_stop() in response to</font>
+<font color="black">  81. # the STOP opcode, passing the object that is the result of unpickling.</font>
+<font color="green">  82. class _Stop(Exception):</font>
+<font color="green">  83.     def __init__(self, value):</font>
+<font color="red">  84.         self.value = value</font>
+<font color="black">  85. </font>
+<font color="black">  86. # Jython has PyStringMap; it's a dict subclass with string keys</font>
+<font color="green">  87. try:</font>
+<font color="green">  88.     from org.python.core import PyStringMap</font>
+<font color="green">  89. except ImportError:</font>
+<font color="green">  90.     PyStringMap = None</font>
+<font color="black">  91. </font>
+<font color="black">  92. # UnicodeType may or may not be exported (normally imported from types)</font>
+<font color="green">  93. try:</font>
+<font color="green">  94.     UnicodeType</font>
+<font color="red">  95. except NameError:</font>
+<font color="red">  96.     UnicodeType = None</font>
+<font color="black">  97. </font>
+<font color="black">  98. # Pickle opcodes.  See pickletools.py for extensive docs.  The listing</font>
+<font color="black">  99. # here is in kind-of alphabetical order of 1-character pickle code.</font>
+<font color="black"> 100. # pickletools groups them by purpose.</font>
+<font color="black"> 101. </font>
+<font color="green"> 102. MARK            = '('   # push special markobject on stack</font>
+<font color="green"> 103. STOP            = '.'   # every pickle ends with STOP</font>
+<font color="green"> 104. POP             = '0'   # discard topmost stack item</font>
+<font color="green"> 105. POP_MARK        = '1'   # discard stack top through topmost markobject</font>
+<font color="green"> 106. DUP             = '2'   # duplicate top stack item</font>
+<font color="green"> 107. FLOAT           = 'F'   # push float object; decimal string argument</font>
+<font color="green"> 108. INT             = 'I'   # push integer or bool; decimal string argument</font>
+<font color="green"> 109. BININT          = 'J'   # push four-byte signed int</font>
+<font color="green"> 110. BININT1         = 'K'   # push 1-byte unsigned int</font>
+<font color="green"> 111. LONG            = 'L'   # push long; decimal string argument</font>
+<font color="green"> 112. BININT2         = 'M'   # push 2-byte unsigned int</font>
+<font color="green"> 113. NONE            = 'N'   # push None</font>
+<font color="green"> 114. PERSID          = 'P'   # push persistent object; id is taken from string arg</font>
+<font color="green"> 115. BINPERSID       = 'Q'   #  &quot;       &quot;         &quot;  ;  &quot;  &quot;   &quot;     &quot;  stack</font>
+<font color="green"> 116. REDUCE          = 'R'   # apply callable to argtuple, both on stack</font>
+<font color="green"> 117. STRING          = 'S'   # push string; NL-terminated string argument</font>
+<font color="green"> 118. BINSTRING       = 'T'   # push string; counted binary string argument</font>
+<font color="green"> 119. SHORT_BINSTRING = 'U'   #  &quot;     &quot;   ;    &quot;      &quot;       &quot;      &quot; &lt; 256 bytes</font>
+<font color="green"> 120. UNICODE         = 'V'   # push Unicode string; raw-unicode-escaped'd argument</font>
+<font color="green"> 121. BINUNICODE      = 'X'   #   &quot;     &quot;       &quot;  ; counted UTF-8 string argument</font>
+<font color="green"> 122. APPEND          = 'a'   # append stack top to list below it</font>
+<font color="green"> 123. BUILD           = 'b'   # call __setstate__ or __dict__.update()</font>
+<font color="green"> 124. GLOBAL          = 'c'   # push self.find_class(modname, name); 2 string args</font>
+<font color="green"> 125. DICT            = 'd'   # build a dict from stack items</font>
+<font color="green"> 126. EMPTY_DICT      = '}'   # push empty dict</font>
+<font color="green"> 127. APPENDS         = 'e'   # extend list on stack by topmost stack slice</font>
+<font color="green"> 128. GET             = 'g'   # push item from memo on stack; index is string arg</font>
+<font color="green"> 129. BINGET          = 'h'   #   &quot;    &quot;    &quot;    &quot;   &quot;   &quot;  ;   &quot;    &quot; 1-byte arg</font>
+<font color="green"> 130. INST            = 'i'   # build &amp; push class instance</font>
+<font color="green"> 131. LONG_BINGET     = 'j'   # push item from memo on stack; index is 4-byte arg</font>
+<font color="green"> 132. LIST            = 'l'   # build list from topmost stack items</font>
+<font color="green"> 133. EMPTY_LIST      = ']'   # push empty list</font>
+<font color="green"> 134. OBJ             = 'o'   # build &amp; push class instance</font>
+<font color="green"> 135. PUT             = 'p'   # store stack top in memo; index is string arg</font>
+<font color="green"> 136. BINPUT          = 'q'   #   &quot;     &quot;    &quot;   &quot;   &quot; ;   &quot;    &quot; 1-byte arg</font>
+<font color="green"> 137. LONG_BINPUT     = 'r'   #   &quot;     &quot;    &quot;   &quot;   &quot; ;   &quot;    &quot; 4-byte arg</font>
+<font color="green"> 138. SETITEM         = 's'   # add key+value pair to dict</font>
+<font color="green"> 139. TUPLE           = 't'   # build tuple from topmost stack items</font>
+<font color="green"> 140. EMPTY_TUPLE     = ')'   # push empty tuple</font>
+<font color="green"> 141. SETITEMS        = 'u'   # modify dict by adding topmost key+value pairs</font>
+<font color="green"> 142. BINFLOAT        = 'G'   # push float; arg is 8-byte float encoding</font>
+<font color="black"> 143. </font>
+<font color="green"> 144. TRUE            = 'I01\n'  # not an opcode; see INT docs in pickletools.py</font>
+<font color="green"> 145. FALSE           = 'I00\n'  # not an opcode; see INT docs in pickletools.py</font>
+<font color="black"> 146. </font>
+<font color="black"> 147. # Protocol 2</font>
+<font color="black"> 148. </font>
+<font color="green"> 149. PROTO           = '\x80'  # identify pickle protocol</font>
+<font color="green"> 150. NEWOBJ          = '\x81'  # build object by applying cls.__new__ to argtuple</font>
+<font color="green"> 151. EXT1            = '\x82'  # push object from extension registry; 1-byte index</font>
+<font color="green"> 152. EXT2            = '\x83'  # ditto, but 2-byte index</font>
+<font color="green"> 153. EXT4            = '\x84'  # ditto, but 4-byte index</font>
+<font color="green"> 154. TUPLE1          = '\x85'  # build 1-tuple from stack top</font>
+<font color="green"> 155. TUPLE2          = '\x86'  # build 2-tuple from two topmost stack items</font>
+<font color="green"> 156. TUPLE3          = '\x87'  # build 3-tuple from three topmost stack items</font>
+<font color="green"> 157. NEWTRUE         = '\x88'  # push True</font>
+<font color="green"> 158. NEWFALSE        = '\x89'  # push False</font>
+<font color="green"> 159. LONG1           = '\x8a'  # push long from &lt; 256 bytes</font>
+<font color="green"> 160. LONG4           = '\x8b'  # push really big long</font>
+<font color="black"> 161. </font>
+<font color="green"> 162. _tuplesize2code = [EMPTY_TUPLE, TUPLE1, TUPLE2, TUPLE3]</font>
+<font color="black"> 163. </font>
+<font color="black"> 164. </font>
+<font color="green"> 165. __all__.extend([x for x in dir() if re.match(&quot;[A-Z][A-Z0-9_]+$&quot;,x)])</font>
+<font color="green"> 166. del x</font>
+<font color="black"> 167. </font>
+<font color="black"> 168. </font>
+<font color="black"> 169. # Pickling machinery</font>
+<font color="black"> 170. </font>
+<font color="green"> 171. class Pickler:</font>
+<font color="black"> 172. </font>
+<font color="green"> 173.     def __init__(self, file, protocol=None):</font>
+<font color="black"> 174.         &quot;&quot;&quot;This takes a file-like object for writing a pickle data stream.</font>
+<font color="black"> 175. </font>
+<font color="black"> 176.         The optional protocol argument tells the pickler to use the</font>
+<font color="black"> 177.         given protocol; supported protocols are 0, 1, 2.  The default</font>
+<font color="black"> 178.         protocol is 0, to be backwards compatible.  (Protocol 0 is the</font>
+<font color="black"> 179.         only protocol that can be written to a file opened in text</font>
+<font color="black"> 180.         mode and read back successfully.  When using a protocol higher</font>
+<font color="black"> 181.         than 0, make sure the file is opened in binary mode, both when</font>
+<font color="black"> 182.         pickling and unpickling.)</font>
+<font color="black"> 183. </font>
+<font color="black"> 184.         Protocol 1 is more efficient than protocol 0; protocol 2 is</font>
+<font color="black"> 185.         more efficient than protocol 1.</font>
+<font color="black"> 186. </font>
+<font color="black"> 187.         Specifying a negative protocol version selects the highest</font>
+<font color="black"> 188.         protocol version supported.  The higher the protocol used, the</font>
+<font color="black"> 189.         more recent the version of Python needed to read the pickle</font>
+<font color="black"> 190.         produced.</font>
+<font color="black"> 191. </font>
+<font color="black"> 192.         The file parameter must have a write() method that accepts a single</font>
+<font color="black"> 193.         string argument.  It can thus be an open file object, a StringIO</font>
+<font color="black"> 194.         object, or any other custom object that meets this interface.</font>
+<font color="black"> 195. </font>
+<font color="black"> 196.         &quot;&quot;&quot;</font>
+<font color="red"> 197.         if protocol is None:</font>
+<font color="red"> 198.             protocol = 0</font>
+<font color="red"> 199.         if protocol &lt; 0:</font>
+<font color="red"> 200.             protocol = HIGHEST_PROTOCOL</font>
+<font color="red"> 201.         elif not 0 &lt;= protocol &lt;= HIGHEST_PROTOCOL:</font>
+<font color="red"> 202.             raise ValueError(&quot;pickle protocol must be &lt;= %d&quot; % HIGHEST_PROTOCOL)</font>
+<font color="red"> 203.         self.write = file.write</font>
+<font color="red"> 204.         self.memo = {}</font>
+<font color="red"> 205.         self.proto = int(protocol)</font>
+<font color="red"> 206.         self.bin = protocol &gt;= 1</font>
+<font color="red"> 207.         self.fast = 0</font>
+<font color="black"> 208. </font>
+<font color="green"> 209.     def clear_memo(self):</font>
+<font color="black"> 210.         &quot;&quot;&quot;Clears the pickler's &quot;memo&quot;.</font>
+<font color="black"> 211. </font>
+<font color="black"> 212.         The memo is the data structure that remembers which objects the</font>
+<font color="black"> 213.         pickler has already seen, so that shared or recursive objects are</font>
+<font color="black"> 214.         pickled by reference and not by value.  This method is useful when</font>
+<font color="black"> 215.         re-using picklers.</font>
+<font color="black"> 216. </font>
+<font color="black"> 217.         &quot;&quot;&quot;</font>
+<font color="red"> 218.         self.memo.clear()</font>
+<font color="black"> 219. </font>
+<font color="green"> 220.     def dump(self, obj):</font>
+<font color="black"> 221.         &quot;&quot;&quot;Write a pickled representation of obj to the open file.&quot;&quot;&quot;</font>
+<font color="red"> 222.         if self.proto &gt;= 2:</font>
+<font color="red"> 223.             self.write(PROTO + chr(self.proto))</font>
+<font color="red"> 224.         self.save(obj)</font>
+<font color="red"> 225.         self.write(STOP)</font>
+<font color="black"> 226. </font>
+<font color="green"> 227.     def memoize(self, obj):</font>
+<font color="black"> 228.         &quot;&quot;&quot;Store an object in the memo.&quot;&quot;&quot;</font>
+<font color="black"> 229. </font>
+<font color="black"> 230.         # The Pickler memo is a dictionary mapping object ids to 2-tuples</font>
+<font color="black"> 231.         # that contain the Unpickler memo key and the object being memoized.</font>
+<font color="black"> 232.         # The memo key is written to the pickle and will become</font>
+<font color="black"> 233.         # the key in the Unpickler's memo.  The object is stored in the</font>
+<font color="black"> 234.         # Pickler memo so that transient objects are kept alive during</font>
+<font color="black"> 235.         # pickling.</font>
+<font color="black"> 236. </font>
+<font color="black"> 237.         # The use of the Unpickler memo length as the memo key is just a</font>
+<font color="black"> 238.         # convention.  The only requirement is that the memo values be unique.</font>
+<font color="black"> 239.         # But there appears no advantage to any other scheme, and this</font>
+<font color="black"> 240.         # scheme allows the Unpickler memo to be implemented as a plain (but</font>
+<font color="black"> 241.         # growable) array, indexed by memo key.</font>
+<font color="red"> 242.         if self.fast:</font>
+<font color="red"> 243.             return</font>
+<font color="red"> 244.         assert id(obj) not in self.memo</font>
+<font color="red"> 245.         memo_len = len(self.memo)</font>
+<font color="red"> 246.         self.write(self.put(memo_len))</font>
+<font color="red"> 247.         self.memo[id(obj)] = memo_len, obj</font>
+<font color="black"> 248. </font>
+<font color="black"> 249.     # Return a PUT (BINPUT, LONG_BINPUT) opcode string, with argument i.</font>
+<font color="green"> 250.     def put(self, i, pack=struct.pack):</font>
+<font color="red"> 251.         if self.bin:</font>
+<font color="red"> 252.             if i &lt; 256:</font>
+<font color="red"> 253.                 return BINPUT + chr(i)</font>
+<font color="black"> 254.             else:</font>
+<font color="red"> 255.                 return LONG_BINPUT + pack(&quot;&lt;i&quot;, i)</font>
+<font color="black"> 256. </font>
+<font color="red"> 257.         return PUT + repr(i) + '\n'</font>
+<font color="black"> 258. </font>
+<font color="black"> 259.     # Return a GET (BINGET, LONG_BINGET) opcode string, with argument i.</font>
+<font color="green"> 260.     def get(self, i, pack=struct.pack):</font>
+<font color="red"> 261.         if self.bin:</font>
+<font color="red"> 262.             if i &lt; 256:</font>
+<font color="red"> 263.                 return BINGET + chr(i)</font>
+<font color="black"> 264.             else:</font>
+<font color="red"> 265.                 return LONG_BINGET + pack(&quot;&lt;i&quot;, i)</font>
+<font color="black"> 266. </font>
+<font color="red"> 267.         return GET + repr(i) + '\n'</font>
+<font color="black"> 268. </font>
+<font color="green"> 269.     def save(self, obj):</font>
+<font color="black"> 270.         # Check for persistent id (defined by a subclass)</font>
+<font color="red"> 271.         pid = self.persistent_id(obj)</font>
+<font color="red"> 272.         if pid is not None:</font>
+<font color="red"> 273.             self.save_pers(pid)</font>
+<font color="red"> 274.             return</font>
+<font color="black"> 275. </font>
+<font color="black"> 276.         # Check the memo</font>
+<font color="red"> 277.         x = self.memo.get(id(obj))</font>
+<font color="red"> 278.         if x:</font>
+<font color="red"> 279.             self.write(self.get(x[0]))</font>
+<font color="red"> 280.             return</font>
+<font color="black"> 281. </font>
+<font color="black"> 282.         # Check the type dispatch table</font>
+<font color="red"> 283.         t = type(obj)</font>
+<font color="red"> 284.         f = self.dispatch.get(t)</font>
+<font color="red"> 285.         if f:</font>
+<font color="red"> 286.             f(self, obj) # Call unbound method with explicit self</font>
+<font color="red"> 287.             return</font>
+<font color="black"> 288. </font>
+<font color="black"> 289.         # Check copy_reg.dispatch_table</font>
+<font color="red"> 290.         reduce = dispatch_table.get(t)</font>
+<font color="red"> 291.         if reduce:</font>
+<font color="red"> 292.             rv = reduce(obj)</font>
+<font color="black"> 293.         else:</font>
+<font color="black"> 294.             # Check for a class with a custom metaclass; treat as regular class</font>
+<font color="red"> 295.             try:</font>
+<font color="red"> 296.                 issc = issubclass(t, TypeType)</font>
+<font color="red"> 297.             except TypeError: # t is not a class (old Boost; see SF #502085)</font>
+<font color="red"> 298.                 issc = 0</font>
+<font color="red"> 299.             if issc:</font>
+<font color="red"> 300.                 self.save_global(obj)</font>
+<font color="red"> 301.                 return</font>
+<font color="black"> 302. </font>
+<font color="black"> 303.             # Check for a __reduce_ex__ method, fall back to __reduce__</font>
+<font color="red"> 304.             reduce = getattr(obj, &quot;__reduce_ex__&quot;, None)</font>
+<font color="red"> 305.             if reduce:</font>
+<font color="red"> 306.                 rv = reduce(self.proto)</font>
+<font color="black"> 307.             else:</font>
+<font color="red"> 308.                 reduce = getattr(obj, &quot;__reduce__&quot;, None)</font>
+<font color="red"> 309.                 if reduce:</font>
+<font color="red"> 310.                     rv = reduce()</font>
+<font color="black"> 311.                 else:</font>
+<font color="red"> 312.                     raise PicklingError(&quot;Can't pickle %r object: %r&quot; %</font>
+<font color="red"> 313.                                         (t.__name__, obj))</font>
+<font color="black"> 314. </font>
+<font color="black"> 315.         # Check for string returned by reduce(), meaning &quot;save as global&quot;</font>
+<font color="red"> 316.         if type(rv) is StringType:</font>
+<font color="red"> 317.             self.save_global(obj, rv)</font>
+<font color="red"> 318.             return</font>
+<font color="black"> 319. </font>
+<font color="black"> 320.         # Assert that reduce() returned a tuple</font>
+<font color="red"> 321.         if type(rv) is not TupleType:</font>
+<font color="red"> 322.             raise PicklingError(&quot;%s must return string or tuple&quot; % reduce)</font>
+<font color="black"> 323. </font>
+<font color="black"> 324.         # Assert that it returned an appropriately sized tuple</font>
+<font color="red"> 325.         l = len(rv)</font>
+<font color="red"> 326.         if not (2 &lt;= l &lt;= 5):</font>
+<font color="red"> 327.             raise PicklingError(&quot;Tuple returned by %s must have &quot;</font>
+<font color="red"> 328.                                 &quot;two to five elements&quot; % reduce)</font>
+<font color="black"> 329. </font>
+<font color="black"> 330.         # Save the reduce() output and finally memoize the object</font>
+<font color="red"> 331.         self.save_reduce(obj=obj, *rv)</font>
+<font color="black"> 332. </font>
+<font color="green"> 333.     def persistent_id(self, obj):</font>
+<font color="black"> 334.         # This exists so a subclass can override it</font>
+<font color="red"> 335.         return None</font>
+<font color="black"> 336. </font>
+<font color="green"> 337.     def save_pers(self, pid):</font>
+<font color="black"> 338.         # Save a persistent id reference</font>
+<font color="red"> 339.         if self.bin:</font>
+<font color="red"> 340.             self.save(pid)</font>
+<font color="red"> 341.             self.write(BINPERSID)</font>
+<font color="black"> 342.         else:</font>
+<font color="red"> 343.             self.write(PERSID + str(pid) + '\n')</font>
+<font color="black"> 344. </font>
+<font color="green"> 345.     def save_reduce(self, func, args, state=None,</font>
+<font color="green"> 346.                     listitems=None, dictitems=None, obj=None):</font>
+<font color="black"> 347.         # This API is called by some subclasses</font>
+<font color="black"> 348. </font>
+<font color="black"> 349.         # Assert that args is a tuple or None</font>
+<font color="red"> 350.         if not isinstance(args, TupleType):</font>
+<font color="red"> 351.             raise PicklingError(&quot;args from reduce() should be a tuple&quot;)</font>
+<font color="black"> 352. </font>
+<font color="black"> 353.         # Assert that func is callable</font>
+<font color="red"> 354.         if not hasattr(func, '__call__'):</font>
+<font color="red"> 355.             raise PicklingError(&quot;func from reduce should be callable&quot;)</font>
+<font color="black"> 356. </font>
+<font color="red"> 357.         save = self.save</font>
+<font color="red"> 358.         write = self.write</font>
+<font color="black"> 359. </font>
+<font color="black"> 360.         # Protocol 2 special case: if func's name is __newobj__, use NEWOBJ</font>
+<font color="red"> 361.         if self.proto &gt;= 2 and getattr(func, &quot;__name__&quot;, &quot;&quot;) == &quot;__newobj__&quot;:</font>
+<font color="black"> 362.             # A __reduce__ implementation can direct protocol 2 to</font>
+<font color="black"> 363.             # use the more efficient NEWOBJ opcode, while still</font>
+<font color="black"> 364.             # allowing protocol 0 and 1 to work normally.  For this to</font>
+<font color="black"> 365.             # work, the function returned by __reduce__ should be</font>
+<font color="black"> 366.             # called __newobj__, and its first argument should be a</font>
+<font color="black"> 367.             # new-style class.  The implementation for __newobj__</font>
+<font color="black"> 368.             # should be as follows, although pickle has no way to</font>
+<font color="black"> 369.             # verify this:</font>
+<font color="black"> 370.             #</font>
+<font color="black"> 371.             # def __newobj__(cls, *args):</font>
+<font color="black"> 372.             #     return cls.__new__(cls, *args)</font>
+<font color="black"> 373.             #</font>
+<font color="black"> 374.             # Protocols 0 and 1 will pickle a reference to __newobj__,</font>
+<font color="black"> 375.             # while protocol 2 (and above) will pickle a reference to</font>
+<font color="black"> 376.             # cls, the remaining args tuple, and the NEWOBJ code,</font>
+<font color="black"> 377.             # which calls cls.__new__(cls, *args) at unpickling time</font>
+<font color="black"> 378.             # (see load_newobj below).  If __reduce__ returns a</font>
+<font color="black"> 379.             # three-tuple, the state from the third tuple item will be</font>
+<font color="black"> 380.             # pickled regardless of the protocol, calling __setstate__</font>
+<font color="black"> 381.             # at unpickling time (see load_build below).</font>
+<font color="black"> 382.             #</font>
+<font color="black"> 383.             # Note that no standard __newobj__ implementation exists;</font>
+<font color="black"> 384.             # you have to provide your own.  This is to enforce</font>
+<font color="black"> 385.             # compatibility with Python 2.2 (pickles written using</font>
+<font color="black"> 386.             # protocol 0 or 1 in Python 2.3 should be unpicklable by</font>
+<font color="black"> 387.             # Python 2.2).</font>
+<font color="red"> 388.             cls = args[0]</font>
+<font color="red"> 389.             if not hasattr(cls, &quot;__new__&quot;):</font>
+<font color="red"> 390.                 raise PicklingError(</font>
+<font color="red"> 391.                     &quot;args[0] from __newobj__ args has no __new__&quot;)</font>
+<font color="red"> 392.             if obj is not None and cls is not obj.__class__:</font>
+<font color="red"> 393.                 raise PicklingError(</font>
+<font color="red"> 394.                     &quot;args[0] from __newobj__ args has the wrong class&quot;)</font>
+<font color="red"> 395.             args = args[1:]</font>
+<font color="red"> 396.             save(cls)</font>
+<font color="red"> 397.             save(args)</font>
+<font color="red"> 398.             write(NEWOBJ)</font>
+<font color="black"> 399.         else:</font>
+<font color="red"> 400.             save(func)</font>
+<font color="red"> 401.             save(args)</font>
+<font color="red"> 402.             write(REDUCE)</font>
+<font color="black"> 403. </font>
+<font color="red"> 404.         if obj is not None:</font>
+<font color="black"> 405.             # If the object is already in the memo, this means it is</font>
+<font color="black"> 406.             # recursive. In this case, throw away everything we put on the</font>
+<font color="black"> 407.             # stack, and fetch the object back from the memo.</font>
+<font color="red"> 408.             if id(obj) in self.memo:</font>
+<font color="red"> 409.                 write(POP + self.get(self.memo[id(obj)][0]))</font>
+<font color="black"> 410.             else:</font>
+<font color="red"> 411.                 self.memoize(obj)</font>
+<font color="black"> 412. </font>
+<font color="black"> 413.         # More new special cases (that work with older protocols as</font>
+<font color="black"> 414.         # well): when __reduce__ returns a tuple with 4 or 5 items,</font>
+<font color="black"> 415.         # the 4th and 5th item should be iterators that provide list</font>
+<font color="black"> 416.         # items and dict items (as (key, value) tuples), or None.</font>
+<font color="black"> 417. </font>
+<font color="red"> 418.         if listitems is not None:</font>
+<font color="red"> 419.             self._batch_appends(listitems)</font>
+<font color="black"> 420. </font>
+<font color="red"> 421.         if dictitems is not None:</font>
+<font color="red"> 422.             self._batch_setitems(dictitems)</font>
+<font color="black"> 423. </font>
+<font color="red"> 424.         if state is not None:</font>
+<font color="red"> 425.             save(state)</font>
+<font color="red"> 426.             write(BUILD)</font>
+<font color="black"> 427. </font>
+<font color="black"> 428.     # Methods below this point are dispatched through the dispatch table</font>
+<font color="black"> 429. </font>
+<font color="green"> 430.     dispatch = {}</font>
+<font color="black"> 431. </font>
+<font color="green"> 432.     def save_none(self, obj):</font>
+<font color="red"> 433.         self.write(NONE)</font>
+<font color="green"> 434.     dispatch[NoneType] = save_none</font>
+<font color="black"> 435. </font>
+<font color="green"> 436.     def save_bool(self, obj):</font>
+<font color="red"> 437.         if self.proto &gt;= 2:</font>
+<font color="red"> 438.             self.write(obj and NEWTRUE or NEWFALSE)</font>
+<font color="black"> 439.         else:</font>
+<font color="red"> 440.             self.write(obj and TRUE or FALSE)</font>
+<font color="green"> 441.     dispatch[bool] = save_bool</font>
+<font color="black"> 442. </font>
+<font color="green"> 443.     def save_int(self, obj, pack=struct.pack):</font>
+<font color="red"> 444.         if self.bin:</font>
+<font color="black"> 445.             # If the int is small enough to fit in a signed 4-byte 2's-comp</font>
+<font color="black"> 446.             # format, we can store it more efficiently than the general</font>
+<font color="black"> 447.             # case.</font>
+<font color="black"> 448.             # First one- and two-byte unsigned ints:</font>
+<font color="red"> 449.             if obj &gt;= 0:</font>
+<font color="red"> 450.                 if obj &lt;= 0xff:</font>
+<font color="red"> 451.                     self.write(BININT1 + chr(obj))</font>
+<font color="red"> 452.                     return</font>
+<font color="red"> 453.                 if obj &lt;= 0xffff:</font>
+<font color="red"> 454.                     self.write(&quot;%c%c%c&quot; % (BININT2, obj&amp;0xff, obj&gt;&gt;8))</font>
+<font color="red"> 455.                     return</font>
+<font color="black"> 456.             # Next check for 4-byte signed ints:</font>
+<font color="red"> 457.             high_bits = obj &gt;&gt; 31  # note that Python shift sign-extends</font>
+<font color="red"> 458.             if high_bits == 0 or high_bits == -1:</font>
+<font color="black"> 459.                 # All high bits are copies of bit 2**31, so the value</font>
+<font color="black"> 460.                 # fits in a 4-byte signed int.</font>
+<font color="red"> 461.                 self.write(BININT + pack(&quot;&lt;i&quot;, obj))</font>
+<font color="red"> 462.                 return</font>
+<font color="black"> 463.         # Text pickle, or int too big to fit in signed 4-byte format.</font>
+<font color="red"> 464.         self.write(INT + repr(obj) + '\n')</font>
+<font color="green"> 465.     dispatch[IntType] = save_int</font>
+<font color="black"> 466. </font>
+<font color="green"> 467.     def save_long(self, obj, pack=struct.pack):</font>
+<font color="red"> 468.         if self.proto &gt;= 2:</font>
+<font color="red"> 469.             bytes = encode_long(obj)</font>
+<font color="red"> 470.             n = len(bytes)</font>
+<font color="red"> 471.             if n &lt; 256:</font>
+<font color="red"> 472.                 self.write(LONG1 + chr(n) + bytes)</font>
+<font color="black"> 473.             else:</font>
+<font color="red"> 474.                 self.write(LONG4 + pack(&quot;&lt;i&quot;, n) + bytes)</font>
+<font color="red"> 475.             return</font>
+<font color="red"> 476.         self.write(LONG + repr(obj) + '\n')</font>
+<font color="green"> 477.     dispatch[LongType] = save_long</font>
+<font color="black"> 478. </font>
+<font color="green"> 479.     def save_float(self, obj, pack=struct.pack):</font>
+<font color="red"> 480.         if self.bin:</font>
+<font color="red"> 481.             self.write(BINFLOAT + pack('&gt;d', obj))</font>
+<font color="black"> 482.         else:</font>
+<font color="red"> 483.             self.write(FLOAT + repr(obj) + '\n')</font>
+<font color="green"> 484.     dispatch[FloatType] = save_float</font>
+<font color="black"> 485. </font>
+<font color="green"> 486.     def save_string(self, obj, pack=struct.pack):</font>
+<font color="red"> 487.         if self.bin:</font>
+<font color="red"> 488.             n = len(obj)</font>
+<font color="red"> 489.             if n &lt; 256:</font>
+<font color="red"> 490.                 self.write(SHORT_BINSTRING + chr(n) + obj)</font>
+<font color="black"> 491.             else:</font>
+<font color="red"> 492.                 self.write(BINSTRING + pack(&quot;&lt;i&quot;, n) + obj)</font>
+<font color="black"> 493.         else:</font>
+<font color="red"> 494.             self.write(STRING + repr(obj) + '\n')</font>
+<font color="red"> 495.         self.memoize(obj)</font>
+<font color="green"> 496.     dispatch[StringType] = save_string</font>
+<font color="black"> 497. </font>
+<font color="green"> 498.     def save_unicode(self, obj, pack=struct.pack):</font>
+<font color="red"> 499.         if self.bin:</font>
+<font color="red"> 500.             encoding = obj.encode('utf-8')</font>
+<font color="red"> 501.             n = len(encoding)</font>
+<font color="red"> 502.             self.write(BINUNICODE + pack(&quot;&lt;i&quot;, n) + encoding)</font>
+<font color="black"> 503.         else:</font>
+<font color="red"> 504.             obj = obj.replace(&quot;\\&quot;, &quot;\\u005c&quot;)</font>
+<font color="red"> 505.             obj = obj.replace(&quot;\n&quot;, &quot;\\u000a&quot;)</font>
+<font color="red"> 506.             self.write(UNICODE + obj.encode('raw-unicode-escape') + '\n')</font>
+<font color="red"> 507.         self.memoize(obj)</font>
+<font color="green"> 508.     dispatch[UnicodeType] = save_unicode</font>
+<font color="black"> 509. </font>
+<font color="green"> 510.     if StringType is UnicodeType:</font>
+<font color="black"> 511.         # This is true for Jython</font>
+<font color="red"> 512.         def save_string(self, obj, pack=struct.pack):</font>
+<font color="red"> 513.             unicode = obj.isunicode()</font>
+<font color="black"> 514. </font>
+<font color="red"> 515.             if self.bin:</font>
+<font color="red"> 516.                 if unicode:</font>
+<font color="red"> 517.                     obj = obj.encode(&quot;utf-8&quot;)</font>
+<font color="red"> 518.                 l = len(obj)</font>
+<font color="red"> 519.                 if l &lt; 256 and not unicode:</font>
+<font color="red"> 520.                     self.write(SHORT_BINSTRING + chr(l) + obj)</font>
+<font color="black"> 521.                 else:</font>
+<font color="red"> 522.                     s = pack(&quot;&lt;i&quot;, l)</font>
+<font color="red"> 523.                     if unicode:</font>
+<font color="red"> 524.                         self.write(BINUNICODE + s + obj)</font>
+<font color="black"> 525.                     else:</font>
+<font color="red"> 526.                         self.write(BINSTRING + s + obj)</font>
+<font color="black"> 527.             else:</font>
+<font color="red"> 528.                 if unicode:</font>
+<font color="red"> 529.                     obj = obj.replace(&quot;\\&quot;, &quot;\\u005c&quot;)</font>
+<font color="red"> 530.                     obj = obj.replace(&quot;\n&quot;, &quot;\\u000a&quot;)</font>
+<font color="red"> 531.                     obj = obj.encode('raw-unicode-escape')</font>
+<font color="red"> 532.                     self.write(UNICODE + obj + '\n')</font>
+<font color="black"> 533.                 else:</font>
+<font color="red"> 534.                     self.write(STRING + repr(obj) + '\n')</font>
+<font color="red"> 535.             self.memoize(obj)</font>
+<font color="red"> 536.         dispatch[StringType] = save_string</font>
+<font color="black"> 537. </font>
+<font color="green"> 538.     def save_tuple(self, obj):</font>
+<font color="red"> 539.         write = self.write</font>
+<font color="red"> 540.         proto = self.proto</font>
+<font color="black"> 541. </font>
+<font color="red"> 542.         n = len(obj)</font>
+<font color="red"> 543.         if n == 0:</font>
+<font color="red"> 544.             if proto:</font>
+<font color="red"> 545.                 write(EMPTY_TUPLE)</font>
+<font color="black"> 546.             else:</font>
+<font color="red"> 547.                 write(MARK + TUPLE)</font>
+<font color="red"> 548.             return</font>
+<font color="black"> 549. </font>
+<font color="red"> 550.         save = self.save</font>
+<font color="red"> 551.         memo = self.memo</font>
+<font color="red"> 552.         if n &lt;= 3 and proto &gt;= 2:</font>
+<font color="red"> 553.             for element in obj:</font>
+<font color="red"> 554.                 save(element)</font>
+<font color="black"> 555.             # Subtle.  Same as in the big comment below.</font>
+<font color="red"> 556.             if id(obj) in memo:</font>
+<font color="red"> 557.                 get = self.get(memo[id(obj)][0])</font>
+<font color="red"> 558.                 write(POP * n + get)</font>
+<font color="black"> 559.             else:</font>
+<font color="red"> 560.                 write(_tuplesize2code[n])</font>
+<font color="red"> 561.                 self.memoize(obj)</font>
+<font color="red"> 562.             return</font>
+<font color="black"> 563. </font>
+<font color="black"> 564.         # proto 0 or proto 1 and tuple isn't empty, or proto &gt; 1 and tuple</font>
+<font color="black"> 565.         # has more than 3 elements.</font>
+<font color="red"> 566.         write(MARK)</font>
+<font color="red"> 567.         for element in obj:</font>
+<font color="red"> 568.             save(element)</font>
+<font color="black"> 569. </font>
+<font color="red"> 570.         if id(obj) in memo:</font>
+<font color="black"> 571.             # Subtle.  d was not in memo when we entered save_tuple(), so</font>
+<font color="black"> 572.             # the process of saving the tuple's elements must have saved</font>
+<font color="black"> 573.             # the tuple itself:  the tuple is recursive.  The proper action</font>
+<font color="black"> 574.             # now is to throw away everything we put on the stack, and</font>
+<font color="black"> 575.             # simply GET the tuple (it's already constructed).  This check</font>
+<font color="black"> 576.             # could have been done in the &quot;for element&quot; loop instead, but</font>
+<font color="black"> 577.             # recursive tuples are a rare thing.</font>
+<font color="red"> 578.             get = self.get(memo[id(obj)][0])</font>
+<font color="red"> 579.             if proto:</font>
+<font color="red"> 580.                 write(POP_MARK + get)</font>
+<font color="black"> 581.             else:   # proto 0 -- POP_MARK not available</font>
+<font color="red"> 582.                 write(POP * (n+1) + get)</font>
+<font color="red"> 583.             return</font>
+<font color="black"> 584. </font>
+<font color="black"> 585.         # No recursion.</font>
+<font color="red"> 586.         self.write(TUPLE)</font>
+<font color="red"> 587.         self.memoize(obj)</font>
+<font color="black"> 588. </font>
+<font color="green"> 589.     dispatch[TupleType] = save_tuple</font>
+<font color="black"> 590. </font>
+<font color="black"> 591.     # save_empty_tuple() isn't used by anything in Python 2.3.  However, I</font>
+<font color="black"> 592.     # found a Pickler subclass in Zope3 that calls it, so it's not harmless</font>
+<font color="black"> 593.     # to remove it.</font>
+<font color="green"> 594.     def save_empty_tuple(self, obj):</font>
+<font color="red"> 595.         self.write(EMPTY_TUPLE)</font>
+<font color="black"> 596. </font>
+<font color="green"> 597.     def save_list(self, obj):</font>
+<font color="red"> 598.         write = self.write</font>
+<font color="black"> 599. </font>
+<font color="red"> 600.         if self.bin:</font>
+<font color="red"> 601.             write(EMPTY_LIST)</font>
+<font color="black"> 602.         else:   # proto 0 -- can't use EMPTY_LIST</font>
+<font color="red"> 603.             write(MARK + LIST)</font>
+<font color="black"> 604. </font>
+<font color="red"> 605.         self.memoize(obj)</font>
+<font color="red"> 606.         self._batch_appends(iter(obj))</font>
+<font color="black"> 607. </font>
+<font color="green"> 608.     dispatch[ListType] = save_list</font>
+<font color="black"> 609. </font>
+<font color="black"> 610.     # Keep in synch with cPickle's BATCHSIZE.  Nothing will break if it gets</font>
+<font color="black"> 611.     # out of synch, though.</font>
+<font color="green"> 612.     _BATCHSIZE = 1000</font>
+<font color="black"> 613. </font>
+<font color="green"> 614.     def _batch_appends(self, items):</font>
+<font color="black"> 615.         # Helper to batch up APPENDS sequences</font>
+<font color="red"> 616.         save = self.save</font>
+<font color="red"> 617.         write = self.write</font>
+<font color="black"> 618. </font>
+<font color="red"> 619.         if not self.bin:</font>
+<font color="red"> 620.             for x in items:</font>
+<font color="red"> 621.                 save(x)</font>
+<font color="red"> 622.                 write(APPEND)</font>
+<font color="red"> 623.             return</font>
+<font color="black"> 624. </font>
+<font color="red"> 625.         r = xrange(self._BATCHSIZE)</font>
+<font color="red"> 626.         while items is not None:</font>
+<font color="red"> 627.             tmp = []</font>
+<font color="red"> 628.             for i in r:</font>
+<font color="red"> 629.                 try:</font>
+<font color="red"> 630.                     x = items.next()</font>
+<font color="red"> 631.                     tmp.append(x)</font>
+<font color="red"> 632.                 except StopIteration:</font>
+<font color="red"> 633.                     items = None</font>
+<font color="red"> 634.                     break</font>
+<font color="red"> 635.             n = len(tmp)</font>
+<font color="red"> 636.             if n &gt; 1:</font>
+<font color="red"> 637.                 write(MARK)</font>
+<font color="red"> 638.                 for x in tmp:</font>
+<font color="red"> 639.                     save(x)</font>
+<font color="red"> 640.                 write(APPENDS)</font>
+<font color="red"> 641.             elif n:</font>
+<font color="red"> 642.                 save(tmp[0])</font>
+<font color="red"> 643.                 write(APPEND)</font>
+<font color="black"> 644.             # else tmp is empty, and we're done</font>
+<font color="black"> 645. </font>
+<font color="green"> 646.     def save_dict(self, obj):</font>
+<font color="red"> 647.         write = self.write</font>
+<font color="black"> 648. </font>
+<font color="red"> 649.         if self.bin:</font>
+<font color="red"> 650.             write(EMPTY_DICT)</font>
+<font color="black"> 651.         else:   # proto 0 -- can't use EMPTY_DICT</font>
+<font color="red"> 652.             write(MARK + DICT)</font>
+<font color="black"> 653. </font>
+<font color="red"> 654.         self.memoize(obj)</font>
+<font color="red"> 655.         self._batch_setitems(obj.iteritems())</font>
+<font color="black"> 656. </font>
+<font color="green"> 657.     dispatch[DictionaryType] = save_dict</font>
+<font color="green"> 658.     if not PyStringMap is None:</font>
+<font color="red"> 659.         dispatch[PyStringMap] = save_dict</font>
+<font color="black"> 660. </font>
+<font color="green"> 661.     def _batch_setitems(self, items):</font>
+<font color="black"> 662.         # Helper to batch up SETITEMS sequences; proto &gt;= 1 only</font>
+<font color="red"> 663.         save = self.save</font>
+<font color="red"> 664.         write = self.write</font>
+<font color="black"> 665. </font>
+<font color="red"> 666.         if not self.bin:</font>
+<font color="red"> 667.             for k, v in items:</font>
+<font color="red"> 668.                 save(k)</font>
+<font color="red"> 669.                 save(v)</font>
+<font color="red"> 670.                 write(SETITEM)</font>
+<font color="red"> 671.             return</font>
+<font color="black"> 672. </font>
+<font color="red"> 673.         r = xrange(self._BATCHSIZE)</font>
+<font color="red"> 674.         while items is not None:</font>
+<font color="red"> 675.             tmp = []</font>
+<font color="red"> 676.             for i in r:</font>
+<font color="red"> 677.                 try:</font>
+<font color="red"> 678.                     tmp.append(items.next())</font>
+<font color="red"> 679.                 except StopIteration:</font>
+<font color="red"> 680.                     items = None</font>
+<font color="red"> 681.                     break</font>
+<font color="red"> 682.             n = len(tmp)</font>
+<font color="red"> 683.             if n &gt; 1:</font>
+<font color="red"> 684.                 write(MARK)</font>
+<font color="red"> 685.                 for k, v in tmp:</font>
+<font color="red"> 686.                     save(k)</font>
+<font color="red"> 687.                     save(v)</font>
+<font color="red"> 688.                 write(SETITEMS)</font>
+<font color="red"> 689.             elif n:</font>
+<font color="red"> 690.                 k, v = tmp[0]</font>
+<font color="red"> 691.                 save(k)</font>
+<font color="red"> 692.                 save(v)</font>
+<font color="red"> 693.                 write(SETITEM)</font>
+<font color="black"> 694.             # else tmp is empty, and we're done</font>
+<font color="black"> 695. </font>
+<font color="green"> 696.     def save_inst(self, obj):</font>
+<font color="red"> 697.         cls = obj.__class__</font>
+<font color="black"> 698. </font>
+<font color="red"> 699.         memo  = self.memo</font>
+<font color="red"> 700.         write = self.write</font>
+<font color="red"> 701.         save  = self.save</font>
+<font color="black"> 702. </font>
+<font color="red"> 703.         if hasattr(obj, '__getinitargs__'):</font>
+<font color="red"> 704.             args = obj.__getinitargs__()</font>
+<font color="red"> 705.             len(args) # XXX Assert it's a sequence</font>
+<font color="red"> 706.             _keep_alive(args, memo)</font>
+<font color="black"> 707.         else:</font>
+<font color="red"> 708.             args = ()</font>
+<font color="black"> 709. </font>
+<font color="red"> 710.         write(MARK)</font>
+<font color="black"> 711. </font>
+<font color="red"> 712.         if self.bin:</font>
+<font color="red"> 713.             save(cls)</font>
+<font color="red"> 714.             for arg in args:</font>
+<font color="red"> 715.                 save(arg)</font>
+<font color="red"> 716.             write(OBJ)</font>
+<font color="black"> 717.         else:</font>
+<font color="red"> 718.             for arg in args:</font>
+<font color="red"> 719.                 save(arg)</font>
+<font color="red"> 720.             write(INST + cls.__module__ + '\n' + cls.__name__ + '\n')</font>
+<font color="black"> 721. </font>
+<font color="red"> 722.         self.memoize(obj)</font>
+<font color="black"> 723. </font>
+<font color="red"> 724.         try:</font>
+<font color="red"> 725.             getstate = obj.__getstate__</font>
+<font color="red"> 726.         except AttributeError:</font>
+<font color="red"> 727.             stuff = obj.__dict__</font>
+<font color="black"> 728.         else:</font>
+<font color="red"> 729.             stuff = getstate()</font>
+<font color="red"> 730.             _keep_alive(stuff, memo)</font>
+<font color="red"> 731.         save(stuff)</font>
+<font color="red"> 732.         write(BUILD)</font>
+<font color="black"> 733. </font>
+<font color="green"> 734.     dispatch[InstanceType] = save_inst</font>
+<font color="black"> 735. </font>
+<font color="green"> 736.     def save_global(self, obj, name=None, pack=struct.pack):</font>
+<font color="red"> 737.         write = self.write</font>
+<font color="red"> 738.         memo = self.memo</font>
+<font color="black"> 739. </font>
+<font color="red"> 740.         if name is None:</font>
+<font color="red"> 741.             name = obj.__name__</font>
+<font color="black"> 742. </font>
+<font color="red"> 743.         module = getattr(obj, &quot;__module__&quot;, None)</font>
+<font color="red"> 744.         if module is None:</font>
+<font color="red"> 745.             module = whichmodule(obj, name)</font>
+<font color="black"> 746. </font>
+<font color="red"> 747.         try:</font>
+<font color="red"> 748.             __import__(module)</font>
+<font color="red"> 749.             mod = sys.modules[module]</font>
+<font color="red"> 750.             klass = getattr(mod, name)</font>
+<font color="red"> 751.         except (ImportError, KeyError, AttributeError):</font>
+<font color="red"> 752.             raise PicklingError(</font>
+<font color="red"> 753.                 &quot;Can't pickle %r: it's not found as %s.%s&quot; %</font>
+<font color="red"> 754.                 (obj, module, name))</font>
+<font color="black"> 755.         else:</font>
+<font color="red"> 756.             if klass is not obj:</font>
+<font color="red"> 757.                 raise PicklingError(</font>
+<font color="red"> 758.                     &quot;Can't pickle %r: it's not the same object as %s.%s&quot; %</font>
+<font color="red"> 759.                     (obj, module, name))</font>
+<font color="black"> 760. </font>
+<font color="red"> 761.         if self.proto &gt;= 2:</font>
+<font color="red"> 762.             code = _extension_registry.get((module, name))</font>
+<font color="red"> 763.             if code:</font>
+<font color="red"> 764.                 assert code &gt; 0</font>
+<font color="red"> 765.                 if code &lt;= 0xff:</font>
+<font color="red"> 766.                     write(EXT1 + chr(code))</font>
+<font color="red"> 767.                 elif code &lt;= 0xffff:</font>
+<font color="red"> 768.                     write(&quot;%c%c%c&quot; % (EXT2, code&amp;0xff, code&gt;&gt;8))</font>
+<font color="black"> 769.                 else:</font>
+<font color="red"> 770.                     write(EXT4 + pack(&quot;&lt;i&quot;, code))</font>
+<font color="red"> 771.                 return</font>
+<font color="black"> 772. </font>
+<font color="red"> 773.         write(GLOBAL + module + '\n' + name + '\n')</font>
+<font color="red"> 774.         self.memoize(obj)</font>
+<font color="black"> 775. </font>
+<font color="green"> 776.     dispatch[ClassType] = save_global</font>
+<font color="green"> 777.     dispatch[FunctionType] = save_global</font>
+<font color="green"> 778.     dispatch[BuiltinFunctionType] = save_global</font>
+<font color="green"> 779.     dispatch[TypeType] = save_global</font>
+<font color="black"> 780. </font>
+<font color="black"> 781. # Pickling helpers</font>
+<font color="black"> 782. </font>
+<font color="green"> 783. def _keep_alive(x, memo):</font>
+<font color="black"> 784.     &quot;&quot;&quot;Keeps a reference to the object x in the memo.</font>
+<font color="black"> 785. </font>
+<font color="black"> 786.     Because we remember objects by their id, we have</font>
+<font color="black"> 787.     to assure that possibly temporary objects are kept</font>
+<font color="black"> 788.     alive by referencing them.</font>
+<font color="black"> 789.     We store a reference at the id of the memo, which should</font>
+<font color="black"> 790.     normally not be used unless someone tries to deepcopy</font>
+<font color="black"> 791.     the memo itself...</font>
+<font color="black"> 792.     &quot;&quot;&quot;</font>
+<font color="red"> 793.     try:</font>
+<font color="red"> 794.         memo[id(memo)].append(x)</font>
+<font color="red"> 795.     except KeyError:</font>
+<font color="black"> 796.         # aha, this is the first one :-)</font>
+<font color="red"> 797.         memo[id(memo)]=[x]</font>
+<font color="black"> 798. </font>
+<font color="black"> 799. </font>
+<font color="black"> 800. # A cache for whichmodule(), mapping a function object to the name of</font>
+<font color="black"> 801. # the module in which the function was found.</font>
+<font color="black"> 802. </font>
+<font color="green"> 803. classmap = {} # called classmap for backwards compatibility</font>
+<font color="black"> 804. </font>
+<font color="green"> 805. def whichmodule(func, funcname):</font>
+<font color="black"> 806.     &quot;&quot;&quot;Figure out the module in which a function occurs.</font>
+<font color="black"> 807. </font>
+<font color="black"> 808.     Search sys.modules for the module.</font>
+<font color="black"> 809.     Cache in classmap.</font>
+<font color="black"> 810.     Return a module name.</font>
+<font color="black"> 811.     If the function cannot be found, return &quot;__main__&quot;.</font>
+<font color="black"> 812.     &quot;&quot;&quot;</font>
+<font color="black"> 813.     # Python functions should always get an __module__ from their globals.</font>
+<font color="red"> 814.     mod = getattr(func, &quot;__module__&quot;, None)</font>
+<font color="red"> 815.     if mod is not None:</font>
+<font color="red"> 816.         return mod</font>
+<font color="red"> 817.     if func in classmap:</font>
+<font color="red"> 818.         return classmap[func]</font>
+<font color="black"> 819. </font>
+<font color="red"> 820.     for name, module in sys.modules.items():</font>
+<font color="red"> 821.         if module is None:</font>
+<font color="red"> 822.             continue # skip dummy package entries</font>
+<font color="red"> 823.         if name != '__main__' and getattr(module, funcname, None) is func:</font>
+<font color="red"> 824.             break</font>
+<font color="black"> 825.     else:</font>
+<font color="red"> 826.         name = '__main__'</font>
+<font color="red"> 827.     classmap[func] = name</font>
+<font color="red"> 828.     return name</font>
+<font color="black"> 829. </font>
+<font color="black"> 830. </font>
+<font color="black"> 831. # Unpickling machinery</font>
+<font color="black"> 832. </font>
+<font color="green"> 833. class Unpickler:</font>
+<font color="black"> 834. </font>
+<font color="green"> 835.     def __init__(self, file):</font>
+<font color="black"> 836.         &quot;&quot;&quot;This takes a file-like object for reading a pickle data stream.</font>
+<font color="black"> 837. </font>
+<font color="black"> 838.         The protocol version of the pickle is detected automatically, so no</font>
+<font color="black"> 839.         proto argument is needed.</font>
+<font color="black"> 840. </font>
+<font color="black"> 841.         The file-like object must have two methods, a read() method that</font>
+<font color="black"> 842.         takes an integer argument, and a readline() method that requires no</font>
+<font color="black"> 843.         arguments.  Both methods should return a string.  Thus file-like</font>
+<font color="black"> 844.         object can be a file object opened for reading, a StringIO object,</font>
+<font color="black"> 845.         or any other custom object that meets this interface.</font>
+<font color="black"> 846.         &quot;&quot;&quot;</font>
+<font color="red"> 847.         self.readline = file.readline</font>
+<font color="red"> 848.         self.read = file.read</font>
+<font color="red"> 849.         self.memo = {}</font>
+<font color="black"> 850. </font>
+<font color="green"> 851.     def load(self):</font>
+<font color="black"> 852.         &quot;&quot;&quot;Read a pickled object representation from the open file.</font>
+<font color="black"> 853. </font>
+<font color="black"> 854.         Return the reconstituted object hierarchy specified in the file.</font>
+<font color="black"> 855.         &quot;&quot;&quot;</font>
+<font color="red"> 856.         self.mark = object() # any new unique object</font>
+<font color="red"> 857.         self.stack = []</font>
+<font color="red"> 858.         self.append = self.stack.append</font>
+<font color="red"> 859.         read = self.read</font>
+<font color="red"> 860.         dispatch = self.dispatch</font>
+<font color="red"> 861.         try:</font>
+<font color="red"> 862.             while 1:</font>
+<font color="red"> 863.                 key = read(1)</font>
+<font color="red"> 864.                 dispatch[key](self)</font>
+<font color="red"> 865.         except _Stop, stopinst:</font>
+<font color="red"> 866.             return stopinst.value</font>
+<font color="black"> 867. </font>
+<font color="black"> 868.     # Return largest index k such that self.stack[k] is self.mark.</font>
+<font color="black"> 869.     # If the stack doesn't contain a mark, eventually raises IndexError.</font>
+<font color="black"> 870.     # This could be sped by maintaining another stack, of indices at which</font>
+<font color="black"> 871.     # the mark appears.  For that matter, the latter stack would suffice,</font>
+<font color="black"> 872.     # and we wouldn't need to push mark objects on self.stack at all.</font>
+<font color="black"> 873.     # Doing so is probably a good thing, though, since if the pickle is</font>
+<font color="black"> 874.     # corrupt (or hostile) we may get a clue from finding self.mark embedded</font>
+<font color="black"> 875.     # in unpickled objects.</font>
+<font color="green"> 876.     def marker(self):</font>
+<font color="red"> 877.         stack = self.stack</font>
+<font color="red"> 878.         mark = self.mark</font>
+<font color="red"> 879.         k = len(stack)-1</font>
+<font color="red"> 880.         while stack[k] is not mark: k = k-1</font>
+<font color="red"> 881.         return k</font>
+<font color="black"> 882. </font>
+<font color="green"> 883.     dispatch = {}</font>
+<font color="black"> 884. </font>
+<font color="green"> 885.     def load_eof(self):</font>
+<font color="red"> 886.         raise EOFError</font>
+<font color="green"> 887.     dispatch[''] = load_eof</font>
+<font color="black"> 888. </font>
+<font color="green"> 889.     def load_proto(self):</font>
+<font color="red"> 890.         proto = ord(self.read(1))</font>
+<font color="red"> 891.         if not 0 &lt;= proto &lt;= 2:</font>
+<font color="red"> 892.             raise ValueError, &quot;unsupported pickle protocol: %d&quot; % proto</font>
+<font color="green"> 893.     dispatch[PROTO] = load_proto</font>
+<font color="black"> 894. </font>
+<font color="green"> 895.     def load_persid(self):</font>
+<font color="red"> 896.         pid = self.readline()[:-1]</font>
+<font color="red"> 897.         self.append(self.persistent_load(pid))</font>
+<font color="green"> 898.     dispatch[PERSID] = load_persid</font>
+<font color="black"> 899. </font>
+<font color="green"> 900.     def load_binpersid(self):</font>
+<font color="red"> 901.         pid = self.stack.pop()</font>
+<font color="red"> 902.         self.append(self.persistent_load(pid))</font>
+<font color="green"> 903.     dispatch[BINPERSID] = load_binpersid</font>
+<font color="black"> 904. </font>
+<font color="green"> 905.     def load_none(self):</font>
+<font color="red"> 906.         self.append(None)</font>
+<font color="green"> 907.     dispatch[NONE] = load_none</font>
+<font color="black"> 908. </font>
+<font color="green"> 909.     def load_false(self):</font>
+<font color="red"> 910.         self.append(False)</font>
+<font color="green"> 911.     dispatch[NEWFALSE] = load_false</font>
+<font color="black"> 912. </font>
+<font color="green"> 913.     def load_true(self):</font>
+<font color="red"> 914.         self.append(True)</font>
+<font color="green"> 915.     dispatch[NEWTRUE] = load_true</font>
+<font color="black"> 916. </font>
+<font color="green"> 917.     def load_int(self):</font>
+<font color="red"> 918.         data = self.readline()</font>
+<font color="red"> 919.         if data == FALSE[1:]:</font>
+<font color="red"> 920.             val = False</font>
+<font color="red"> 921.         elif data == TRUE[1:]:</font>
+<font color="red"> 922.             val = True</font>
+<font color="black"> 923.         else:</font>
+<font color="red"> 924.             try:</font>
+<font color="red"> 925.                 val = int(data)</font>
+<font color="red"> 926.             except ValueError:</font>
+<font color="red"> 927.                 val = long(data)</font>
+<font color="red"> 928.         self.append(val)</font>
+<font color="green"> 929.     dispatch[INT] = load_int</font>
+<font color="black"> 930. </font>
+<font color="green"> 931.     def load_binint(self):</font>
+<font color="red"> 932.         self.append(mloads('i' + self.read(4)))</font>
+<font color="green"> 933.     dispatch[BININT] = load_binint</font>
+<font color="black"> 934. </font>
+<font color="green"> 935.     def load_binint1(self):</font>
+<font color="red"> 936.         self.append(ord(self.read(1)))</font>
+<font color="green"> 937.     dispatch[BININT1] = load_binint1</font>
+<font color="black"> 938. </font>
+<font color="green"> 939.     def load_binint2(self):</font>
+<font color="red"> 940.         self.append(mloads('i' + self.read(2) + '\000\000'))</font>
+<font color="green"> 941.     dispatch[BININT2] = load_binint2</font>
+<font color="black"> 942. </font>
+<font color="green"> 943.     def load_long(self):</font>
+<font color="red"> 944.         self.append(long(self.readline()[:-1], 0))</font>
+<font color="green"> 945.     dispatch[LONG] = load_long</font>
+<font color="black"> 946. </font>
+<font color="green"> 947.     def load_long1(self):</font>
+<font color="red"> 948.         n = ord(self.read(1))</font>
+<font color="red"> 949.         bytes = self.read(n)</font>
+<font color="red"> 950.         self.append(decode_long(bytes))</font>
+<font color="green"> 951.     dispatch[LONG1] = load_long1</font>
+<font color="black"> 952. </font>
+<font color="green"> 953.     def load_long4(self):</font>
+<font color="red"> 954.         n = mloads('i' + self.read(4))</font>
+<font color="red"> 955.         bytes = self.read(n)</font>
+<font color="red"> 956.         self.append(decode_long(bytes))</font>
+<font color="green"> 957.     dispatch[LONG4] = load_long4</font>
+<font color="black"> 958. </font>
+<font color="green"> 959.     def load_float(self):</font>
+<font color="red"> 960.         self.append(float(self.readline()[:-1]))</font>
+<font color="green"> 961.     dispatch[FLOAT] = load_float</font>
+<font color="black"> 962. </font>
+<font color="green"> 963.     def load_binfloat(self, unpack=struct.unpack):</font>
+<font color="red"> 964.         self.append(unpack('&gt;d', self.read(8))[0])</font>
+<font color="green"> 965.     dispatch[BINFLOAT] = load_binfloat</font>
+<font color="black"> 966. </font>
+<font color="green"> 967.     def load_string(self):</font>
+<font color="red"> 968.         rep = self.readline()[:-1]</font>
+<font color="red"> 969.         for q in &quot;\&quot;'&quot;: # double or single quote</font>
+<font color="red"> 970.             if rep.startswith(q):</font>
+<font color="red"> 971.                 if len(rep) &lt; 2 or not rep.endswith(q):</font>
+<font color="red"> 972.                     raise ValueError, &quot;insecure string pickle&quot;</font>
+<font color="red"> 973.                 rep = rep[len(q):-len(q)]</font>
+<font color="red"> 974.                 break</font>
+<font color="black"> 975.         else:</font>
+<font color="red"> 976.             raise ValueError, &quot;insecure string pickle&quot;</font>
+<font color="red"> 977.         self.append(rep.decode(&quot;string-escape&quot;))</font>
+<font color="green"> 978.     dispatch[STRING] = load_string</font>
+<font color="black"> 979. </font>
+<font color="green"> 980.     def load_binstring(self):</font>
+<font color="red"> 981.         len = mloads('i' + self.read(4))</font>
+<font color="red"> 982.         self.append(self.read(len))</font>
+<font color="green"> 983.     dispatch[BINSTRING] = load_binstring</font>
+<font color="black"> 984. </font>
+<font color="green"> 985.     def load_unicode(self):</font>
+<font color="red"> 986.         self.append(unicode(self.readline()[:-1],'raw-unicode-escape'))</font>
+<font color="green"> 987.     dispatch[UNICODE] = load_unicode</font>
+<font color="black"> 988. </font>
+<font color="green"> 989.     def load_binunicode(self):</font>
+<font color="red"> 990.         len = mloads('i' + self.read(4))</font>
+<font color="red"> 991.         self.append(unicode(self.read(len),'utf-8'))</font>
+<font color="green"> 992.     dispatch[BINUNICODE] = load_binunicode</font>
+<font color="black"> 993. </font>
+<font color="green"> 994.     def load_short_binstring(self):</font>
+<font color="red"> 995.         len = ord(self.read(1))</font>
+<font color="red"> 996.         self.append(self.read(len))</font>
+<font color="green"> 997.     dispatch[SHORT_BINSTRING] = load_short_binstring</font>
+<font color="black"> 998. </font>
+<font color="green"> 999.     def load_tuple(self):</font>
+<font color="red">1000.         k = self.marker()</font>
+<font color="red">1001.         self.stack[k:] = [tuple(self.stack[k+1:])]</font>
+<font color="green">1002.     dispatch[TUPLE] = load_tuple</font>
+<font color="black">1003. </font>
+<font color="green">1004.     def load_empty_tuple(self):</font>
+<font color="red">1005.         self.stack.append(())</font>
+<font color="green">1006.     dispatch[EMPTY_TUPLE] = load_empty_tuple</font>
+<font color="black">1007. </font>
+<font color="green">1008.     def load_tuple1(self):</font>
+<font color="red">1009.         self.stack[-1] = (self.stack[-1],)</font>
+<font color="green">1010.     dispatch[TUPLE1] = load_tuple1</font>
+<font color="black">1011. </font>
+<font color="green">1012.     def load_tuple2(self):</font>
+<font color="red">1013.         self.stack[-2:] = [(self.stack[-2], self.stack[-1])]</font>
+<font color="green">1014.     dispatch[TUPLE2] = load_tuple2</font>
+<font color="black">1015. </font>
+<font color="green">1016.     def load_tuple3(self):</font>
+<font color="red">1017.         self.stack[-3:] = [(self.stack[-3], self.stack[-2], self.stack[-1])]</font>
+<font color="green">1018.     dispatch[TUPLE3] = load_tuple3</font>
+<font color="black">1019. </font>
+<font color="green">1020.     def load_empty_list(self):</font>
+<font color="red">1021.         self.stack.append([])</font>
+<font color="green">1022.     dispatch[EMPTY_LIST] = load_empty_list</font>
+<font color="black">1023. </font>
+<font color="green">1024.     def load_empty_dictionary(self):</font>
+<font color="red">1025.         self.stack.append({})</font>
+<font color="green">1026.     dispatch[EMPTY_DICT] = load_empty_dictionary</font>
+<font color="black">1027. </font>
+<font color="green">1028.     def load_list(self):</font>
+<font color="red">1029.         k = self.marker()</font>
+<font color="red">1030.         self.stack[k:] = [self.stack[k+1:]]</font>
+<font color="green">1031.     dispatch[LIST] = load_list</font>
+<font color="black">1032. </font>
+<font color="green">1033.     def load_dict(self):</font>
+<font color="red">1034.         k = self.marker()</font>
+<font color="red">1035.         d = {}</font>
+<font color="red">1036.         items = self.stack[k+1:]</font>
+<font color="red">1037.         for i in range(0, len(items), 2):</font>
+<font color="red">1038.             key = items[i]</font>
+<font color="red">1039.             value = items[i+1]</font>
+<font color="red">1040.             d[key] = value</font>
+<font color="red">1041.         self.stack[k:] = [d]</font>
+<font color="green">1042.     dispatch[DICT] = load_dict</font>
+<font color="black">1043. </font>
+<font color="black">1044.     # INST and OBJ differ only in how they get a class object.  It's not</font>
+<font color="black">1045.     # only sensible to do the rest in a common routine, the two routines</font>
+<font color="black">1046.     # previously diverged and grew different bugs.</font>
+<font color="black">1047.     # klass is the class to instantiate, and k points to the topmost mark</font>
+<font color="black">1048.     # object, following which are the arguments for klass.__init__.</font>
+<font color="green">1049.     def _instantiate(self, klass, k):</font>
+<font color="red">1050.         args = tuple(self.stack[k+1:])</font>
+<font color="red">1051.         del self.stack[k:]</font>
+<font color="red">1052.         instantiated = 0</font>
+<font color="red">1053.         if (not args and</font>
+<font color="red">1054.                 type(klass) is ClassType and</font>
+<font color="red">1055.                 not hasattr(klass, &quot;__getinitargs__&quot;)):</font>
+<font color="red">1056.             try:</font>
+<font color="red">1057.                 value = _EmptyClass()</font>
+<font color="red">1058.                 value.__class__ = klass</font>
+<font color="red">1059.                 instantiated = 1</font>
+<font color="red">1060.             except RuntimeError:</font>
+<font color="black">1061.                 # In restricted execution, assignment to inst.__class__ is</font>
+<font color="black">1062.                 # prohibited</font>
+<font color="red">1063.                 pass</font>
+<font color="red">1064.         if not instantiated:</font>
+<font color="red">1065.             try:</font>
+<font color="red">1066.                 value = klass(*args)</font>
+<font color="red">1067.             except TypeError, err:</font>
+<font color="red">1068.                 raise TypeError, &quot;in constructor for %s: %s&quot; % (</font>
+<font color="red">1069.                     klass.__name__, str(err)), sys.exc_info()[2]</font>
+<font color="red">1070.         self.append(value)</font>
+<font color="black">1071. </font>
+<font color="green">1072.     def load_inst(self):</font>
+<font color="red">1073.         module = self.readline()[:-1]</font>
+<font color="red">1074.         name = self.readline()[:-1]</font>
+<font color="red">1075.         klass = self.find_class(module, name)</font>
+<font color="red">1076.         self._instantiate(klass, self.marker())</font>
+<font color="green">1077.     dispatch[INST] = load_inst</font>
+<font color="black">1078. </font>
+<font color="green">1079.     def load_obj(self):</font>
+<font color="black">1080.         # Stack is ... markobject classobject arg1 arg2 ...</font>
+<font color="red">1081.         k = self.marker()</font>
+<font color="red">1082.         klass = self.stack.pop(k+1)</font>
+<font color="red">1083.         self._instantiate(klass, k)</font>
+<font color="green">1084.     dispatch[OBJ] = load_obj</font>
+<font color="black">1085. </font>
+<font color="green">1086.     def load_newobj(self):</font>
+<font color="red">1087.         args = self.stack.pop()</font>
+<font color="red">1088.         cls = self.stack[-1]</font>
+<font color="red">1089.         obj = cls.__new__(cls, *args)</font>
+<font color="red">1090.         self.stack[-1] = obj</font>
+<font color="green">1091.     dispatch[NEWOBJ] = load_newobj</font>
+<font color="black">1092. </font>
+<font color="green">1093.     def load_global(self):</font>
+<font color="red">1094.         module = self.readline()[:-1]</font>
+<font color="red">1095.         name = self.readline()[:-1]</font>
+<font color="red">1096.         klass = self.find_class(module, name)</font>
+<font color="red">1097.         self.append(klass)</font>
+<font color="green">1098.     dispatch[GLOBAL] = load_global</font>
+<font color="black">1099. </font>
+<font color="green">1100.     def load_ext1(self):</font>
+<font color="red">1101.         code = ord(self.read(1))</font>
+<font color="red">1102.         self.get_extension(code)</font>
+<font color="green">1103.     dispatch[EXT1] = load_ext1</font>
+<font color="black">1104. </font>
+<font color="green">1105.     def load_ext2(self):</font>
+<font color="red">1106.         code = mloads('i' + self.read(2) + '\000\000')</font>
+<font color="red">1107.         self.get_extension(code)</font>
+<font color="green">1108.     dispatch[EXT2] = load_ext2</font>
+<font color="black">1109. </font>
+<font color="green">1110.     def load_ext4(self):</font>
+<font color="red">1111.         code = mloads('i' + self.read(4))</font>
+<font color="red">1112.         self.get_extension(code)</font>
+<font color="green">1113.     dispatch[EXT4] = load_ext4</font>
+<font color="black">1114. </font>
+<font color="green">1115.     def get_extension(self, code):</font>
+<font color="red">1116.         nil = []</font>
+<font color="red">1117.         obj = _extension_cache.get(code, nil)</font>
+<font color="red">1118.         if obj is not nil:</font>
+<font color="red">1119.             self.append(obj)</font>
+<font color="red">1120.             return</font>
+<font color="red">1121.         key = _inverted_registry.get(code)</font>
+<font color="red">1122.         if not key:</font>
+<font color="red">1123.             raise ValueError(&quot;unregistered extension code %d&quot; % code)</font>
+<font color="red">1124.         obj = self.find_class(*key)</font>
+<font color="red">1125.         _extension_cache[code] = obj</font>
+<font color="red">1126.         self.append(obj)</font>
+<font color="black">1127. </font>
+<font color="green">1128.     def find_class(self, module, name):</font>
+<font color="black">1129.         # Subclasses may override this</font>
+<font color="red">1130.         __import__(module)</font>
+<font color="red">1131.         mod = sys.modules[module]</font>
+<font color="red">1132.         klass = getattr(mod, name)</font>
+<font color="red">1133.         return klass</font>
+<font color="black">1134. </font>
+<font color="green">1135.     def load_reduce(self):</font>
+<font color="red">1136.         stack = self.stack</font>
+<font color="red">1137.         args = stack.pop()</font>
+<font color="red">1138.         func = stack[-1]</font>
+<font color="red">1139.         value = func(*args)</font>
+<font color="red">1140.         stack[-1] = value</font>
+<font color="green">1141.     dispatch[REDUCE] = load_reduce</font>
+<font color="black">1142. </font>
+<font color="green">1143.     def load_pop(self):</font>
+<font color="red">1144.         del self.stack[-1]</font>
+<font color="green">1145.     dispatch[POP] = load_pop</font>
+<font color="black">1146. </font>
+<font color="green">1147.     def load_pop_mark(self):</font>
+<font color="red">1148.         k = self.marker()</font>
+<font color="red">1149.         del self.stack[k:]</font>
+<font color="green">1150.     dispatch[POP_MARK] = load_pop_mark</font>
+<font color="black">1151. </font>
+<font color="green">1152.     def load_dup(self):</font>
+<font color="red">1153.         self.append(self.stack[-1])</font>
+<font color="green">1154.     dispatch[DUP] = load_dup</font>
+<font color="black">1155. </font>
+<font color="green">1156.     def load_get(self):</font>
+<font color="red">1157.         self.append(self.memo[self.readline()[:-1]])</font>
+<font color="green">1158.     dispatch[GET] = load_get</font>
+<font color="black">1159. </font>
+<font color="green">1160.     def load_binget(self):</font>
+<font color="red">1161.         i = ord(self.read(1))</font>
+<font color="red">1162.         self.append(self.memo[repr(i)])</font>
+<font color="green">1163.     dispatch[BINGET] = load_binget</font>
+<font color="black">1164. </font>
+<font color="green">1165.     def load_long_binget(self):</font>
+<font color="red">1166.         i = mloads('i' + self.read(4))</font>
+<font color="red">1167.         self.append(self.memo[repr(i)])</font>
+<font color="green">1168.     dispatch[LONG_BINGET] = load_long_binget</font>
+<font color="black">1169. </font>
+<font color="green">1170.     def load_put(self):</font>
+<font color="red">1171.         self.memo[self.readline()[:-1]] = self.stack[-1]</font>
+<font color="green">1172.     dispatch[PUT] = load_put</font>
+<font color="black">1173. </font>
+<font color="green">1174.     def load_binput(self):</font>
+<font color="red">1175.         i = ord(self.read(1))</font>
+<font color="red">1176.         self.memo[repr(i)] = self.stack[-1]</font>
+<font color="green">1177.     dispatch[BINPUT] = load_binput</font>
+<font color="black">1178. </font>
+<font color="green">1179.     def load_long_binput(self):</font>
+<font color="red">1180.         i = mloads('i' + self.read(4))</font>
+<font color="red">1181.         self.memo[repr(i)] = self.stack[-1]</font>
+<font color="green">1182.     dispatch[LONG_BINPUT] = load_long_binput</font>
+<font color="black">1183. </font>
+<font color="green">1184.     def load_append(self):</font>
+<font color="red">1185.         stack = self.stack</font>
+<font color="red">1186.         value = stack.pop()</font>
+<font color="red">1187.         list = stack[-1]</font>
+<font color="red">1188.         list.append(value)</font>
+<font color="green">1189.     dispatch[APPEND] = load_append</font>
+<font color="black">1190. </font>
+<font color="green">1191.     def load_appends(self):</font>
+<font color="red">1192.         stack = self.stack</font>
+<font color="red">1193.         mark = self.marker()</font>
+<font color="red">1194.         list = stack[mark - 1]</font>
+<font color="red">1195.         list.extend(stack[mark + 1:])</font>
+<font color="red">1196.         del stack[mark:]</font>
+<font color="green">1197.     dispatch[APPENDS] = load_appends</font>
+<font color="black">1198. </font>
+<font color="green">1199.     def load_setitem(self):</font>
+<font color="red">1200.         stack = self.stack</font>
+<font color="red">1201.         value = stack.pop()</font>
+<font color="red">1202.         key = stack.pop()</font>
+<font color="red">1203.         dict = stack[-1]</font>
+<font color="red">1204.         dict[key] = value</font>
+<font color="green">1205.     dispatch[SETITEM] = load_setitem</font>
+<font color="black">1206. </font>
+<font color="green">1207.     def load_setitems(self):</font>
+<font color="red">1208.         stack = self.stack</font>
+<font color="red">1209.         mark = self.marker()</font>
+<font color="red">1210.         dict = stack[mark - 1]</font>
+<font color="red">1211.         for i in range(mark + 1, len(stack), 2):</font>
+<font color="red">1212.             dict[stack[i]] = stack[i + 1]</font>
+<font color="black">1213. </font>
+<font color="red">1214.         del stack[mark:]</font>
+<font color="green">1215.     dispatch[SETITEMS] = load_setitems</font>
+<font color="black">1216. </font>
+<font color="green">1217.     def load_build(self):</font>
+<font color="red">1218.         stack = self.stack</font>
+<font color="red">1219.         state = stack.pop()</font>
+<font color="red">1220.         inst = stack[-1]</font>
+<font color="red">1221.         setstate = getattr(inst, &quot;__setstate__&quot;, None)</font>
+<font color="red">1222.         if setstate:</font>
+<font color="red">1223.             setstate(state)</font>
+<font color="red">1224.             return</font>
+<font color="red">1225.         slotstate = None</font>
+<font color="red">1226.         if isinstance(state, tuple) and len(state) == 2:</font>
+<font color="red">1227.             state, slotstate = state</font>
+<font color="red">1228.         if state:</font>
+<font color="red">1229.             try:</font>
+<font color="red">1230.                 d = inst.__dict__</font>
+<font color="red">1231.                 try:</font>
+<font color="red">1232.                     for k, v in state.iteritems():</font>
+<font color="red">1233.                         d[intern(k)] = v</font>
+<font color="black">1234.                 # keys in state don't have to be strings</font>
+<font color="black">1235.                 # don't blow up, but don't go out of our way</font>
+<font color="red">1236.                 except TypeError:</font>
+<font color="red">1237.                     d.update(state)</font>
+<font color="black">1238. </font>
+<font color="red">1239.             except RuntimeError:</font>
+<font color="black">1240.                 # XXX In restricted execution, the instance's __dict__</font>
+<font color="black">1241.                 # is not accessible.  Use the old way of unpickling</font>
+<font color="black">1242.                 # the instance variables.  This is a semantic</font>
+<font color="black">1243.                 # difference when unpickling in restricted</font>
+<font color="black">1244.                 # vs. unrestricted modes.</font>
+<font color="black">1245.                 # Note, however, that cPickle has never tried to do the</font>
+<font color="black">1246.                 # .update() business, and always uses</font>
+<font color="black">1247.                 #     PyObject_SetItem(inst.__dict__, key, value) in a</font>
+<font color="black">1248.                 # loop over state.items().</font>
+<font color="red">1249.                 for k, v in state.items():</font>
+<font color="red">1250.                     setattr(inst, k, v)</font>
+<font color="red">1251.         if slotstate:</font>
+<font color="red">1252.             for k, v in slotstate.items():</font>
+<font color="red">1253.                 setattr(inst, k, v)</font>
+<font color="green">1254.     dispatch[BUILD] = load_build</font>
+<font color="black">1255. </font>
+<font color="green">1256.     def load_mark(self):</font>
+<font color="red">1257.         self.append(self.mark)</font>
+<font color="green">1258.     dispatch[MARK] = load_mark</font>
+<font color="black">1259. </font>
+<font color="green">1260.     def load_stop(self):</font>
+<font color="red">1261.         value = self.stack.pop()</font>
+<font color="red">1262.         raise _Stop(value)</font>
+<font color="green">1263.     dispatch[STOP] = load_stop</font>
+<font color="black">1264. </font>
+<font color="black">1265. # Helper class for load_inst/load_obj</font>
+<font color="black">1266. </font>
+<font color="green">1267. class _EmptyClass:</font>
+<font color="green">1268.     pass</font>
+<font color="black">1269. </font>
+<font color="black">1270. # Encode/decode longs in linear time.</font>
+<font color="black">1271. </font>
+<font color="green">1272. import binascii as _binascii</font>
+<font color="black">1273. </font>
+<font color="green">1274. def encode_long(x):</font>
+<font color="black">1275.     r&quot;&quot;&quot;Encode a long to a two's complement little-endian binary string.</font>
+<font color="black">1276.     Note that 0L is a special case, returning an empty string, to save a</font>
+<font color="black">1277.     byte in the LONG1 pickling context.</font>
+<font color="black">1278. </font>
+<font color="black">1279.     &gt;&gt;&gt; encode_long(0L)</font>
+<font color="black">1280.     ''</font>
+<font color="black">1281.     &gt;&gt;&gt; encode_long(255L)</font>
+<font color="black">1282.     '\xff\x00'</font>
+<font color="black">1283.     &gt;&gt;&gt; encode_long(32767L)</font>
+<font color="black">1284.     '\xff\x7f'</font>
+<font color="black">1285.     &gt;&gt;&gt; encode_long(-256L)</font>
+<font color="black">1286.     '\x00\xff'</font>
+<font color="black">1287.     &gt;&gt;&gt; encode_long(-32768L)</font>
+<font color="black">1288.     '\x00\x80'</font>
+<font color="black">1289.     &gt;&gt;&gt; encode_long(-128L)</font>
+<font color="black">1290.     '\x80'</font>
+<font color="black">1291.     &gt;&gt;&gt; encode_long(127L)</font>
+<font color="black">1292.     '\x7f'</font>
+<font color="black">1293.     &gt;&gt;&gt;</font>
+<font color="black">1294.     &quot;&quot;&quot;</font>
+<font color="black">1295. </font>
+<font color="red">1296.     if x == 0:</font>
+<font color="red">1297.         return ''</font>
+<font color="red">1298.     if x &gt; 0:</font>
+<font color="red">1299.         ashex = hex(x)</font>
+<font color="red">1300.         assert ashex.startswith(&quot;0x&quot;)</font>
+<font color="red">1301.         njunkchars = 2 + ashex.endswith('L')</font>
+<font color="red">1302.         nibbles = len(ashex) - njunkchars</font>
+<font color="red">1303.         if nibbles &amp; 1:</font>
+<font color="black">1304.             # need an even # of nibbles for unhexlify</font>
+<font color="red">1305.             ashex = &quot;0x0&quot; + ashex[2:]</font>
+<font color="red">1306.         elif int(ashex[2], 16) &gt;= 8:</font>
+<font color="black">1307.             # &quot;looks negative&quot;, so need a byte of sign bits</font>
+<font color="red">1308.             ashex = &quot;0x00&quot; + ashex[2:]</font>
+<font color="black">1309.     else:</font>
+<font color="black">1310.         # Build the 256's-complement:  (1L &lt;&lt; nbytes) + x.  The trick is</font>
+<font color="black">1311.         # to find the number of bytes in linear time (although that should</font>
+<font color="black">1312.         # really be a constant-time task).</font>
+<font color="red">1313.         ashex = hex(-x)</font>
+<font color="red">1314.         assert ashex.startswith(&quot;0x&quot;)</font>
+<font color="red">1315.         njunkchars = 2 + ashex.endswith('L')</font>
+<font color="red">1316.         nibbles = len(ashex) - njunkchars</font>
+<font color="red">1317.         if nibbles &amp; 1:</font>
+<font color="black">1318.             # Extend to a full byte.</font>
+<font color="red">1319.             nibbles += 1</font>
+<font color="red">1320.         nbits = nibbles * 4</font>
+<font color="red">1321.         x += 1L &lt;&lt; nbits</font>
+<font color="red">1322.         assert x &gt; 0</font>
+<font color="red">1323.         ashex = hex(x)</font>
+<font color="red">1324.         njunkchars = 2 + ashex.endswith('L')</font>
+<font color="red">1325.         newnibbles = len(ashex) - njunkchars</font>
+<font color="red">1326.         if newnibbles &lt; nibbles:</font>
+<font color="red">1327.             ashex = &quot;0x&quot; + &quot;0&quot; * (nibbles - newnibbles) + ashex[2:]</font>
+<font color="red">1328.         if int(ashex[2], 16) &lt; 8:</font>
+<font color="black">1329.             # &quot;looks positive&quot;, so need a byte of sign bits</font>
+<font color="red">1330.             ashex = &quot;0xff&quot; + ashex[2:]</font>
+<font color="black">1331. </font>
+<font color="red">1332.     if ashex.endswith('L'):</font>
+<font color="red">1333.         ashex = ashex[2:-1]</font>
+<font color="black">1334.     else:</font>
+<font color="red">1335.         ashex = ashex[2:]</font>
+<font color="red">1336.     assert len(ashex) &amp; 1 == 0, (x, ashex)</font>
+<font color="red">1337.     binary = _binascii.unhexlify(ashex)</font>
+<font color="red">1338.     return binary[::-1]</font>
+<font color="black">1339. </font>
+<font color="green">1340. def decode_long(data):</font>
+<font color="black">1341.     r&quot;&quot;&quot;Decode a long from a two's complement little-endian binary string.</font>
+<font color="black">1342. </font>
+<font color="black">1343.     &gt;&gt;&gt; decode_long('')</font>
+<font color="black">1344.     0L</font>
+<font color="black">1345.     &gt;&gt;&gt; decode_long(&quot;\xff\x00&quot;)</font>
+<font color="black">1346.     255L</font>
+<font color="black">1347.     &gt;&gt;&gt; decode_long(&quot;\xff\x7f&quot;)</font>
+<font color="black">1348.     32767L</font>
+<font color="black">1349.     &gt;&gt;&gt; decode_long(&quot;\x00\xff&quot;)</font>
+<font color="black">1350.     -256L</font>
+<font color="black">1351.     &gt;&gt;&gt; decode_long(&quot;\x00\x80&quot;)</font>
+<font color="black">1352.     -32768L</font>
+<font color="black">1353.     &gt;&gt;&gt; decode_long(&quot;\x80&quot;)</font>
+<font color="black">1354.     -128L</font>
+<font color="black">1355.     &gt;&gt;&gt; decode_long(&quot;\x7f&quot;)</font>
+<font color="black">1356.     127L</font>
+<font color="black">1357.     &quot;&quot;&quot;</font>
+<font color="black">1358. </font>
+<font color="red">1359.     nbytes = len(data)</font>
+<font color="red">1360.     if nbytes == 0:</font>
+<font color="red">1361.         return 0L</font>
+<font color="red">1362.     ashex = _binascii.hexlify(data[::-1])</font>
+<font color="red">1363.     n = long(ashex, 16) # quadratic time before Python 2.3; linear now</font>
+<font color="red">1364.     if data[-1] &gt;= '\x80':</font>
+<font color="red">1365.         n -= 1L &lt;&lt; (nbytes * 8)</font>
+<font color="red">1366.     return n</font>
+<font color="black">1367. </font>
+<font color="black">1368. # Shorthands</font>
+<font color="black">1369. </font>
+<font color="green">1370. try:</font>
+<font color="green">1371.     from cStringIO import StringIO</font>
+<font color="red">1372. except ImportError:</font>
+<font color="red">1373.     from StringIO import StringIO</font>
+<font color="black">1374. </font>
+<font color="green">1375. def dump(obj, file, protocol=None):</font>
+<font color="red">1376.     Pickler(file, protocol).dump(obj)</font>
+<font color="black">1377. </font>
+<font color="green">1378. def dumps(obj, protocol=None):</font>
+<font color="red">1379.     file = StringIO()</font>
+<font color="red">1380.     Pickler(file, protocol).dump(obj)</font>
+<font color="red">1381.     return file.getvalue()</font>
+<font color="black">1382. </font>
+<font color="green">1383. def load(file):</font>
+<font color="red">1384.     return Unpickler(file).load()</font>
+<font color="black">1385. </font>
+<font color="green">1386. def loads(str):</font>
+<font color="red">1387.     file = StringIO(str)</font>
+<font color="red">1388.     return Unpickler(file).load()</font>
+<font color="black">1389. </font>
+<font color="black">1390. # Doctest</font>
+<font color="black">1391. </font>
+<font color="green">1392. def _test():</font>
+<font color="red">1393.     import doctest</font>
+<font color="red">1394.     return doctest.testmod()</font>
+<font color="black">1395. </font>
+<font color="green">1396. if __name__ == &quot;__main__&quot;:</font>
+<font color="red">1397.     _test()</font>
+</pre>
+

@@ -1,0 +1,1437 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/httplib.py</b><br>
+
+
+file stats: <b>804 lines, 441 executed: 54.9% covered</b>
+<pre>
+<font color="black">   1. r&quot;&quot;&quot;HTTP/1.1 client library</font>
+<font color="black">   2. </font>
+<font color="black">   3. &lt;intro stuff goes here&gt;</font>
+<font color="black">   4. &lt;other stuff, too&gt;</font>
+<font color="black">   5. </font>
+<font color="black">   6. HTTPConnection goes through a number of &quot;states&quot;, which define when a client</font>
+<font color="black">   7. may legally make another request or fetch the response for a particular</font>
+<font color="black">   8. request. This diagram details these state transitions:</font>
+<font color="black">   9. </font>
+<font color="black">  10.     (null)</font>
+<font color="black">  11.       |</font>
+<font color="black">  12.       | HTTPConnection()</font>
+<font color="black">  13.       v</font>
+<font color="black">  14.     Idle</font>
+<font color="black">  15.       |</font>
+<font color="black">  16.       | putrequest()</font>
+<font color="black">  17.       v</font>
+<font color="black">  18.     Request-started</font>
+<font color="black">  19.       |</font>
+<font color="black">  20.       | ( putheader() )*  endheaders()</font>
+<font color="black">  21.       v</font>
+<font color="black">  22.     Request-sent</font>
+<font color="black">  23.       |</font>
+<font color="black">  24.       | response = getresponse()</font>
+<font color="black">  25.       v</font>
+<font color="black">  26.     Unread-response   [Response-headers-read]</font>
+<font color="black">  27.       |\____________________</font>
+<font color="black">  28.       |                     |</font>
+<font color="black">  29.       | response.read()     | putrequest()</font>
+<font color="black">  30.       v                     v</font>
+<font color="black">  31.     Idle                  Req-started-unread-response</font>
+<font color="black">  32.                      ______/|</font>
+<font color="black">  33.                    /        |</font>
+<font color="black">  34.    response.read() |        | ( putheader() )*  endheaders()</font>
+<font color="black">  35.                    v        v</font>
+<font color="black">  36.        Request-started    Req-sent-unread-response</font>
+<font color="black">  37.                             |</font>
+<font color="black">  38.                             | response.read()</font>
+<font color="black">  39.                             v</font>
+<font color="black">  40.                           Request-sent</font>
+<font color="black">  41. </font>
+<font color="black">  42. This diagram presents the following rules:</font>
+<font color="black">  43.   -- a second request may not be started until {response-headers-read}</font>
+<font color="black">  44.   -- a response [object] cannot be retrieved until {request-sent}</font>
+<font color="black">  45.   -- there is no differentiation between an unread response body and a</font>
+<font color="black">  46.      partially read response body</font>
+<font color="black">  47. </font>
+<font color="black">  48. Note: this enforcement is applied by the HTTPConnection class. The</font>
+<font color="black">  49.       HTTPResponse class does not enforce this state machine, which</font>
+<font color="black">  50.       implies sophisticated clients may accelerate the request/response</font>
+<font color="black">  51.       pipeline. Caution should be taken, though: accelerating the states</font>
+<font color="black">  52.       beyond the above pattern may imply knowledge of the server's</font>
+<font color="black">  53.       connection-close behavior for certain requests. For example, it</font>
+<font color="black">  54.       is impossible to tell whether the server will close the connection</font>
+<font color="black">  55.       UNTIL the response headers have been read; this means that further</font>
+<font color="black">  56.       requests cannot be placed into the pipeline until it is known that</font>
+<font color="black">  57.       the server will NOT be closing the connection.</font>
+<font color="black">  58. </font>
+<font color="black">  59. Logical State                  __state            __response</font>
+<font color="black">  60. -------------                  -------            ----------</font>
+<font color="black">  61. Idle                           _CS_IDLE           None</font>
+<font color="black">  62. Request-started                _CS_REQ_STARTED    None</font>
+<font color="black">  63. Request-sent                   _CS_REQ_SENT       None</font>
+<font color="black">  64. Unread-response                _CS_IDLE           &lt;response_class&gt;</font>
+<font color="black">  65. Req-started-unread-response    _CS_REQ_STARTED    &lt;response_class&gt;</font>
+<font color="black">  66. Req-sent-unread-response       _CS_REQ_SENT       &lt;response_class&gt;</font>
+<font color="green">  67. &quot;&quot;&quot;</font>
+<font color="black">  68. </font>
+<font color="green">  69. from array import array</font>
+<font color="green">  70. import os</font>
+<font color="green">  71. import re</font>
+<font color="green">  72. import socket</font>
+<font color="green">  73. from sys import py3kwarning</font>
+<font color="green">  74. from urlparse import urlsplit</font>
+<font color="green">  75. import warnings</font>
+<font color="green">  76. with warnings.catch_warnings():</font>
+<font color="green">  77.     if py3kwarning:</font>
+<font color="red">  78.         warnings.filterwarnings(&quot;ignore&quot;, &quot;.*mimetools has been removed&quot;,</font>
+<font color="red">  79.                                 DeprecationWarning)</font>
+<font color="green">  80.     import mimetools</font>
+<font color="black">  81. </font>
+<font color="green">  82. try:</font>
+<font color="green">  83.     from cStringIO import StringIO</font>
+<font color="red">  84. except ImportError:</font>
+<font color="red">  85.     from StringIO import StringIO</font>
+<font color="black">  86. </font>
+<font color="green">  87. __all__ = [&quot;HTTP&quot;, &quot;HTTPResponse&quot;, &quot;HTTPConnection&quot;,</font>
+<font color="green">  88.            &quot;HTTPException&quot;, &quot;NotConnected&quot;, &quot;UnknownProtocol&quot;,</font>
+<font color="green">  89.            &quot;UnknownTransferEncoding&quot;, &quot;UnimplementedFileMode&quot;,</font>
+<font color="green">  90.            &quot;IncompleteRead&quot;, &quot;InvalidURL&quot;, &quot;ImproperConnectionState&quot;,</font>
+<font color="green">  91.            &quot;CannotSendRequest&quot;, &quot;CannotSendHeader&quot;, &quot;ResponseNotReady&quot;,</font>
+<font color="green">  92.            &quot;BadStatusLine&quot;, &quot;error&quot;, &quot;responses&quot;]</font>
+<font color="black">  93. </font>
+<font color="green">  94. HTTP_PORT = 80</font>
+<font color="green">  95. HTTPS_PORT = 443</font>
+<font color="black">  96. </font>
+<font color="green">  97. _UNKNOWN = 'UNKNOWN'</font>
+<font color="black">  98. </font>
+<font color="black">  99. # connection states</font>
+<font color="green"> 100. _CS_IDLE = 'Idle'</font>
+<font color="green"> 101. _CS_REQ_STARTED = 'Request-started'</font>
+<font color="green"> 102. _CS_REQ_SENT = 'Request-sent'</font>
+<font color="black"> 103. </font>
+<font color="black"> 104. # status codes</font>
+<font color="black"> 105. # informational</font>
+<font color="green"> 106. CONTINUE = 100</font>
+<font color="green"> 107. SWITCHING_PROTOCOLS = 101</font>
+<font color="green"> 108. PROCESSING = 102</font>
+<font color="black"> 109. </font>
+<font color="black"> 110. # successful</font>
+<font color="green"> 111. OK = 200</font>
+<font color="green"> 112. CREATED = 201</font>
+<font color="green"> 113. ACCEPTED = 202</font>
+<font color="green"> 114. NON_AUTHORITATIVE_INFORMATION = 203</font>
+<font color="green"> 115. NO_CONTENT = 204</font>
+<font color="green"> 116. RESET_CONTENT = 205</font>
+<font color="green"> 117. PARTIAL_CONTENT = 206</font>
+<font color="green"> 118. MULTI_STATUS = 207</font>
+<font color="green"> 119. IM_USED = 226</font>
+<font color="black"> 120. </font>
+<font color="black"> 121. # redirection</font>
+<font color="green"> 122. MULTIPLE_CHOICES = 300</font>
+<font color="green"> 123. MOVED_PERMANENTLY = 301</font>
+<font color="green"> 124. FOUND = 302</font>
+<font color="green"> 125. SEE_OTHER = 303</font>
+<font color="green"> 126. NOT_MODIFIED = 304</font>
+<font color="green"> 127. USE_PROXY = 305</font>
+<font color="green"> 128. TEMPORARY_REDIRECT = 307</font>
+<font color="black"> 129. </font>
+<font color="black"> 130. # client error</font>
+<font color="green"> 131. BAD_REQUEST = 400</font>
+<font color="green"> 132. UNAUTHORIZED = 401</font>
+<font color="green"> 133. PAYMENT_REQUIRED = 402</font>
+<font color="green"> 134. FORBIDDEN = 403</font>
+<font color="green"> 135. NOT_FOUND = 404</font>
+<font color="green"> 136. METHOD_NOT_ALLOWED = 405</font>
+<font color="green"> 137. NOT_ACCEPTABLE = 406</font>
+<font color="green"> 138. PROXY_AUTHENTICATION_REQUIRED = 407</font>
+<font color="green"> 139. REQUEST_TIMEOUT = 408</font>
+<font color="green"> 140. CONFLICT = 409</font>
+<font color="green"> 141. GONE = 410</font>
+<font color="green"> 142. LENGTH_REQUIRED = 411</font>
+<font color="green"> 143. PRECONDITION_FAILED = 412</font>
+<font color="green"> 144. REQUEST_ENTITY_TOO_LARGE = 413</font>
+<font color="green"> 145. REQUEST_URI_TOO_LONG = 414</font>
+<font color="green"> 146. UNSUPPORTED_MEDIA_TYPE = 415</font>
+<font color="green"> 147. REQUESTED_RANGE_NOT_SATISFIABLE = 416</font>
+<font color="green"> 148. EXPECTATION_FAILED = 417</font>
+<font color="green"> 149. UNPROCESSABLE_ENTITY = 422</font>
+<font color="green"> 150. LOCKED = 423</font>
+<font color="green"> 151. FAILED_DEPENDENCY = 424</font>
+<font color="green"> 152. UPGRADE_REQUIRED = 426</font>
+<font color="black"> 153. </font>
+<font color="black"> 154. # server error</font>
+<font color="green"> 155. INTERNAL_SERVER_ERROR = 500</font>
+<font color="green"> 156. NOT_IMPLEMENTED = 501</font>
+<font color="green"> 157. BAD_GATEWAY = 502</font>
+<font color="green"> 158. SERVICE_UNAVAILABLE = 503</font>
+<font color="green"> 159. GATEWAY_TIMEOUT = 504</font>
+<font color="green"> 160. HTTP_VERSION_NOT_SUPPORTED = 505</font>
+<font color="green"> 161. INSUFFICIENT_STORAGE = 507</font>
+<font color="green"> 162. NOT_EXTENDED = 510</font>
+<font color="black"> 163. </font>
+<font color="black"> 164. # Mapping status codes to official W3C names</font>
+<font color="green"> 165. responses = {</font>
+<font color="green"> 166.     100: 'Continue',</font>
+<font color="green"> 167.     101: 'Switching Protocols',</font>
+<font color="black"> 168. </font>
+<font color="green"> 169.     200: 'OK',</font>
+<font color="green"> 170.     201: 'Created',</font>
+<font color="green"> 171.     202: 'Accepted',</font>
+<font color="green"> 172.     203: 'Non-Authoritative Information',</font>
+<font color="green"> 173.     204: 'No Content',</font>
+<font color="green"> 174.     205: 'Reset Content',</font>
+<font color="green"> 175.     206: 'Partial Content',</font>
+<font color="black"> 176. </font>
+<font color="green"> 177.     300: 'Multiple Choices',</font>
+<font color="green"> 178.     301: 'Moved Permanently',</font>
+<font color="green"> 179.     302: 'Found',</font>
+<font color="green"> 180.     303: 'See Other',</font>
+<font color="green"> 181.     304: 'Not Modified',</font>
+<font color="green"> 182.     305: 'Use Proxy',</font>
+<font color="green"> 183.     306: '(Unused)',</font>
+<font color="green"> 184.     307: 'Temporary Redirect',</font>
+<font color="black"> 185. </font>
+<font color="green"> 186.     400: 'Bad Request',</font>
+<font color="green"> 187.     401: 'Unauthorized',</font>
+<font color="green"> 188.     402: 'Payment Required',</font>
+<font color="green"> 189.     403: 'Forbidden',</font>
+<font color="green"> 190.     404: 'Not Found',</font>
+<font color="green"> 191.     405: 'Method Not Allowed',</font>
+<font color="green"> 192.     406: 'Not Acceptable',</font>
+<font color="green"> 193.     407: 'Proxy Authentication Required',</font>
+<font color="green"> 194.     408: 'Request Timeout',</font>
+<font color="green"> 195.     409: 'Conflict',</font>
+<font color="green"> 196.     410: 'Gone',</font>
+<font color="green"> 197.     411: 'Length Required',</font>
+<font color="green"> 198.     412: 'Precondition Failed',</font>
+<font color="green"> 199.     413: 'Request Entity Too Large',</font>
+<font color="green"> 200.     414: 'Request-URI Too Long',</font>
+<font color="green"> 201.     415: 'Unsupported Media Type',</font>
+<font color="green"> 202.     416: 'Requested Range Not Satisfiable',</font>
+<font color="green"> 203.     417: 'Expectation Failed',</font>
+<font color="black"> 204. </font>
+<font color="green"> 205.     500: 'Internal Server Error',</font>
+<font color="green"> 206.     501: 'Not Implemented',</font>
+<font color="green"> 207.     502: 'Bad Gateway',</font>
+<font color="green"> 208.     503: 'Service Unavailable',</font>
+<font color="green"> 209.     504: 'Gateway Timeout',</font>
+<font color="green"> 210.     505: 'HTTP Version Not Supported',</font>
+<font color="black"> 211. }</font>
+<font color="black"> 212. </font>
+<font color="black"> 213. # maximal amount of data to read at one time in _safe_read</font>
+<font color="green"> 214. MAXAMOUNT = 1048576</font>
+<font color="black"> 215. </font>
+<font color="black"> 216. # maximal line length when calling readline().</font>
+<font color="green"> 217. _MAXLINE = 65536</font>
+<font color="black"> 218. </font>
+<font color="black"> 219. # maximum amount of headers accepted</font>
+<font color="green"> 220. _MAXHEADERS = 100</font>
+<font color="black"> 221. </font>
+<font color="black"> 222. # Header name/value ABNF (http://tools.ietf.org/html/rfc7230#section-3.2)</font>
+<font color="black"> 223. #</font>
+<font color="black"> 224. # VCHAR          = %x21-7E</font>
+<font color="black"> 225. # obs-text       = %x80-FF</font>
+<font color="black"> 226. # header-field   = field-name &quot;:&quot; OWS field-value OWS</font>
+<font color="black"> 227. # field-name     = token</font>
+<font color="black"> 228. # field-value    = *( field-content / obs-fold )</font>
+<font color="black"> 229. # field-content  = field-vchar [ 1*( SP / HTAB ) field-vchar ]</font>
+<font color="black"> 230. # field-vchar    = VCHAR / obs-text</font>
+<font color="black"> 231. #</font>
+<font color="black"> 232. # obs-fold       = CRLF 1*( SP / HTAB )</font>
+<font color="black"> 233. #                ; obsolete line folding</font>
+<font color="black"> 234. #                ; see Section 3.2.4</font>
+<font color="black"> 235. </font>
+<font color="black"> 236. # token          = 1*tchar</font>
+<font color="black"> 237. #</font>
+<font color="black"> 238. # tchar          = &quot;!&quot; / &quot;#&quot; / &quot;$&quot; / &quot;%&quot; / &quot;&amp;&quot; / &quot;'&quot; / &quot;*&quot;</font>
+<font color="black"> 239. #                / &quot;+&quot; / &quot;-&quot; / &quot;.&quot; / &quot;^&quot; / &quot;_&quot; / &quot;`&quot; / &quot;|&quot; / &quot;~&quot;</font>
+<font color="black"> 240. #                / DIGIT / ALPHA</font>
+<font color="black"> 241. #                ; any VCHAR, except delimiters</font>
+<font color="black"> 242. #</font>
+<font color="black"> 243. # VCHAR defined in http://tools.ietf.org/html/rfc5234#appendix-B.1</font>
+<font color="black"> 244. </font>
+<font color="black"> 245. # the patterns for both name and value are more lenient than RFC</font>
+<font color="black"> 246. # definitions to allow for backwards compatibility</font>
+<font color="green"> 247. _is_legal_header_name = re.compile(r'\A[^:\s][^:\r\n]*\Z').match</font>
+<font color="green"> 248. _is_illegal_header_value = re.compile(r'\n(?![ \t])|\r(?![ \t\n])').search</font>
+<font color="black"> 249. </font>
+<font color="black"> 250. # We always set the Content-Length header for these methods because some</font>
+<font color="black"> 251. # servers will otherwise respond with a 411</font>
+<font color="green"> 252. _METHODS_EXPECTING_BODY = {'PATCH', 'POST', 'PUT'}</font>
+<font color="black"> 253. </font>
+<font color="black"> 254. </font>
+<font color="green"> 255. class HTTPMessage(mimetools.Message):</font>
+<font color="black"> 256. </font>
+<font color="green"> 257.     def addheader(self, key, value):</font>
+<font color="black"> 258.         &quot;&quot;&quot;Add header for field key handling repeats.&quot;&quot;&quot;</font>
+<font color="green"> 259.         prev = self.dict.get(key)</font>
+<font color="green"> 260.         if prev is None:</font>
+<font color="green"> 261.             self.dict[key] = value</font>
+<font color="black"> 262.         else:</font>
+<font color="red"> 263.             combined = &quot;, &quot;.join((prev, value))</font>
+<font color="red"> 264.             self.dict[key] = combined</font>
+<font color="black"> 265. </font>
+<font color="green"> 266.     def addcontinue(self, key, more):</font>
+<font color="black"> 267.         &quot;&quot;&quot;Add more field data from a continuation line.&quot;&quot;&quot;</font>
+<font color="red"> 268.         prev = self.dict[key]</font>
+<font color="red"> 269.         self.dict[key] = prev + &quot;\n &quot; + more</font>
+<font color="black"> 270. </font>
+<font color="green"> 271.     def readheaders(self):</font>
+<font color="black"> 272.         &quot;&quot;&quot;Read header lines.</font>
+<font color="black"> 273. </font>
+<font color="black"> 274.         Read header lines up to the entirely blank line that terminates them.</font>
+<font color="black"> 275.         The (normally blank) line that ends the headers is skipped, but not</font>
+<font color="black"> 276.         included in the returned list.  If an invalid line is found in the</font>
+<font color="black"> 277.         header section, it is skipped, and further lines are processed.</font>
+<font color="black"> 278. </font>
+<font color="black"> 279.         The variable self.status is set to the empty string if all went well,</font>
+<font color="black"> 280.         otherwise it is an error message.  The variable self.headers is a</font>
+<font color="black"> 281.         completely uninterpreted list of lines contained in the header (so</font>
+<font color="black"> 282.         printing them will reproduce the header exactly as it appears in the</font>
+<font color="black"> 283.         file).</font>
+<font color="black"> 284. </font>
+<font color="black"> 285.         If multiple header fields with the same name occur, they are combined</font>
+<font color="black"> 286.         according to the rules in RFC 2616 sec 4.2:</font>
+<font color="black"> 287. </font>
+<font color="black"> 288.         Appending each subsequent field-value to the first, each separated</font>
+<font color="black"> 289.         by a comma. The order in which header fields with the same field-name</font>
+<font color="black"> 290.         are received is significant to the interpretation of the combined</font>
+<font color="black"> 291.         field value.</font>
+<font color="black"> 292.         &quot;&quot;&quot;</font>
+<font color="black"> 293.         # XXX The implementation overrides the readheaders() method of</font>
+<font color="black"> 294.         # rfc822.Message.  The base class design isn't amenable to</font>
+<font color="black"> 295.         # customized behavior here so the method here is a copy of the</font>
+<font color="black"> 296.         # base class code with a few small changes.</font>
+<font color="black"> 297. </font>
+<font color="green"> 298.         self.dict = {}</font>
+<font color="green"> 299.         self.unixfrom = ''</font>
+<font color="green"> 300.         self.headers = hlist = []</font>
+<font color="green"> 301.         self.status = ''</font>
+<font color="green"> 302.         headerseen = &quot;&quot;</font>
+<font color="green"> 303.         firstline = 1</font>
+<font color="green"> 304.         tell = None</font>
+<font color="green"> 305.         if not hasattr(self.fp, 'unread') and self.seekable:</font>
+<font color="red"> 306.             tell = self.fp.tell</font>
+<font color="green"> 307.         while True:</font>
+<font color="green"> 308.             if len(hlist) &gt; _MAXHEADERS:</font>
+<font color="red"> 309.                 raise HTTPException(&quot;got more than %d headers&quot; % _MAXHEADERS)</font>
+<font color="green"> 310.             if tell:</font>
+<font color="red"> 311.                 try:</font>
+<font color="red"> 312.                     tell()</font>
+<font color="red"> 313.                 except IOError:</font>
+<font color="red"> 314.                     tell = None</font>
+<font color="red"> 315.                     self.seekable = 0</font>
+<font color="green"> 316.             line = self.fp.readline(_MAXLINE + 1)</font>
+<font color="green"> 317.             if len(line) &gt; _MAXLINE:</font>
+<font color="red"> 318.                 raise LineTooLong(&quot;header line&quot;)</font>
+<font color="green"> 319.             if not line:</font>
+<font color="red"> 320.                 self.status = 'EOF in headers'</font>
+<font color="red"> 321.                 break</font>
+<font color="black"> 322.             # Skip unix From name time lines</font>
+<font color="green"> 323.             if firstline and line.startswith('From '):</font>
+<font color="red"> 324.                 self.unixfrom = self.unixfrom + line</font>
+<font color="red"> 325.                 continue</font>
+<font color="green"> 326.             firstline = 0</font>
+<font color="green"> 327.             if headerseen and line[0] in ' \t':</font>
+<font color="black"> 328.                 # XXX Not sure if continuation lines are handled properly</font>
+<font color="black"> 329.                 # for http and/or for repeating headers</font>
+<font color="black"> 330.                 # It's a continuation line.</font>
+<font color="red"> 331.                 hlist.append(line)</font>
+<font color="red"> 332.                 self.addcontinue(headerseen, line.strip())</font>
+<font color="red"> 333.                 continue</font>
+<font color="green"> 334.             elif self.iscomment(line):</font>
+<font color="black"> 335.                 # It's a comment.  Ignore it.</font>
+<font color="red"> 336.                 continue</font>
+<font color="green"> 337.             elif self.islast(line):</font>
+<font color="black"> 338.                 # Note! No pushback here!  The delimiter line gets eaten.</font>
+<font color="green"> 339.                 break</font>
+<font color="green"> 340.             headerseen = self.isheader(line)</font>
+<font color="green"> 341.             if headerseen:</font>
+<font color="black"> 342.                 # It's a legal header line, save it.</font>
+<font color="green"> 343.                 hlist.append(line)</font>
+<font color="green"> 344.                 self.addheader(headerseen, line[len(headerseen)+1:].strip())</font>
+<font color="red"> 345.             elif headerseen is not None:</font>
+<font color="black"> 346.                 # An empty header name. These aren't allowed in HTTP, but it's</font>
+<font color="black"> 347.                 # probably a benign mistake. Don't add the header, just keep</font>
+<font color="black"> 348.                 # going.</font>
+<font color="red"> 349.                 pass</font>
+<font color="black"> 350.             else:</font>
+<font color="black"> 351.                 # It's not a header line; skip it and try the next line.</font>
+<font color="red"> 352.                 self.status = 'Non-header line where header expected'</font>
+<font color="black"> 353. </font>
+<font color="green"> 354. class HTTPResponse:</font>
+<font color="black"> 355. </font>
+<font color="black"> 356.     # strict: If true, raise BadStatusLine if the status line can't be</font>
+<font color="black"> 357.     # parsed as a valid HTTP/1.0 or 1.1 status line.  By default it is</font>
+<font color="black"> 358.     # false because it prevents clients from talking to HTTP/0.9</font>
+<font color="black"> 359.     # servers.  Note that a response with a sufficiently corrupted</font>
+<font color="black"> 360.     # status line will look like an HTTP/0.9 response.</font>
+<font color="black"> 361. </font>
+<font color="black"> 362.     # See RFC 2616 sec 19.6 and RFC 1945 sec 6 for details.</font>
+<font color="black"> 363. </font>
+<font color="green"> 364.     def __init__(self, sock, debuglevel=0, strict=0, method=None, buffering=False):</font>
+<font color="green"> 365.         if buffering:</font>
+<font color="black"> 366.             # The caller won't be using any sock.recv() calls, so buffering</font>
+<font color="black"> 367.             # is fine and recommended for performance.</font>
+<font color="green"> 368.             self.fp = sock.makefile('rb')</font>
+<font color="black"> 369.         else:</font>
+<font color="black"> 370.             # The buffer size is specified as zero, because the headers of</font>
+<font color="black"> 371.             # the response are read with readline().  If the reads were</font>
+<font color="black"> 372.             # buffered the readline() calls could consume some of the</font>
+<font color="black"> 373.             # response, which make be read via a recv() on the underlying</font>
+<font color="black"> 374.             # socket.</font>
+<font color="red"> 375.             self.fp = sock.makefile('rb', 0)</font>
+<font color="green"> 376.         self.debuglevel = debuglevel</font>
+<font color="green"> 377.         self.strict = strict</font>
+<font color="green"> 378.         self._method = method</font>
+<font color="black"> 379. </font>
+<font color="green"> 380.         self.msg = None</font>
+<font color="black"> 381. </font>
+<font color="black"> 382.         # from the Status-Line of the response</font>
+<font color="green"> 383.         self.version = _UNKNOWN # HTTP-Version</font>
+<font color="green"> 384.         self.status = _UNKNOWN  # Status-Code</font>
+<font color="green"> 385.         self.reason = _UNKNOWN  # Reason-Phrase</font>
+<font color="black"> 386. </font>
+<font color="green"> 387.         self.chunked = _UNKNOWN         # is &quot;chunked&quot; being used?</font>
+<font color="green"> 388.         self.chunk_left = _UNKNOWN      # bytes left to read in current chunk</font>
+<font color="green"> 389.         self.length = _UNKNOWN          # number of bytes left in response</font>
+<font color="green"> 390.         self.will_close = _UNKNOWN      # conn will close at end of response</font>
+<font color="black"> 391. </font>
+<font color="green"> 392.     def _read_status(self):</font>
+<font color="black"> 393.         # Initialize with Simple-Response defaults</font>
+<font color="green"> 394.         line = self.fp.readline(_MAXLINE + 1)</font>
+<font color="green"> 395.         if len(line) &gt; _MAXLINE:</font>
+<font color="red"> 396.             raise LineTooLong(&quot;header line&quot;)</font>
+<font color="green"> 397.         if self.debuglevel &gt; 0:</font>
+<font color="red"> 398.             print &quot;reply:&quot;, repr(line)</font>
+<font color="green"> 399.         if not line:</font>
+<font color="black"> 400.             # Presumably, the server closed the connection before</font>
+<font color="black"> 401.             # sending a valid response.</font>
+<font color="red"> 402.             raise BadStatusLine(line)</font>
+<font color="green"> 403.         try:</font>
+<font color="green"> 404.             [version, status, reason] = line.split(None, 2)</font>
+<font color="red"> 405.         except ValueError:</font>
+<font color="red"> 406.             try:</font>
+<font color="red"> 407.                 [version, status] = line.split(None, 1)</font>
+<font color="red"> 408.                 reason = &quot;&quot;</font>
+<font color="red"> 409.             except ValueError:</font>
+<font color="black"> 410.                 # empty version will cause next test to fail and status</font>
+<font color="black"> 411.                 # will be treated as 0.9 response.</font>
+<font color="red"> 412.                 version = &quot;&quot;</font>
+<font color="green"> 413.         if not version.startswith('HTTP/'):</font>
+<font color="red"> 414.             if self.strict:</font>
+<font color="red"> 415.                 self.close()</font>
+<font color="red"> 416.                 raise BadStatusLine(line)</font>
+<font color="black"> 417.             else:</font>
+<font color="black"> 418.                 # assume it's a Simple-Response from an 0.9 server</font>
+<font color="red"> 419.                 self.fp = LineAndFileWrapper(line, self.fp)</font>
+<font color="red"> 420.                 return &quot;HTTP/0.9&quot;, 200, &quot;&quot;</font>
+<font color="black"> 421. </font>
+<font color="black"> 422.         # The status code is a three-digit number</font>
+<font color="green"> 423.         try:</font>
+<font color="green"> 424.             status = int(status)</font>
+<font color="green"> 425.             if status &lt; 100 or status &gt; 999:</font>
+<font color="red"> 426.                 raise BadStatusLine(line)</font>
+<font color="red"> 427.         except ValueError:</font>
+<font color="red"> 428.             raise BadStatusLine(line)</font>
+<font color="green"> 429.         return version, status, reason</font>
+<font color="black"> 430. </font>
+<font color="green"> 431.     def begin(self):</font>
+<font color="green"> 432.         if self.msg is not None:</font>
+<font color="black"> 433.             # we've already started reading the response</font>
+<font color="red"> 434.             return</font>
+<font color="black"> 435. </font>
+<font color="black"> 436.         # read until we get a non-100 response</font>
+<font color="green"> 437.         while True:</font>
+<font color="green"> 438.             version, status, reason = self._read_status()</font>
+<font color="green"> 439.             if status != CONTINUE:</font>
+<font color="green"> 440.                 break</font>
+<font color="black"> 441.             # skip the header from the 100 response</font>
+<font color="red"> 442.             while True:</font>
+<font color="red"> 443.                 skip = self.fp.readline(_MAXLINE + 1)</font>
+<font color="red"> 444.                 if len(skip) &gt; _MAXLINE:</font>
+<font color="red"> 445.                     raise LineTooLong(&quot;header line&quot;)</font>
+<font color="red"> 446.                 skip = skip.strip()</font>
+<font color="red"> 447.                 if not skip:</font>
+<font color="red"> 448.                     break</font>
+<font color="red"> 449.                 if self.debuglevel &gt; 0:</font>
+<font color="red"> 450.                     print &quot;header:&quot;, skip</font>
+<font color="black"> 451. </font>
+<font color="green"> 452.         self.status = status</font>
+<font color="green"> 453.         self.reason = reason.strip()</font>
+<font color="green"> 454.         if version == 'HTTP/1.0':</font>
+<font color="red"> 455.             self.version = 10</font>
+<font color="green"> 456.         elif version.startswith('HTTP/1.'):</font>
+<font color="green"> 457.             self.version = 11   # use HTTP/1.1 code for HTTP/1.x where x&gt;=1</font>
+<font color="red"> 458.         elif version == 'HTTP/0.9':</font>
+<font color="red"> 459.             self.version = 9</font>
+<font color="black"> 460.         else:</font>
+<font color="red"> 461.             raise UnknownProtocol(version)</font>
+<font color="black"> 462. </font>
+<font color="green"> 463.         if self.version == 9:</font>
+<font color="red"> 464.             self.length = None</font>
+<font color="red"> 465.             self.chunked = 0</font>
+<font color="red"> 466.             self.will_close = 1</font>
+<font color="red"> 467.             self.msg = HTTPMessage(StringIO())</font>
+<font color="red"> 468.             return</font>
+<font color="black"> 469. </font>
+<font color="green"> 470.         self.msg = HTTPMessage(self.fp, 0)</font>
+<font color="green"> 471.         if self.debuglevel &gt; 0:</font>
+<font color="red"> 472.             for hdr in self.msg.headers:</font>
+<font color="red"> 473.                 print &quot;header:&quot;, hdr,</font>
+<font color="black"> 474. </font>
+<font color="black"> 475.         # don't let the msg keep an fp</font>
+<font color="green"> 476.         self.msg.fp = None</font>
+<font color="black"> 477. </font>
+<font color="black"> 478.         # are we using the chunked-style of transfer encoding?</font>
+<font color="green"> 479.         tr_enc = self.msg.getheader('transfer-encoding')</font>
+<font color="green"> 480.         if tr_enc and tr_enc.lower() == &quot;chunked&quot;:</font>
+<font color="green"> 481.             self.chunked = 1</font>
+<font color="green"> 482.             self.chunk_left = None</font>
+<font color="black"> 483.         else:</font>
+<font color="green"> 484.             self.chunked = 0</font>
+<font color="black"> 485. </font>
+<font color="black"> 486.         # will the connection close at the end of the response?</font>
+<font color="green"> 487.         self.will_close = self._check_close()</font>
+<font color="black"> 488. </font>
+<font color="black"> 489.         # do we have a Content-Length?</font>
+<font color="black"> 490.         # NOTE: RFC 2616, S4.4, #3 says we ignore this if tr_enc is &quot;chunked&quot;</font>
+<font color="green"> 491.         length = self.msg.getheader('content-length')</font>
+<font color="green"> 492.         if length and not self.chunked:</font>
+<font color="green"> 493.             try:</font>
+<font color="green"> 494.                 self.length = int(length)</font>
+<font color="red"> 495.             except ValueError:</font>
+<font color="red"> 496.                 self.length = None</font>
+<font color="black"> 497.             else:</font>
+<font color="green"> 498.                 if self.length &lt; 0:  # ignore nonsensical negative lengths</font>
+<font color="red"> 499.                     self.length = None</font>
+<font color="black"> 500.         else:</font>
+<font color="green"> 501.             self.length = None</font>
+<font color="black"> 502. </font>
+<font color="black"> 503.         # does the body have a fixed length? (of zero)</font>
+<font color="green"> 504.         if (status == NO_CONTENT or status == NOT_MODIFIED or</font>
+<font color="green"> 505.             100 &lt;= status &lt; 200 or      # 1xx codes</font>
+<font color="green"> 506.             self._method == 'HEAD'):</font>
+<font color="red"> 507.             self.length = 0</font>
+<font color="black"> 508. </font>
+<font color="black"> 509.         # if the connection remains open, and we aren't using chunked, and</font>
+<font color="black"> 510.         # a content-length was not provided, then assume that the connection</font>
+<font color="black"> 511.         # WILL close.</font>
+<font color="green"> 512.         if not self.will_close and \</font>
+<font color="green"> 513.            not self.chunked and \</font>
+<font color="green"> 514.            self.length is None:</font>
+<font color="red"> 515.             self.will_close = 1</font>
+<font color="black"> 516. </font>
+<font color="green"> 517.     def _check_close(self):</font>
+<font color="green"> 518.         conn = self.msg.getheader('connection')</font>
+<font color="green"> 519.         if self.version == 11:</font>
+<font color="black"> 520.             # An HTTP/1.1 proxy is assumed to stay open unless</font>
+<font color="black"> 521.             # explicitly closed.</font>
+<font color="green"> 522.             conn = self.msg.getheader('connection')</font>
+<font color="green"> 523.             if conn and &quot;close&quot; in conn.lower():</font>
+<font color="red"> 524.                 return True</font>
+<font color="green"> 525.             return False</font>
+<font color="black"> 526. </font>
+<font color="black"> 527.         # Some HTTP/1.0 implementations have support for persistent</font>
+<font color="black"> 528.         # connections, using rules different than HTTP/1.1.</font>
+<font color="black"> 529. </font>
+<font color="black"> 530.         # For older HTTP, Keep-Alive indicates persistent connection.</font>
+<font color="red"> 531.         if self.msg.getheader('keep-alive'):</font>
+<font color="red"> 532.             return False</font>
+<font color="black"> 533. </font>
+<font color="black"> 534.         # At least Akamai returns a &quot;Connection: Keep-Alive&quot; header,</font>
+<font color="black"> 535.         # which was supposed to be sent by the client.</font>
+<font color="red"> 536.         if conn and &quot;keep-alive&quot; in conn.lower():</font>
+<font color="red"> 537.             return False</font>
+<font color="black"> 538. </font>
+<font color="black"> 539.         # Proxy-Connection is a netscape hack.</font>
+<font color="red"> 540.         pconn = self.msg.getheader('proxy-connection')</font>
+<font color="red"> 541.         if pconn and &quot;keep-alive&quot; in pconn.lower():</font>
+<font color="red"> 542.             return False</font>
+<font color="black"> 543. </font>
+<font color="black"> 544.         # otherwise, assume it will close</font>
+<font color="red"> 545.         return True</font>
+<font color="black"> 546. </font>
+<font color="green"> 547.     def close(self):</font>
+<font color="green"> 548.         fp = self.fp</font>
+<font color="green"> 549.         if fp:</font>
+<font color="green"> 550.             self.fp = None</font>
+<font color="green"> 551.             fp.close()</font>
+<font color="black"> 552. </font>
+<font color="green"> 553.     def isclosed(self):</font>
+<font color="black"> 554.         # NOTE: it is possible that we will not ever call self.close(). This</font>
+<font color="black"> 555.         #       case occurs when will_close is TRUE, length is None, and we</font>
+<font color="black"> 556.         #       read up to the last byte, but NOT past it.</font>
+<font color="black"> 557.         #</font>
+<font color="black"> 558.         # IMPLIES: if will_close is FALSE, then self.close() will ALWAYS be</font>
+<font color="black"> 559.         #          called, meaning self.isclosed() is meaningful.</font>
+<font color="green"> 560.         return self.fp is None</font>
+<font color="black"> 561. </font>
+<font color="black"> 562.     # XXX It would be nice to have readline and __iter__ for this, too.</font>
+<font color="black"> 563. </font>
+<font color="green"> 564.     def read(self, amt=None):</font>
+<font color="green"> 565.         if self.fp is None:</font>
+<font color="red"> 566.             return ''</font>
+<font color="black"> 567. </font>
+<font color="green"> 568.         if self._method == 'HEAD':</font>
+<font color="red"> 569.             self.close()</font>
+<font color="red"> 570.             return ''</font>
+<font color="black"> 571. </font>
+<font color="green"> 572.         if self.chunked:</font>
+<font color="red"> 573.             return self._read_chunked(amt)</font>
+<font color="black"> 574. </font>
+<font color="green"> 575.         if amt is None:</font>
+<font color="black"> 576.             # unbounded read</font>
+<font color="red"> 577.             if self.length is None:</font>
+<font color="red"> 578.                 s = self.fp.read()</font>
+<font color="black"> 579.             else:</font>
+<font color="red"> 580.                 try:</font>
+<font color="red"> 581.                     s = self._safe_read(self.length)</font>
+<font color="red"> 582.                 except IncompleteRead:</font>
+<font color="red"> 583.                     self.close()</font>
+<font color="red"> 584.                     raise</font>
+<font color="red"> 585.                 self.length = 0</font>
+<font color="red"> 586.             self.close()        # we read everything</font>
+<font color="red"> 587.             return s</font>
+<font color="black"> 588. </font>
+<font color="green"> 589.         if self.length is not None:</font>
+<font color="green"> 590.             if amt &gt; self.length:</font>
+<font color="black"> 591.                 # clip the read to the &quot;end of response&quot;</font>
+<font color="green"> 592.                 amt = self.length</font>
+<font color="black"> 593. </font>
+<font color="black"> 594.         # we do not use _safe_read() here because this may be a .will_close</font>
+<font color="black"> 595.         # connection, and the user is reading more bytes than will be provided</font>
+<font color="black"> 596.         # (for example, reading in 1k chunks)</font>
+<font color="green"> 597.         s = self.fp.read(amt)</font>
+<font color="green"> 598.         if not s and amt:</font>
+<font color="black"> 599.             # Ideally, we would raise IncompleteRead if the content-length</font>
+<font color="black"> 600.             # wasn't satisfied, but it might break compatibility.</font>
+<font color="red"> 601.             self.close()</font>
+<font color="green"> 602.         if self.length is not None:</font>
+<font color="green"> 603.             self.length -= len(s)</font>
+<font color="green"> 604.             if not self.length:</font>
+<font color="green"> 605.                 self.close()</font>
+<font color="black"> 606. </font>
+<font color="green"> 607.         return s</font>
+<font color="black"> 608. </font>
+<font color="green"> 609.     def _read_chunked(self, amt):</font>
+<font color="red"> 610.         assert self.chunked != _UNKNOWN</font>
+<font color="red"> 611.         chunk_left = self.chunk_left</font>
+<font color="red"> 612.         value = []</font>
+<font color="red"> 613.         while True:</font>
+<font color="red"> 614.             if chunk_left is None:</font>
+<font color="red"> 615.                 line = self.fp.readline(_MAXLINE + 1)</font>
+<font color="red"> 616.                 if len(line) &gt; _MAXLINE:</font>
+<font color="red"> 617.                     raise LineTooLong(&quot;chunk size&quot;)</font>
+<font color="red"> 618.                 i = line.find(';')</font>
+<font color="red"> 619.                 if i &gt;= 0:</font>
+<font color="red"> 620.                     line = line[:i] # strip chunk-extensions</font>
+<font color="red"> 621.                 try:</font>
+<font color="red"> 622.                     chunk_left = int(line, 16)</font>
+<font color="red"> 623.                 except ValueError:</font>
+<font color="black"> 624.                     # close the connection as protocol synchronisation is</font>
+<font color="black"> 625.                     # probably lost</font>
+<font color="red"> 626.                     self.close()</font>
+<font color="red"> 627.                     raise IncompleteRead(''.join(value))</font>
+<font color="red"> 628.                 if chunk_left == 0:</font>
+<font color="red"> 629.                     break</font>
+<font color="red"> 630.             if amt is None:</font>
+<font color="red"> 631.                 value.append(self._safe_read(chunk_left))</font>
+<font color="red"> 632.             elif amt &lt; chunk_left:</font>
+<font color="red"> 633.                 value.append(self._safe_read(amt))</font>
+<font color="red"> 634.                 self.chunk_left = chunk_left - amt</font>
+<font color="red"> 635.                 return ''.join(value)</font>
+<font color="red"> 636.             elif amt == chunk_left:</font>
+<font color="red"> 637.                 value.append(self._safe_read(amt))</font>
+<font color="red"> 638.                 self._safe_read(2)  # toss the CRLF at the end of the chunk</font>
+<font color="red"> 639.                 self.chunk_left = None</font>
+<font color="red"> 640.                 return ''.join(value)</font>
+<font color="black"> 641.             else:</font>
+<font color="red"> 642.                 value.append(self._safe_read(chunk_left))</font>
+<font color="red"> 643.                 amt -= chunk_left</font>
+<font color="black"> 644. </font>
+<font color="black"> 645.             # we read the whole chunk, get another</font>
+<font color="red"> 646.             self._safe_read(2)      # toss the CRLF at the end of the chunk</font>
+<font color="red"> 647.             chunk_left = None</font>
+<font color="black"> 648. </font>
+<font color="black"> 649.         # read and discard trailer up to the CRLF terminator</font>
+<font color="black"> 650.         ### note: we shouldn't have any trailers!</font>
+<font color="red"> 651.         while True:</font>
+<font color="red"> 652.             line = self.fp.readline(_MAXLINE + 1)</font>
+<font color="red"> 653.             if len(line) &gt; _MAXLINE:</font>
+<font color="red"> 654.                 raise LineTooLong(&quot;trailer line&quot;)</font>
+<font color="red"> 655.             if not line:</font>
+<font color="black"> 656.                 # a vanishingly small number of sites EOF without</font>
+<font color="black"> 657.                 # sending the trailer</font>
+<font color="red"> 658.                 break</font>
+<font color="red"> 659.             if line == '\r\n':</font>
+<font color="red"> 660.                 break</font>
+<font color="black"> 661. </font>
+<font color="black"> 662.         # we read everything; close the &quot;file&quot;</font>
+<font color="red"> 663.         self.close()</font>
+<font color="black"> 664. </font>
+<font color="red"> 665.         return ''.join(value)</font>
+<font color="black"> 666. </font>
+<font color="green"> 667.     def _safe_read(self, amt):</font>
+<font color="black"> 668.         &quot;&quot;&quot;Read the number of bytes requested, compensating for partial reads.</font>
+<font color="black"> 669. </font>
+<font color="black"> 670.         Normally, we have a blocking socket, but a read() can be interrupted</font>
+<font color="black"> 671.         by a signal (resulting in a partial read).</font>
+<font color="black"> 672. </font>
+<font color="black"> 673.         Note that we cannot distinguish between EOF and an interrupt when zero</font>
+<font color="black"> 674.         bytes have been read. IncompleteRead() will be raised in this</font>
+<font color="black"> 675.         situation.</font>
+<font color="black"> 676. </font>
+<font color="black"> 677.         This function should be used when &lt;amt&gt; bytes &quot;should&quot; be present for</font>
+<font color="black"> 678.         reading. If the bytes are truly not available (due to EOF), then the</font>
+<font color="black"> 679.         IncompleteRead exception can be used to detect the problem.</font>
+<font color="black"> 680.         &quot;&quot;&quot;</font>
+<font color="black"> 681.         # NOTE(gps): As of svn r74426 socket._fileobject.read(x) will never</font>
+<font color="black"> 682.         # return less than x bytes unless EOF is encountered.  It now handles</font>
+<font color="black"> 683.         # signal interruptions (socket.error EINTR) internally.  This code</font>
+<font color="black"> 684.         # never caught that exception anyways.  It seems largely pointless.</font>
+<font color="black"> 685.         # self.fp.read(amt) will work fine.</font>
+<font color="green"> 686.         s = []</font>
+<font color="green"> 687.         while amt &gt; 0:</font>
+<font color="green"> 688.             chunk = self.fp.read(min(amt, MAXAMOUNT))</font>
+<font color="green"> 689.             if not chunk:</font>
+<font color="red"> 690.                 raise IncompleteRead(''.join(s), amt)</font>
+<font color="green"> 691.             s.append(chunk)</font>
+<font color="green"> 692.             amt -= len(chunk)</font>
+<font color="green"> 693.         return ''.join(s)</font>
+<font color="black"> 694. </font>
+<font color="green"> 695.     def fileno(self):</font>
+<font color="red"> 696.         return self.fp.fileno()</font>
+<font color="black"> 697. </font>
+<font color="green"> 698.     def getheader(self, name, default=None):</font>
+<font color="red"> 699.         if self.msg is None:</font>
+<font color="red"> 700.             raise ResponseNotReady()</font>
+<font color="red"> 701.         return self.msg.getheader(name, default)</font>
+<font color="black"> 702. </font>
+<font color="green"> 703.     def getheaders(self):</font>
+<font color="black"> 704.         &quot;&quot;&quot;Return list of (header, value) tuples.&quot;&quot;&quot;</font>
+<font color="red"> 705.         if self.msg is None:</font>
+<font color="red"> 706.             raise ResponseNotReady()</font>
+<font color="red"> 707.         return self.msg.items()</font>
+<font color="black"> 708. </font>
+<font color="black"> 709. </font>
+<font color="green"> 710. class HTTPConnection:</font>
+<font color="black"> 711. </font>
+<font color="green"> 712.     _http_vsn = 11</font>
+<font color="green"> 713.     _http_vsn_str = 'HTTP/1.1'</font>
+<font color="black"> 714. </font>
+<font color="green"> 715.     response_class = HTTPResponse</font>
+<font color="green"> 716.     default_port = HTTP_PORT</font>
+<font color="green"> 717.     auto_open = 1</font>
+<font color="green"> 718.     debuglevel = 0</font>
+<font color="green"> 719.     strict = 0</font>
+<font color="black"> 720. </font>
+<font color="green"> 721.     def __init__(self, host, port=None, strict=None,</font>
+<font color="green"> 722.                  timeout=socket._GLOBAL_DEFAULT_TIMEOUT, source_address=None):</font>
+<font color="green"> 723.         self.timeout = timeout</font>
+<font color="green"> 724.         self.source_address = source_address</font>
+<font color="green"> 725.         self.sock = None</font>
+<font color="green"> 726.         self._buffer = []</font>
+<font color="green"> 727.         self.__response = None</font>
+<font color="green"> 728.         self.__state = _CS_IDLE</font>
+<font color="green"> 729.         self._method = None</font>
+<font color="green"> 730.         self._tunnel_host = None</font>
+<font color="green"> 731.         self._tunnel_port = None</font>
+<font color="green"> 732.         self._tunnel_headers = {}</font>
+<font color="green"> 733.         if strict is not None:</font>
+<font color="green"> 734.             self.strict = strict</font>
+<font color="black"> 735. </font>
+<font color="green"> 736.         (self.host, self.port) = self._get_hostport(host, port)</font>
+<font color="black"> 737. </font>
+<font color="black"> 738.         # This is stored as an instance variable to allow unittests</font>
+<font color="black"> 739.         # to replace with a suitable mock</font>
+<font color="green"> 740.         self._create_connection = socket.create_connection</font>
+<font color="black"> 741. </font>
+<font color="green"> 742.     def set_tunnel(self, host, port=None, headers=None):</font>
+<font color="black"> 743.         &quot;&quot;&quot; Set up host and port for HTTP CONNECT tunnelling.</font>
+<font color="black"> 744. </font>
+<font color="black"> 745.         In a connection that uses HTTP Connect tunneling, the host passed to the</font>
+<font color="black"> 746.         constructor is used as proxy server that relays all communication to the</font>
+<font color="black"> 747.         endpoint passed to set_tunnel. This is done by sending a HTTP CONNECT</font>
+<font color="black"> 748.         request to the proxy server when the connection is established.</font>
+<font color="black"> 749. </font>
+<font color="black"> 750.         This method must be called before the HTTP connection has been</font>
+<font color="black"> 751.         established.</font>
+<font color="black"> 752. </font>
+<font color="black"> 753.         The headers argument should be a mapping of extra HTTP headers</font>
+<font color="black"> 754.         to send with the CONNECT request.</font>
+<font color="black"> 755.         &quot;&quot;&quot;</font>
+<font color="black"> 756.         # Verify if this is required.</font>
+<font color="red"> 757.         if self.sock:</font>
+<font color="red"> 758.             raise RuntimeError(&quot;Can't setup tunnel for established connection.&quot;)</font>
+<font color="black"> 759. </font>
+<font color="red"> 760.         self._tunnel_host, self._tunnel_port = self._get_hostport(host, port)</font>
+<font color="red"> 761.         if headers:</font>
+<font color="red"> 762.             self._tunnel_headers = headers</font>
+<font color="black"> 763.         else:</font>
+<font color="red"> 764.             self._tunnel_headers.clear()</font>
+<font color="black"> 765. </font>
+<font color="green"> 766.     def _get_hostport(self, host, port):</font>
+<font color="green"> 767.         if port is None:</font>
+<font color="red"> 768.             i = host.rfind(':')</font>
+<font color="red"> 769.             j = host.rfind(']')         # ipv6 addresses have [...]</font>
+<font color="red"> 770.             if i &gt; j:</font>
+<font color="red"> 771.                 try:</font>
+<font color="red"> 772.                     port = int(host[i+1:])</font>
+<font color="red"> 773.                 except ValueError:</font>
+<font color="red"> 774.                     if host[i+1:] == &quot;&quot;:  # http://foo.com:/ == http://foo.com/</font>
+<font color="red"> 775.                         port = self.default_port</font>
+<font color="black"> 776.                     else:</font>
+<font color="red"> 777.                         raise InvalidURL(&quot;nonnumeric port: '%s'&quot; % host[i+1:])</font>
+<font color="red"> 778.                 host = host[:i]</font>
+<font color="black"> 779.             else:</font>
+<font color="red"> 780.                 port = self.default_port</font>
+<font color="red"> 781.             if host and host[0] == '[' and host[-1] == ']':</font>
+<font color="red"> 782.                 host = host[1:-1]</font>
+<font color="green"> 783.         return (host, port)</font>
+<font color="black"> 784. </font>
+<font color="green"> 785.     def set_debuglevel(self, level):</font>
+<font color="red"> 786.         self.debuglevel = level</font>
+<font color="black"> 787. </font>
+<font color="green"> 788.     def _tunnel(self):</font>
+<font color="red"> 789.         self.send(&quot;CONNECT %s:%d HTTP/1.0\r\n&quot; % (self._tunnel_host,</font>
+<font color="red"> 790.             self._tunnel_port))</font>
+<font color="red"> 791.         for header, value in self._tunnel_headers.iteritems():</font>
+<font color="red"> 792.             self.send(&quot;%s: %s\r\n&quot; % (header, value))</font>
+<font color="red"> 793.         self.send(&quot;\r\n&quot;)</font>
+<font color="red"> 794.         response = self.response_class(self.sock, strict = self.strict,</font>
+<font color="red"> 795.                                        method = self._method)</font>
+<font color="red"> 796.         (version, code, message) = response._read_status()</font>
+<font color="black"> 797. </font>
+<font color="red"> 798.         if version == &quot;HTTP/0.9&quot;:</font>
+<font color="black"> 799.             # HTTP/0.9 doesn't support the CONNECT verb, so if httplib has</font>
+<font color="black"> 800.             # concluded HTTP/0.9 is being used something has gone wrong.</font>
+<font color="red"> 801.             self.close()</font>
+<font color="red"> 802.             raise socket.error(&quot;Invalid response from tunnel request&quot;)</font>
+<font color="red"> 803.         if code != 200:</font>
+<font color="red"> 804.             self.close()</font>
+<font color="red"> 805.             raise socket.error(&quot;Tunnel connection failed: %d %s&quot; % (code,</font>
+<font color="red"> 806.                                                                     message.strip()))</font>
+<font color="red"> 807.         while True:</font>
+<font color="red"> 808.             line = response.fp.readline(_MAXLINE + 1)</font>
+<font color="red"> 809.             if len(line) &gt; _MAXLINE:</font>
+<font color="red"> 810.                 raise LineTooLong(&quot;header line&quot;)</font>
+<font color="red"> 811.             if not line:</font>
+<font color="black"> 812.                 # for sites which EOF without sending trailer</font>
+<font color="red"> 813.                 break</font>
+<font color="red"> 814.             if line == '\r\n':</font>
+<font color="red"> 815.                 break</font>
+<font color="black"> 816. </font>
+<font color="black"> 817. </font>
+<font color="green"> 818.     def connect(self):</font>
+<font color="black"> 819.         &quot;&quot;&quot;Connect to the host and port specified in __init__.&quot;&quot;&quot;</font>
+<font color="red"> 820.         self.sock = self._create_connection((self.host,self.port),</font>
+<font color="red"> 821.                                            self.timeout, self.source_address)</font>
+<font color="black"> 822. </font>
+<font color="red"> 823.         if self._tunnel_host:</font>
+<font color="red"> 824.             self._tunnel()</font>
+<font color="black"> 825. </font>
+<font color="green"> 826.     def close(self):</font>
+<font color="black"> 827.         &quot;&quot;&quot;Close the connection to the HTTP server.&quot;&quot;&quot;</font>
+<font color="green"> 828.         self.__state = _CS_IDLE</font>
+<font color="green"> 829.         try:</font>
+<font color="green"> 830.             sock = self.sock</font>
+<font color="green"> 831.             if sock:</font>
+<font color="green"> 832.                 self.sock = None</font>
+<font color="green"> 833.                 sock.close()   # close it manually... there may be other refs</font>
+<font color="black"> 834.         finally:</font>
+<font color="green"> 835.             response = self.__response</font>
+<font color="green"> 836.             if response:</font>
+<font color="green"> 837.                 self.__response = None</font>
+<font color="green"> 838.                 response.close()</font>
+<font color="black"> 839. </font>
+<font color="green"> 840.     def send(self, data):</font>
+<font color="black"> 841.         &quot;&quot;&quot;Send `data' to the server.&quot;&quot;&quot;</font>
+<font color="green"> 842.         if self.sock is None:</font>
+<font color="red"> 843.             if self.auto_open:</font>
+<font color="red"> 844.                 self.connect()</font>
+<font color="black"> 845.             else:</font>
+<font color="red"> 846.                 raise NotConnected()</font>
+<font color="black"> 847. </font>
+<font color="green"> 848.         if self.debuglevel &gt; 0:</font>
+<font color="red"> 849.             print &quot;send:&quot;, repr(data)</font>
+<font color="green"> 850.         blocksize = 8192</font>
+<font color="green"> 851.         if hasattr(data,'read') and not isinstance(data, array):</font>
+<font color="red"> 852.             if self.debuglevel &gt; 0: print &quot;sendIng a read()able&quot;</font>
+<font color="red"> 853.             datablock = data.read(blocksize)</font>
+<font color="red"> 854.             while datablock:</font>
+<font color="red"> 855.                 self.sock.sendall(datablock)</font>
+<font color="red"> 856.                 datablock = data.read(blocksize)</font>
+<font color="black"> 857.         else:</font>
+<font color="green"> 858.             self.sock.sendall(data)</font>
+<font color="black"> 859. </font>
+<font color="green"> 860.     def _output(self, s):</font>
+<font color="black"> 861.         &quot;&quot;&quot;Add a line of output to the current request buffer.</font>
+<font color="black"> 862. </font>
+<font color="black"> 863.         Assumes that the line does *not* end with \\r\\n.</font>
+<font color="black"> 864.         &quot;&quot;&quot;</font>
+<font color="green"> 865.         self._buffer.append(s)</font>
+<font color="black"> 866. </font>
+<font color="green"> 867.     def _send_output(self, message_body=None):</font>
+<font color="black"> 868.         &quot;&quot;&quot;Send the currently buffered request and clear the buffer.</font>
+<font color="black"> 869. </font>
+<font color="black"> 870.         Appends an extra \\r\\n to the buffer.</font>
+<font color="black"> 871.         A message_body may be specified, to be appended to the request.</font>
+<font color="black"> 872.         &quot;&quot;&quot;</font>
+<font color="red"> 873.         self._buffer.extend((&quot;&quot;, &quot;&quot;))</font>
+<font color="red"> 874.         msg = &quot;\r\n&quot;.join(self._buffer)</font>
+<font color="red"> 875.         del self._buffer[:]</font>
+<font color="black"> 876.         # If msg and message_body are sent in a single send() call,</font>
+<font color="black"> 877.         # it will avoid performance problems caused by the interaction</font>
+<font color="black"> 878.         # between delayed ack and the Nagle algorithm.</font>
+<font color="red"> 879.         if isinstance(message_body, str):</font>
+<font color="red"> 880.             msg += message_body</font>
+<font color="red"> 881.             message_body = None</font>
+<font color="red"> 882.         self.send(msg)</font>
+<font color="red"> 883.         if message_body is not None:</font>
+<font color="black"> 884.             #message_body was not a string (i.e. it is a file) and</font>
+<font color="black"> 885.             #we must run the risk of Nagle</font>
+<font color="red"> 886.             self.send(message_body)</font>
+<font color="black"> 887. </font>
+<font color="green"> 888.     def putrequest(self, method, url, skip_host=0, skip_accept_encoding=0):</font>
+<font color="black"> 889.         &quot;&quot;&quot;Send a request to the server.</font>
+<font color="black"> 890. </font>
+<font color="black"> 891.         `method' specifies an HTTP request method, e.g. 'GET'.</font>
+<font color="black"> 892.         `url' specifies the object being requested, e.g. '/index.html'.</font>
+<font color="black"> 893.         `skip_host' if True does not add automatically a 'Host:' header</font>
+<font color="black"> 894.         `skip_accept_encoding' if True does not add automatically an</font>
+<font color="black"> 895.            'Accept-Encoding:' header</font>
+<font color="black"> 896.         &quot;&quot;&quot;</font>
+<font color="black"> 897. </font>
+<font color="black"> 898.         # if a prior response has been completed, then forget about it.</font>
+<font color="green"> 899.         if self.__response and self.__response.isclosed():</font>
+<font color="green"> 900.             self.__response = None</font>
+<font color="black"> 901. </font>
+<font color="black"> 902. </font>
+<font color="black"> 903.         # in certain cases, we cannot issue another request on this connection.</font>
+<font color="black"> 904.         # this occurs when:</font>
+<font color="black"> 905.         #   1) we are in the process of sending a request.   (_CS_REQ_STARTED)</font>
+<font color="black"> 906.         #   2) a response to a previous request has signalled that it is going</font>
+<font color="black"> 907.         #      to close the connection upon completion.</font>
+<font color="black"> 908.         #   3) the headers for the previous response have not been read, thus</font>
+<font color="black"> 909.         #      we cannot determine whether point (2) is true.   (_CS_REQ_SENT)</font>
+<font color="black"> 910.         #</font>
+<font color="black"> 911.         # if there is no prior response, then we can request at will.</font>
+<font color="black"> 912.         #</font>
+<font color="black"> 913.         # if point (2) is true, then we will have passed the socket to the</font>
+<font color="black"> 914.         # response (effectively meaning, &quot;there is no prior response&quot;), and</font>
+<font color="black"> 915.         # will open a new one when a new request is made.</font>
+<font color="black"> 916.         #</font>
+<font color="black"> 917.         # Note: if a prior response exists, then we *can* start a new request.</font>
+<font color="black"> 918.         #       We are not allowed to begin fetching the response to this new</font>
+<font color="black"> 919.         #       request, however, until that prior response is complete.</font>
+<font color="black"> 920.         #</font>
+<font color="green"> 921.         if self.__state == _CS_IDLE:</font>
+<font color="green"> 922.             self.__state = _CS_REQ_STARTED</font>
+<font color="black"> 923.         else:</font>
+<font color="red"> 924.             raise CannotSendRequest()</font>
+<font color="black"> 925. </font>
+<font color="black"> 926.         # Save the method we use, we need it later in the response phase</font>
+<font color="green"> 927.         self._method = method</font>
+<font color="green"> 928.         if not url:</font>
+<font color="red"> 929.             url = '/'</font>
+<font color="green"> 930.         hdr = '%s %s %s' % (method, url, self._http_vsn_str)</font>
+<font color="black"> 931. </font>
+<font color="green"> 932.         self._output(hdr)</font>
+<font color="black"> 933. </font>
+<font color="green"> 934.         if self._http_vsn == 11:</font>
+<font color="black"> 935.             # Issue some standard headers for better HTTP/1.1 compliance</font>
+<font color="black"> 936. </font>
+<font color="green"> 937.             if not skip_host:</font>
+<font color="black"> 938.                 # this header is issued *only* for HTTP/1.1</font>
+<font color="black"> 939.                 # connections. more specifically, this means it is</font>
+<font color="black"> 940.                 # only issued when the client uses the new</font>
+<font color="black"> 941.                 # HTTPConnection() class. backwards-compat clients</font>
+<font color="black"> 942.                 # will be using HTTP/1.0 and those clients may be</font>
+<font color="black"> 943.                 # issuing this header themselves. we should NOT issue</font>
+<font color="black"> 944.                 # it twice; some web servers (such as Apache) barf</font>
+<font color="black"> 945.                 # when they see two Host: headers</font>
+<font color="black"> 946. </font>
+<font color="black"> 947.                 # If we need a non-standard port,include it in the</font>
+<font color="black"> 948.                 # header.  If the request is going through a proxy,</font>
+<font color="black"> 949.                 # but the host of the actual URL, not the host of the</font>
+<font color="black"> 950.                 # proxy.</font>
+<font color="black"> 951. </font>
+<font color="green"> 952.                 netloc = ''</font>
+<font color="green"> 953.                 if url.startswith('http'):</font>
+<font color="red"> 954.                     nil, netloc, nil, nil, nil = urlsplit(url)</font>
+<font color="black"> 955. </font>
+<font color="green"> 956.                 if netloc:</font>
+<font color="red"> 957.                     try:</font>
+<font color="red"> 958.                         netloc_enc = netloc.encode(&quot;ascii&quot;)</font>
+<font color="red"> 959.                     except UnicodeEncodeError:</font>
+<font color="red"> 960.                         netloc_enc = netloc.encode(&quot;idna&quot;)</font>
+<font color="red"> 961.                     self.putheader('Host', netloc_enc)</font>
+<font color="black"> 962.                 else:</font>
+<font color="green"> 963.                     if self._tunnel_host:</font>
+<font color="red"> 964.                         host = self._tunnel_host</font>
+<font color="red"> 965.                         port = self._tunnel_port</font>
+<font color="black"> 966.                     else:</font>
+<font color="green"> 967.                         host = self.host</font>
+<font color="green"> 968.                         port = self.port</font>
+<font color="black"> 969. </font>
+<font color="green"> 970.                     try:</font>
+<font color="green"> 971.                         host_enc = host.encode(&quot;ascii&quot;)</font>
+<font color="red"> 972.                     except UnicodeEncodeError:</font>
+<font color="red"> 973.                         host_enc = host.encode(&quot;idna&quot;)</font>
+<font color="black"> 974.                     # Wrap the IPv6 Host Header with [] (RFC 2732)</font>
+<font color="green"> 975.                     if host_enc.find(':') &gt;= 0:</font>
+<font color="red"> 976.                         host_enc = &quot;[&quot; + host_enc + &quot;]&quot;</font>
+<font color="green"> 977.                     if port == self.default_port:</font>
+<font color="green"> 978.                         self.putheader('Host', host_enc)</font>
+<font color="black"> 979.                     else:</font>
+<font color="red"> 980.                         self.putheader('Host', &quot;%s:%s&quot; % (host_enc, port))</font>
+<font color="black"> 981. </font>
+<font color="black"> 982.             # note: we are assuming that clients will not attempt to set these</font>
+<font color="black"> 983.             #       headers since *this* library must deal with the</font>
+<font color="black"> 984.             #       consequences. this also means that when the supporting</font>
+<font color="black"> 985.             #       libraries are updated to recognize other forms, then this</font>
+<font color="black"> 986.             #       code should be changed (removed or updated).</font>
+<font color="black"> 987. </font>
+<font color="black"> 988.             # we only want a Content-Encoding of &quot;identity&quot; since we don't</font>
+<font color="black"> 989.             # support encodings such as x-gzip or x-deflate.</font>
+<font color="green"> 990.             if not skip_accept_encoding:</font>
+<font color="green"> 991.                 self.putheader('Accept-Encoding', 'identity')</font>
+<font color="black"> 992. </font>
+<font color="black"> 993.             # we can accept &quot;chunked&quot; Transfer-Encodings, but no others</font>
+<font color="black"> 994.             # NOTE: no TE header implies *only* &quot;chunked&quot;</font>
+<font color="black"> 995.             #self.putheader('TE', 'chunked')</font>
+<font color="black"> 996. </font>
+<font color="black"> 997.             # if TE is supplied in the header, then it must appear in a</font>
+<font color="black"> 998.             # Connection header.</font>
+<font color="black"> 999.             #self.putheader('Connection', 'TE')</font>
+<font color="black">1000. </font>
+<font color="black">1001.         else:</font>
+<font color="black">1002.             # For HTTP/1.0, the server will assume &quot;not chunked&quot;</font>
+<font color="green">1003.             pass</font>
+<font color="black">1004. </font>
+<font color="green">1005.     def putheader(self, header, *values):</font>
+<font color="black">1006.         &quot;&quot;&quot;Send a request header line to the server.</font>
+<font color="black">1007. </font>
+<font color="black">1008.         For example: h.putheader('Accept', 'text/html')</font>
+<font color="black">1009.         &quot;&quot;&quot;</font>
+<font color="green">1010.         if self.__state != _CS_REQ_STARTED:</font>
+<font color="red">1011.             raise CannotSendHeader()</font>
+<font color="black">1012. </font>
+<font color="green">1013.         header = '%s' % header</font>
+<font color="green">1014.         if not _is_legal_header_name(header):</font>
+<font color="red">1015.             raise ValueError('Invalid header name %r' % (header,))</font>
+<font color="black">1016. </font>
+<font color="green">1017.         values = [str(v) for v in values]</font>
+<font color="green">1018.         for one_value in values:</font>
+<font color="green">1019.             if _is_illegal_header_value(one_value):</font>
+<font color="red">1020.                 raise ValueError('Invalid header value %r' % (one_value,))</font>
+<font color="black">1021. </font>
+<font color="green">1022.         hdr = '%s: %s' % (header, '\r\n\t'.join(values))</font>
+<font color="green">1023.         self._output(hdr)</font>
+<font color="black">1024. </font>
+<font color="green">1025.     def endheaders(self, message_body=None):</font>
+<font color="black">1026.         &quot;&quot;&quot;Indicate that the last header line has been sent to the server.</font>
+<font color="black">1027. </font>
+<font color="black">1028.         This method sends the request to the server.  The optional</font>
+<font color="black">1029.         message_body argument can be used to pass a message body</font>
+<font color="black">1030.         associated with the request.  The message body will be sent in</font>
+<font color="black">1031.         the same packet as the message headers if it is string, otherwise it is</font>
+<font color="black">1032.         sent as a separate packet.</font>
+<font color="black">1033.         &quot;&quot;&quot;</font>
+<font color="green">1034.         if self.__state == _CS_REQ_STARTED:</font>
+<font color="green">1035.             self.__state = _CS_REQ_SENT</font>
+<font color="black">1036.         else:</font>
+<font color="red">1037.             raise CannotSendHeader()</font>
+<font color="green">1038.         self._send_output(message_body)</font>
+<font color="black">1039. </font>
+<font color="green">1040.     def request(self, method, url, body=None, headers={}):</font>
+<font color="black">1041.         &quot;&quot;&quot;Send a complete request to the server.&quot;&quot;&quot;</font>
+<font color="green">1042.         self._send_request(method, url, body, headers)</font>
+<font color="black">1043. </font>
+<font color="green">1044.     def _set_content_length(self, body, method):</font>
+<font color="black">1045.         # Set the content-length based on the body. If the body is &quot;empty&quot;, we</font>
+<font color="black">1046.         # set Content-Length: 0 for methods that expect a body (RFC 7230,</font>
+<font color="black">1047.         # Section 3.3.2). If the body is set for other methods, we set the</font>
+<font color="black">1048.         # header provided we can figure out what the length is.</font>
+<font color="green">1049.         thelen = None</font>
+<font color="green">1050.         if body is None and method.upper() in _METHODS_EXPECTING_BODY:</font>
+<font color="red">1051.             thelen = '0'</font>
+<font color="green">1052.         elif body is not None:</font>
+<font color="red">1053.             try:</font>
+<font color="red">1054.                 thelen = str(len(body))</font>
+<font color="red">1055.             except (TypeError, AttributeError):</font>
+<font color="black">1056.                 # If this is a file-like object, try to</font>
+<font color="black">1057.                 # fstat its file descriptor</font>
+<font color="red">1058.                 try:</font>
+<font color="red">1059.                     thelen = str(os.fstat(body.fileno()).st_size)</font>
+<font color="red">1060.                 except (AttributeError, OSError):</font>
+<font color="black">1061.                     # Don't send a length if this failed</font>
+<font color="red">1062.                     if self.debuglevel &gt; 0: print &quot;Cannot stat!!&quot;</font>
+<font color="black">1063. </font>
+<font color="green">1064.         if thelen is not None:</font>
+<font color="red">1065.             self.putheader('Content-Length', thelen)</font>
+<font color="black">1066. </font>
+<font color="green">1067.     def _send_request(self, method, url, body, headers):</font>
+<font color="black">1068.         # Honor explicitly requested Host: and Accept-Encoding: headers.</font>
+<font color="green">1069.         header_names = dict.fromkeys([k.lower() for k in headers])</font>
+<font color="green">1070.         skips = {}</font>
+<font color="green">1071.         if 'host' in header_names:</font>
+<font color="red">1072.             skips['skip_host'] = 1</font>
+<font color="green">1073.         if 'accept-encoding' in header_names:</font>
+<font color="red">1074.             skips['skip_accept_encoding'] = 1</font>
+<font color="black">1075. </font>
+<font color="green">1076.         self.putrequest(method, url, **skips)</font>
+<font color="black">1077. </font>
+<font color="green">1078.         if 'content-length' not in header_names:</font>
+<font color="green">1079.             self._set_content_length(body, method)</font>
+<font color="green">1080.         for hdr, value in headers.iteritems():</font>
+<font color="green">1081.             self.putheader(hdr, value)</font>
+<font color="green">1082.         self.endheaders(body)</font>
+<font color="black">1083. </font>
+<font color="green">1084.     def getresponse(self, buffering=False):</font>
+<font color="black">1085.         &quot;Get the response from the server.&quot;</font>
+<font color="black">1086. </font>
+<font color="black">1087.         # if a prior response has been completed, then forget about it.</font>
+<font color="green">1088.         if self.__response and self.__response.isclosed():</font>
+<font color="red">1089.             self.__response = None</font>
+<font color="black">1090. </font>
+<font color="black">1091.         #</font>
+<font color="black">1092.         # if a prior response exists, then it must be completed (otherwise, we</font>
+<font color="black">1093.         # cannot read this response's header to determine the connection-close</font>
+<font color="black">1094.         # behavior)</font>
+<font color="black">1095.         #</font>
+<font color="black">1096.         # note: if a prior response existed, but was connection-close, then the</font>
+<font color="black">1097.         # socket and response were made independent of this HTTPConnection</font>
+<font color="black">1098.         # object since a new request requires that we open a whole new</font>
+<font color="black">1099.         # connection</font>
+<font color="black">1100.         #</font>
+<font color="black">1101.         # this means the prior response had one of two states:</font>
+<font color="black">1102.         #   1) will_close: this connection was reset and the prior socket and</font>
+<font color="black">1103.         #                  response operate independently</font>
+<font color="black">1104.         #   2) persistent: the response was retained and we await its</font>
+<font color="black">1105.         #                  isclosed() status to become true.</font>
+<font color="black">1106.         #</font>
+<font color="green">1107.         if self.__state != _CS_REQ_SENT or self.__response:</font>
+<font color="red">1108.             raise ResponseNotReady()</font>
+<font color="black">1109. </font>
+<font color="green">1110.         args = (self.sock,)</font>
+<font color="green">1111.         kwds = {&quot;strict&quot;:self.strict, &quot;method&quot;:self._method}</font>
+<font color="green">1112.         if self.debuglevel &gt; 0:</font>
+<font color="red">1113.             args += (self.debuglevel,)</font>
+<font color="green">1114.         if buffering:</font>
+<font color="black">1115.             #only add this keyword if non-default, for compatibility with</font>
+<font color="black">1116.             #other response_classes.</font>
+<font color="green">1117.             kwds[&quot;buffering&quot;] = True;</font>
+<font color="green">1118.         response = self.response_class(*args, **kwds)</font>
+<font color="black">1119. </font>
+<font color="green">1120.         try:</font>
+<font color="green">1121.             response.begin()</font>
+<font color="green">1122.             assert response.will_close != _UNKNOWN</font>
+<font color="green">1123.             self.__state = _CS_IDLE</font>
+<font color="black">1124. </font>
+<font color="green">1125.             if response.will_close:</font>
+<font color="black">1126.                 # this effectively passes the connection to the response</font>
+<font color="red">1127.                 self.close()</font>
+<font color="black">1128.             else:</font>
+<font color="black">1129.                 # remember this, so we can tell when it is complete</font>
+<font color="green">1130.                 self.__response = response</font>
+<font color="black">1131. </font>
+<font color="green">1132.             return response</font>
+<font color="red">1133.         except:</font>
+<font color="red">1134.             response.close()</font>
+<font color="red">1135.             raise</font>
+<font color="black">1136. </font>
+<font color="black">1137. </font>
+<font color="green">1138. class HTTP:</font>
+<font color="green">1139.     &quot;Compatibility class with httplib.py from 1.5.&quot;</font>
+<font color="black">1140. </font>
+<font color="green">1141.     _http_vsn = 10</font>
+<font color="green">1142.     _http_vsn_str = 'HTTP/1.0'</font>
+<font color="black">1143. </font>
+<font color="green">1144.     debuglevel = 0</font>
+<font color="black">1145. </font>
+<font color="green">1146.     _connection_class = HTTPConnection</font>
+<font color="black">1147. </font>
+<font color="green">1148.     def __init__(self, host='', port=None, strict=None):</font>
+<font color="black">1149.         &quot;Provide a default host, since the superclass requires one.&quot;</font>
+<font color="black">1150. </font>
+<font color="black">1151.         # some joker passed 0 explicitly, meaning default port</font>
+<font color="red">1152.         if port == 0:</font>
+<font color="red">1153.             port = None</font>
+<font color="black">1154. </font>
+<font color="black">1155.         # Note that we may pass an empty string as the host; this will raise</font>
+<font color="black">1156.         # an error when we attempt to connect. Presumably, the client code</font>
+<font color="black">1157.         # will call connect before then, with a proper host.</font>
+<font color="red">1158.         self._setup(self._connection_class(host, port, strict))</font>
+<font color="black">1159. </font>
+<font color="green">1160.     def _setup(self, conn):</font>
+<font color="red">1161.         self._conn = conn</font>
+<font color="black">1162. </font>
+<font color="black">1163.         # set up delegation to flesh out interface</font>
+<font color="red">1164.         self.send = conn.send</font>
+<font color="red">1165.         self.putrequest = conn.putrequest</font>
+<font color="red">1166.         self.putheader = conn.putheader</font>
+<font color="red">1167.         self.endheaders = conn.endheaders</font>
+<font color="red">1168.         self.set_debuglevel = conn.set_debuglevel</font>
+<font color="black">1169. </font>
+<font color="red">1170.         conn._http_vsn = self._http_vsn</font>
+<font color="red">1171.         conn._http_vsn_str = self._http_vsn_str</font>
+<font color="black">1172. </font>
+<font color="red">1173.         self.file = None</font>
+<font color="black">1174. </font>
+<font color="green">1175.     def connect(self, host=None, port=None):</font>
+<font color="black">1176.         &quot;Accept arguments to set the host/port, since the superclass doesn't.&quot;</font>
+<font color="black">1177. </font>
+<font color="red">1178.         if host is not None:</font>
+<font color="red">1179.             (self._conn.host, self._conn.port) = self._conn._get_hostport(host, port)</font>
+<font color="red">1180.         self._conn.connect()</font>
+<font color="black">1181. </font>
+<font color="green">1182.     def getfile(self):</font>
+<font color="black">1183.         &quot;Provide a getfile, since the superclass' does not use this concept.&quot;</font>
+<font color="red">1184.         return self.file</font>
+<font color="black">1185. </font>
+<font color="green">1186.     def getreply(self, buffering=False):</font>
+<font color="black">1187.         &quot;&quot;&quot;Compat definition since superclass does not define it.</font>
+<font color="black">1188. </font>
+<font color="black">1189.         Returns a tuple consisting of:</font>
+<font color="black">1190.         - server status code (e.g. '200' if all goes well)</font>
+<font color="black">1191.         - server &quot;reason&quot; corresponding to status code</font>
+<font color="black">1192.         - any RFC822 headers in the response from the server</font>
+<font color="black">1193.         &quot;&quot;&quot;</font>
+<font color="red">1194.         try:</font>
+<font color="red">1195.             if not buffering:</font>
+<font color="red">1196.                 response = self._conn.getresponse()</font>
+<font color="black">1197.             else:</font>
+<font color="black">1198.                 #only add this keyword if non-default for compatibility</font>
+<font color="black">1199.                 #with other connection classes</font>
+<font color="red">1200.                 response = self._conn.getresponse(buffering)</font>
+<font color="red">1201.         except BadStatusLine, e:</font>
+<font color="black">1202.             ### hmm. if getresponse() ever closes the socket on a bad request,</font>
+<font color="black">1203.             ### then we are going to have problems with self.sock</font>
+<font color="black">1204. </font>
+<font color="black">1205.             ### should we keep this behavior? do people use it?</font>
+<font color="black">1206.             # keep the socket open (as a file), and return it</font>
+<font color="red">1207.             self.file = self._conn.sock.makefile('rb', 0)</font>
+<font color="black">1208. </font>
+<font color="black">1209.             # close our socket -- we want to restart after any protocol error</font>
+<font color="red">1210.             self.close()</font>
+<font color="black">1211. </font>
+<font color="red">1212.             self.headers = None</font>
+<font color="red">1213.             return -1, e.line, None</font>
+<font color="black">1214. </font>
+<font color="red">1215.         self.headers = response.msg</font>
+<font color="red">1216.         self.file = response.fp</font>
+<font color="red">1217.         return response.status, response.reason, response.msg</font>
+<font color="black">1218. </font>
+<font color="green">1219.     def close(self):</font>
+<font color="red">1220.         self._conn.close()</font>
+<font color="black">1221. </font>
+<font color="black">1222.         # note that self.file == response.fp, which gets closed by the</font>
+<font color="black">1223.         # superclass. just clear the object ref here.</font>
+<font color="black">1224.         ### hmm. messy. if status==-1, then self.file is owned by us.</font>
+<font color="black">1225.         ### well... we aren't explicitly closing, but losing this ref will</font>
+<font color="black">1226.         ### do it</font>
+<font color="red">1227.         self.file = None</font>
+<font color="black">1228. </font>
+<font color="green">1229. try:</font>
+<font color="green">1230.     import ssl</font>
+<font color="red">1231. except ImportError:</font>
+<font color="red">1232.     pass</font>
+<font color="black">1233. else:</font>
+<font color="green">1234.     class HTTPSConnection(HTTPConnection):</font>
+<font color="green">1235.         &quot;This class allows communication via SSL.&quot;</font>
+<font color="black">1236. </font>
+<font color="green">1237.         default_port = HTTPS_PORT</font>
+<font color="black">1238. </font>
+<font color="green">1239.         def __init__(self, host, port=None, key_file=None, cert_file=None,</font>
+<font color="green">1240.                      strict=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT,</font>
+<font color="green">1241.                      source_address=None, context=None):</font>
+<font color="red">1242.             HTTPConnection.__init__(self, host, port, strict, timeout,</font>
+<font color="red">1243.                                     source_address)</font>
+<font color="red">1244.             self.key_file = key_file</font>
+<font color="red">1245.             self.cert_file = cert_file</font>
+<font color="red">1246.             if context is None:</font>
+<font color="red">1247.                 context = ssl._create_default_https_context()</font>
+<font color="red">1248.             if key_file or cert_file:</font>
+<font color="red">1249.                 context.load_cert_chain(cert_file, key_file)</font>
+<font color="red">1250.             self._context = context</font>
+<font color="black">1251. </font>
+<font color="green">1252.         def connect(self):</font>
+<font color="black">1253.             &quot;Connect to a host on a given (SSL) port.&quot;</font>
+<font color="black">1254. </font>
+<font color="red">1255.             HTTPConnection.connect(self)</font>
+<font color="black">1256. </font>
+<font color="red">1257.             if self._tunnel_host:</font>
+<font color="red">1258.                 server_hostname = self._tunnel_host</font>
+<font color="black">1259.             else:</font>
+<font color="red">1260.                 server_hostname = self.host</font>
+<font color="black">1261. </font>
+<font color="red">1262.             self.sock = self._context.wrap_socket(self.sock,</font>
+<font color="red">1263.                                                   server_hostname=server_hostname)</font>
+<font color="black">1264. </font>
+<font color="green">1265.     __all__.append(&quot;HTTPSConnection&quot;)</font>
+<font color="black">1266. </font>
+<font color="green">1267.     class HTTPS(HTTP):</font>
+<font color="black">1268.         &quot;&quot;&quot;Compatibility with 1.5 httplib interface</font>
+<font color="black">1269. </font>
+<font color="black">1270.         Python 1.5.2 did not have an HTTPS class, but it defined an</font>
+<font color="black">1271.         interface for sending http requests that is also useful for</font>
+<font color="black">1272.         https.</font>
+<font color="green">1273.         &quot;&quot;&quot;</font>
+<font color="black">1274. </font>
+<font color="green">1275.         _connection_class = HTTPSConnection</font>
+<font color="black">1276. </font>
+<font color="green">1277.         def __init__(self, host='', port=None, key_file=None, cert_file=None,</font>
+<font color="green">1278.                      strict=None, context=None):</font>
+<font color="black">1279.             # provide a default host, pass the X509 cert info</font>
+<font color="black">1280. </font>
+<font color="black">1281.             # urf. compensate for bad input.</font>
+<font color="red">1282.             if port == 0:</font>
+<font color="red">1283.                 port = None</font>
+<font color="red">1284.             self._setup(self._connection_class(host, port, key_file,</font>
+<font color="red">1285.                                                cert_file, strict,</font>
+<font color="red">1286.                                                context=context))</font>
+<font color="black">1287. </font>
+<font color="black">1288.             # we never actually use these for anything, but we keep them</font>
+<font color="black">1289.             # here for compatibility with post-1.5.2 CVS.</font>
+<font color="red">1290.             self.key_file = key_file</font>
+<font color="red">1291.             self.cert_file = cert_file</font>
+<font color="black">1292. </font>
+<font color="black">1293. </font>
+<font color="green">1294.     def FakeSocket (sock, sslobj):</font>
+<font color="red">1295.         warnings.warn(&quot;FakeSocket is deprecated, and won't be in 3.x.  &quot; +</font>
+<font color="red">1296.                       &quot;Use the result of ssl.wrap_socket() directly instead.&quot;,</font>
+<font color="red">1297.                       DeprecationWarning, stacklevel=2)</font>
+<font color="red">1298.         return sslobj</font>
+<font color="black">1299. </font>
+<font color="black">1300. </font>
+<font color="green">1301. class HTTPException(Exception):</font>
+<font color="black">1302.     # Subclasses that define an __init__ must call Exception.__init__</font>
+<font color="black">1303.     # or define self.args.  Otherwise, str() will fail.</font>
+<font color="green">1304.     pass</font>
+<font color="black">1305. </font>
+<font color="green">1306. class NotConnected(HTTPException):</font>
+<font color="green">1307.     pass</font>
+<font color="black">1308. </font>
+<font color="green">1309. class InvalidURL(HTTPException):</font>
+<font color="green">1310.     pass</font>
+<font color="black">1311. </font>
+<font color="green">1312. class UnknownProtocol(HTTPException):</font>
+<font color="green">1313.     def __init__(self, version):</font>
+<font color="red">1314.         self.args = version,</font>
+<font color="red">1315.         self.version = version</font>
+<font color="black">1316. </font>
+<font color="green">1317. class UnknownTransferEncoding(HTTPException):</font>
+<font color="green">1318.     pass</font>
+<font color="black">1319. </font>
+<font color="green">1320. class UnimplementedFileMode(HTTPException):</font>
+<font color="green">1321.     pass</font>
+<font color="black">1322. </font>
+<font color="green">1323. class IncompleteRead(HTTPException):</font>
+<font color="green">1324.     def __init__(self, partial, expected=None):</font>
+<font color="red">1325.         self.args = partial,</font>
+<font color="red">1326.         self.partial = partial</font>
+<font color="red">1327.         self.expected = expected</font>
+<font color="green">1328.     def __repr__(self):</font>
+<font color="red">1329.         if self.expected is not None:</font>
+<font color="red">1330.             e = ', %i more expected' % self.expected</font>
+<font color="black">1331.         else:</font>
+<font color="red">1332.             e = ''</font>
+<font color="red">1333.         return 'IncompleteRead(%i bytes read%s)' % (len(self.partial), e)</font>
+<font color="green">1334.     def __str__(self):</font>
+<font color="red">1335.         return repr(self)</font>
+<font color="black">1336. </font>
+<font color="green">1337. class ImproperConnectionState(HTTPException):</font>
+<font color="green">1338.     pass</font>
+<font color="black">1339. </font>
+<font color="green">1340. class CannotSendRequest(ImproperConnectionState):</font>
+<font color="green">1341.     pass</font>
+<font color="black">1342. </font>
+<font color="green">1343. class CannotSendHeader(ImproperConnectionState):</font>
+<font color="green">1344.     pass</font>
+<font color="black">1345. </font>
+<font color="green">1346. class ResponseNotReady(ImproperConnectionState):</font>
+<font color="green">1347.     pass</font>
+<font color="black">1348. </font>
+<font color="green">1349. class BadStatusLine(HTTPException):</font>
+<font color="green">1350.     def __init__(self, line):</font>
+<font color="red">1351.         if not line:</font>
+<font color="red">1352.             line = repr(line)</font>
+<font color="red">1353.         self.args = line,</font>
+<font color="red">1354.         self.line = line</font>
+<font color="black">1355. </font>
+<font color="green">1356. class LineTooLong(HTTPException):</font>
+<font color="green">1357.     def __init__(self, line_type):</font>
+<font color="red">1358.         HTTPException.__init__(self, &quot;got more than %d bytes when reading %s&quot;</font>
+<font color="red">1359.                                      % (_MAXLINE, line_type))</font>
+<font color="black">1360. </font>
+<font color="black">1361. # for backwards compatibility</font>
+<font color="green">1362. error = HTTPException</font>
+<font color="black">1363. </font>
+<font color="green">1364. class LineAndFileWrapper:</font>
+<font color="green">1365.     &quot;&quot;&quot;A limited file-like object for HTTP/0.9 responses.&quot;&quot;&quot;</font>
+<font color="black">1366. </font>
+<font color="black">1367.     # The status-line parsing code calls readline(), which normally</font>
+<font color="black">1368.     # get the HTTP status line.  For a 0.9 response, however, this is</font>
+<font color="black">1369.     # actually the first line of the body!  Clients need to get a</font>
+<font color="black">1370.     # readable file object that contains that line.</font>
+<font color="black">1371. </font>
+<font color="green">1372.     def __init__(self, line, file):</font>
+<font color="red">1373.         self._line = line</font>
+<font color="red">1374.         self._file = file</font>
+<font color="red">1375.         self._line_consumed = 0</font>
+<font color="red">1376.         self._line_offset = 0</font>
+<font color="red">1377.         self._line_left = len(line)</font>
+<font color="black">1378. </font>
+<font color="green">1379.     def __getattr__(self, attr):</font>
+<font color="red">1380.         return getattr(self._file, attr)</font>
+<font color="black">1381. </font>
+<font color="green">1382.     def _done(self):</font>
+<font color="black">1383.         # called when the last byte is read from the line.  After the</font>
+<font color="black">1384.         # call, all read methods are delegated to the underlying file</font>
+<font color="black">1385.         # object.</font>
+<font color="red">1386.         self._line_consumed = 1</font>
+<font color="red">1387.         self.read = self._file.read</font>
+<font color="red">1388.         self.readline = self._file.readline</font>
+<font color="red">1389.         self.readlines = self._file.readlines</font>
+<font color="black">1390. </font>
+<font color="green">1391.     def read(self, amt=None):</font>
+<font color="red">1392.         if self._line_consumed:</font>
+<font color="red">1393.             return self._file.read(amt)</font>
+<font color="red">1394.         assert self._line_left</font>
+<font color="red">1395.         if amt is None or amt &gt; self._line_left:</font>
+<font color="red">1396.             s = self._line[self._line_offset:]</font>
+<font color="red">1397.             self._done()</font>
+<font color="red">1398.             if amt is None:</font>
+<font color="red">1399.                 return s + self._file.read()</font>
+<font color="black">1400.             else:</font>
+<font color="red">1401.                 return s + self._file.read(amt - len(s))</font>
+<font color="black">1402.         else:</font>
+<font color="red">1403.             assert amt &lt;= self._line_left</font>
+<font color="red">1404.             i = self._line_offset</font>
+<font color="red">1405.             j = i + amt</font>
+<font color="red">1406.             s = self._line[i:j]</font>
+<font color="red">1407.             self._line_offset = j</font>
+<font color="red">1408.             self._line_left -= amt</font>
+<font color="red">1409.             if self._line_left == 0:</font>
+<font color="red">1410.                 self._done()</font>
+<font color="red">1411.             return s</font>
+<font color="black">1412. </font>
+<font color="green">1413.     def readline(self):</font>
+<font color="red">1414.         if self._line_consumed:</font>
+<font color="red">1415.             return self._file.readline()</font>
+<font color="red">1416.         assert self._line_left</font>
+<font color="red">1417.         s = self._line[self._line_offset:]</font>
+<font color="red">1418.         self._done()</font>
+<font color="red">1419.         return s</font>
+<font color="black">1420. </font>
+<font color="green">1421.     def readlines(self, size=None):</font>
+<font color="red">1422.         if self._line_consumed:</font>
+<font color="red">1423.             return self._file.readlines(size)</font>
+<font color="red">1424.         assert self._line_left</font>
+<font color="red">1425.         L = [self._line[self._line_offset:]]</font>
+<font color="red">1426.         self._done()</font>
+<font color="red">1427.         if size is None:</font>
+<font color="red">1428.             return L + self._file.readlines()</font>
+<font color="black">1429.         else:</font>
+<font color="red">1430.             return L + self._file.readlines(size)</font>
+</pre>
+

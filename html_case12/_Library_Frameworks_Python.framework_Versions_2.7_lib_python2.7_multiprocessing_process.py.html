@@ -1,0 +1,339 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/multiprocessing/process.py</b><br>
+
+
+file stats: <b>167 lines, 49 executed: 29.3% covered</b>
+<pre>
+<font color="black">   1. #</font>
+<font color="black">   2. # Module providing the `Process` class which emulates `threading.Thread`</font>
+<font color="black">   3. #</font>
+<font color="black">   4. # multiprocessing/process.py</font>
+<font color="black">   5. #</font>
+<font color="black">   6. # Copyright (c) 2006-2008, R Oudkerk</font>
+<font color="black">   7. # All rights reserved.</font>
+<font color="black">   8. #</font>
+<font color="black">   9. # Redistribution and use in source and binary forms, with or without</font>
+<font color="black">  10. # modification, are permitted provided that the following conditions</font>
+<font color="black">  11. # are met:</font>
+<font color="black">  12. #</font>
+<font color="black">  13. # 1. Redistributions of source code must retain the above copyright</font>
+<font color="black">  14. #    notice, this list of conditions and the following disclaimer.</font>
+<font color="black">  15. # 2. Redistributions in binary form must reproduce the above copyright</font>
+<font color="black">  16. #    notice, this list of conditions and the following disclaimer in the</font>
+<font color="black">  17. #    documentation and/or other materials provided with the distribution.</font>
+<font color="black">  18. # 3. Neither the name of author nor the names of any contributors may be</font>
+<font color="black">  19. #    used to endorse or promote products derived from this software</font>
+<font color="black">  20. #    without specific prior written permission.</font>
+<font color="black">  21. #</font>
+<font color="black">  22. # THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS &quot;AS IS&quot; AND</font>
+<font color="black">  23. # ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE</font>
+<font color="black">  24. # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE</font>
+<font color="black">  25. # ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE</font>
+<font color="black">  26. # FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL</font>
+<font color="black">  27. # DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS</font>
+<font color="black">  28. # OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)</font>
+<font color="black">  29. # HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT</font>
+<font color="black">  30. # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY</font>
+<font color="black">  31. # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</font>
+<font color="black">  32. # SUCH DAMAGE.</font>
+<font color="black">  33. #</font>
+<font color="black">  34. </font>
+<font color="green">  35. __all__ = ['Process', 'current_process', 'active_children']</font>
+<font color="black">  36. </font>
+<font color="black">  37. #</font>
+<font color="black">  38. # Imports</font>
+<font color="black">  39. #</font>
+<font color="black">  40. </font>
+<font color="green">  41. import os</font>
+<font color="green">  42. import sys</font>
+<font color="green">  43. import signal</font>
+<font color="green">  44. import itertools</font>
+<font color="black">  45. </font>
+<font color="black">  46. #</font>
+<font color="black">  47. #</font>
+<font color="black">  48. #</font>
+<font color="black">  49. </font>
+<font color="green">  50. try:</font>
+<font color="green">  51.     ORIGINAL_DIR = os.path.abspath(os.getcwd())</font>
+<font color="red">  52. except OSError:</font>
+<font color="red">  53.     ORIGINAL_DIR = None</font>
+<font color="black">  54. </font>
+<font color="black">  55. #</font>
+<font color="black">  56. # Public functions</font>
+<font color="black">  57. #</font>
+<font color="black">  58. </font>
+<font color="green">  59. def current_process():</font>
+<font color="black">  60.     '''</font>
+<font color="black">  61.     Return process object representing the current process</font>
+<font color="black">  62.     '''</font>
+<font color="red">  63.     return _current_process</font>
+<font color="black">  64. </font>
+<font color="green">  65. def active_children():</font>
+<font color="black">  66.     '''</font>
+<font color="black">  67.     Return list of process objects corresponding to live child processes</font>
+<font color="black">  68.     '''</font>
+<font color="red">  69.     _cleanup()</font>
+<font color="red">  70.     return list(_current_process._children)</font>
+<font color="black">  71. </font>
+<font color="black">  72. #</font>
+<font color="black">  73. #</font>
+<font color="black">  74. #</font>
+<font color="black">  75. </font>
+<font color="green">  76. def _cleanup():</font>
+<font color="black">  77.     # check for processes which have finished</font>
+<font color="red">  78.     for p in list(_current_process._children):</font>
+<font color="red">  79.         if p._popen.poll() is not None:</font>
+<font color="red">  80.             _current_process._children.discard(p)</font>
+<font color="black">  81. </font>
+<font color="black">  82. #</font>
+<font color="black">  83. # The `Process` class</font>
+<font color="black">  84. #</font>
+<font color="black">  85. </font>
+<font color="green">  86. class Process(object):</font>
+<font color="black">  87.     '''</font>
+<font color="black">  88.     Process objects represent activity that is run in a separate process</font>
+<font color="black">  89. </font>
+<font color="black">  90.     The class is analagous to `threading.Thread`</font>
+<font color="green">  91.     '''</font>
+<font color="green">  92.     _Popen = None</font>
+<font color="black">  93. </font>
+<font color="green">  94.     def __init__(self, group=None, target=None, name=None, args=(), kwargs={}):</font>
+<font color="red">  95.         assert group is None, 'group argument must be None for now'</font>
+<font color="red">  96.         count = _current_process._counter.next()</font>
+<font color="red">  97.         self._identity = _current_process._identity + (count,)</font>
+<font color="red">  98.         self._authkey = _current_process._authkey</font>
+<font color="red">  99.         self._daemonic = _current_process._daemonic</font>
+<font color="red"> 100.         self._tempdir = _current_process._tempdir</font>
+<font color="red"> 101.         self._parent_pid = os.getpid()</font>
+<font color="red"> 102.         self._popen = None</font>
+<font color="red"> 103.         self._target = target</font>
+<font color="red"> 104.         self._args = tuple(args)</font>
+<font color="red"> 105.         self._kwargs = dict(kwargs)</font>
+<font color="red"> 106.         self._name = name or type(self).__name__ + '-' + \</font>
+<font color="red"> 107.                      ':'.join(str(i) for i in self._identity)</font>
+<font color="black"> 108. </font>
+<font color="green"> 109.     def run(self):</font>
+<font color="black"> 110.         '''</font>
+<font color="black"> 111.         Method to be run in sub-process; can be overridden in sub-class</font>
+<font color="black"> 112.         '''</font>
+<font color="red"> 113.         if self._target:</font>
+<font color="red"> 114.             self._target(*self._args, **self._kwargs)</font>
+<font color="black"> 115. </font>
+<font color="green"> 116.     def start(self):</font>
+<font color="black"> 117.         '''</font>
+<font color="black"> 118.         Start child process</font>
+<font color="black"> 119.         '''</font>
+<font color="red"> 120.         assert self._popen is None, 'cannot start a process twice'</font>
+<font color="red"> 121.         assert self._parent_pid == os.getpid(), \</font>
+<font color="red"> 122.                'can only start a process object created by current process'</font>
+<font color="red"> 123.         assert not _current_process._daemonic, \</font>
+<font color="red"> 124.                'daemonic processes are not allowed to have children'</font>
+<font color="red"> 125.         _cleanup()</font>
+<font color="red"> 126.         if self._Popen is not None:</font>
+<font color="red"> 127.             Popen = self._Popen</font>
+<font color="black"> 128.         else:</font>
+<font color="red"> 129.             from .forking import Popen</font>
+<font color="red"> 130.         self._popen = Popen(self)</font>
+<font color="black"> 131.         # Avoid a refcycle if the target function holds an indirect</font>
+<font color="black"> 132.         # reference to the process object (see bpo-30775)</font>
+<font color="red"> 133.         del self._target, self._args, self._kwargs</font>
+<font color="red"> 134.         _current_process._children.add(self)</font>
+<font color="black"> 135. </font>
+<font color="green"> 136.     def terminate(self):</font>
+<font color="black"> 137.         '''</font>
+<font color="black"> 138.         Terminate process; sends SIGTERM signal or uses TerminateProcess()</font>
+<font color="black"> 139.         '''</font>
+<font color="red"> 140.         self._popen.terminate()</font>
+<font color="black"> 141. </font>
+<font color="green"> 142.     def join(self, timeout=None):</font>
+<font color="black"> 143.         '''</font>
+<font color="black"> 144.         Wait until child process terminates</font>
+<font color="black"> 145.         '''</font>
+<font color="red"> 146.         assert self._parent_pid == os.getpid(), 'can only join a child process'</font>
+<font color="red"> 147.         assert self._popen is not None, 'can only join a started process'</font>
+<font color="red"> 148.         res = self._popen.wait(timeout)</font>
+<font color="red"> 149.         if res is not None:</font>
+<font color="red"> 150.             _current_process._children.discard(self)</font>
+<font color="black"> 151. </font>
+<font color="green"> 152.     def is_alive(self):</font>
+<font color="black"> 153.         '''</font>
+<font color="black"> 154.         Return whether process is alive</font>
+<font color="black"> 155.         '''</font>
+<font color="red"> 156.         if self is _current_process:</font>
+<font color="red"> 157.             return True</font>
+<font color="red"> 158.         assert self._parent_pid == os.getpid(), 'can only test a child process'</font>
+<font color="black"> 159. </font>
+<font color="red"> 160.         if self._popen is None:</font>
+<font color="red"> 161.             return False</font>
+<font color="black"> 162. </font>
+<font color="red"> 163.         returncode = self._popen.poll()</font>
+<font color="red"> 164.         if returncode is None:</font>
+<font color="red"> 165.             return True</font>
+<font color="black"> 166.         else:</font>
+<font color="red"> 167.             _current_process._children.discard(self)</font>
+<font color="red"> 168.             return False</font>
+<font color="black"> 169. </font>
+<font color="green"> 170.     @property</font>
+<font color="black"> 171.     def name(self):</font>
+<font color="red"> 172.         return self._name</font>
+<font color="black"> 173. </font>
+<font color="green"> 174.     @name.setter</font>
+<font color="black"> 175.     def name(self, name):</font>
+<font color="red"> 176.         assert isinstance(name, basestring), 'name must be a string'</font>
+<font color="red"> 177.         self._name = name</font>
+<font color="black"> 178. </font>
+<font color="green"> 179.     @property</font>
+<font color="black"> 180.     def daemon(self):</font>
+<font color="black"> 181.         '''</font>
+<font color="black"> 182.         Return whether process is a daemon</font>
+<font color="black"> 183.         '''</font>
+<font color="red"> 184.         return self._daemonic</font>
+<font color="black"> 185. </font>
+<font color="green"> 186.     @daemon.setter</font>
+<font color="black"> 187.     def daemon(self, daemonic):</font>
+<font color="black"> 188.         '''</font>
+<font color="black"> 189.         Set whether process is a daemon</font>
+<font color="black"> 190.         '''</font>
+<font color="red"> 191.         assert self._popen is None, 'process has already started'</font>
+<font color="red"> 192.         self._daemonic = daemonic</font>
+<font color="black"> 193. </font>
+<font color="green"> 194.     @property</font>
+<font color="black"> 195.     def authkey(self):</font>
+<font color="red"> 196.         return self._authkey</font>
+<font color="black"> 197. </font>
+<font color="green"> 198.     @authkey.setter</font>
+<font color="black"> 199.     def authkey(self, authkey):</font>
+<font color="black"> 200.         '''</font>
+<font color="black"> 201.         Set authorization key of process</font>
+<font color="black"> 202.         '''</font>
+<font color="red"> 203.         self._authkey = AuthenticationString(authkey)</font>
+<font color="black"> 204. </font>
+<font color="green"> 205.     @property</font>
+<font color="black"> 206.     def exitcode(self):</font>
+<font color="black"> 207.         '''</font>
+<font color="black"> 208.         Return exit code of process or `None` if it has yet to stop</font>
+<font color="black"> 209.         '''</font>
+<font color="red"> 210.         if self._popen is None:</font>
+<font color="red"> 211.             return self._popen</font>
+<font color="red"> 212.         return self._popen.poll()</font>
+<font color="black"> 213. </font>
+<font color="green"> 214.     @property</font>
+<font color="black"> 215.     def ident(self):</font>
+<font color="black"> 216.         '''</font>
+<font color="black"> 217.         Return identifier (PID) of process or `None` if it has yet to start</font>
+<font color="black"> 218.         '''</font>
+<font color="red"> 219.         if self is _current_process:</font>
+<font color="red"> 220.             return os.getpid()</font>
+<font color="black"> 221.         else:</font>
+<font color="red"> 222.             return self._popen and self._popen.pid</font>
+<font color="black"> 223. </font>
+<font color="green"> 224.     pid = ident</font>
+<font color="black"> 225. </font>
+<font color="green"> 226.     def __repr__(self):</font>
+<font color="red"> 227.         if self is _current_process:</font>
+<font color="red"> 228.             status = 'started'</font>
+<font color="red"> 229.         elif self._parent_pid != os.getpid():</font>
+<font color="red"> 230.             status = 'unknown'</font>
+<font color="red"> 231.         elif self._popen is None:</font>
+<font color="red"> 232.             status = 'initial'</font>
+<font color="black"> 233.         else:</font>
+<font color="red"> 234.             if self._popen.poll() is not None:</font>
+<font color="red"> 235.                 status = self.exitcode</font>
+<font color="black"> 236.             else:</font>
+<font color="red"> 237.                 status = 'started'</font>
+<font color="black"> 238. </font>
+<font color="red"> 239.         if type(status) in (int, long):</font>
+<font color="red"> 240.             if status == 0:</font>
+<font color="red"> 241.                 status = 'stopped'</font>
+<font color="black"> 242.             else:</font>
+<font color="red"> 243.                 status = 'stopped[%s]' % _exitcode_to_name.get(status, status)</font>
+<font color="black"> 244. </font>
+<font color="red"> 245.         return '&lt;%s(%s, %s%s)&gt;' % (type(self).__name__, self._name,</font>
+<font color="red"> 246.                                    status, self._daemonic and ' daemon' or '')</font>
+<font color="black"> 247. </font>
+<font color="black"> 248.     ##</font>
+<font color="black"> 249. </font>
+<font color="green"> 250.     def _bootstrap(self):</font>
+<font color="red"> 251.         from . import util</font>
+<font color="black"> 252.         global _current_process</font>
+<font color="black"> 253. </font>
+<font color="red"> 254.         try:</font>
+<font color="red"> 255.             self._children = set()</font>
+<font color="red"> 256.             self._counter = itertools.count(1)</font>
+<font color="red"> 257.             try:</font>
+<font color="red"> 258.                 sys.stdin.close()</font>
+<font color="red"> 259.                 sys.stdin = open(os.devnull)</font>
+<font color="red"> 260.             except (OSError, ValueError):</font>
+<font color="red"> 261.                 pass</font>
+<font color="red"> 262.             _current_process = self</font>
+<font color="red"> 263.             util._finalizer_registry.clear()</font>
+<font color="red"> 264.             util._run_after_forkers()</font>
+<font color="red"> 265.             util.info('child process calling self.run()')</font>
+<font color="red"> 266.             try:</font>
+<font color="red"> 267.                 self.run()</font>
+<font color="red"> 268.                 exitcode = 0</font>
+<font color="black"> 269.             finally:</font>
+<font color="red"> 270.                 util._exit_function()</font>
+<font color="red"> 271.         except SystemExit, e:</font>
+<font color="red"> 272.             if not e.args:</font>
+<font color="red"> 273.                 exitcode = 1</font>
+<font color="red"> 274.             elif isinstance(e.args[0], (int, long)):</font>
+<font color="red"> 275.                 exitcode = int(e.args[0])</font>
+<font color="black"> 276.             else:</font>
+<font color="red"> 277.                 sys.stderr.write(str(e.args[0]) + '\n')</font>
+<font color="red"> 278.                 sys.stderr.flush()</font>
+<font color="red"> 279.                 exitcode = 1</font>
+<font color="red"> 280.         except:</font>
+<font color="red"> 281.             exitcode = 1</font>
+<font color="red"> 282.             import traceback</font>
+<font color="red"> 283.             sys.stderr.write('Process %s:\n' % self.name)</font>
+<font color="red"> 284.             sys.stderr.flush()</font>
+<font color="red"> 285.             traceback.print_exc()</font>
+<font color="black"> 286. </font>
+<font color="red"> 287.         util.info('process exiting with exitcode %d' % exitcode)</font>
+<font color="red"> 288.         return exitcode</font>
+<font color="black"> 289. </font>
+<font color="black"> 290. #</font>
+<font color="black"> 291. # We subclass bytes to avoid accidental transmission of auth keys over network</font>
+<font color="black"> 292. #</font>
+<font color="black"> 293. </font>
+<font color="green"> 294. class AuthenticationString(bytes):</font>
+<font color="green"> 295.     def __reduce__(self):</font>
+<font color="red"> 296.         from .forking import Popen</font>
+<font color="red"> 297.         if not Popen.thread_is_spawning():</font>
+<font color="red"> 298.             raise TypeError(</font>
+<font color="red"> 299.                 'Pickling an AuthenticationString object is '</font>
+<font color="black"> 300.                 'disallowed for security reasons'</font>
+<font color="black"> 301.                 )</font>
+<font color="red"> 302.         return AuthenticationString, (bytes(self),)</font>
+<font color="black"> 303. </font>
+<font color="black"> 304. #</font>
+<font color="black"> 305. # Create object representing the main process</font>
+<font color="black"> 306. #</font>
+<font color="black"> 307. </font>
+<font color="green"> 308. class _MainProcess(Process):</font>
+<font color="black"> 309. </font>
+<font color="green"> 310.     def __init__(self):</font>
+<font color="green"> 311.         self._identity = ()</font>
+<font color="green"> 312.         self._daemonic = False</font>
+<font color="green"> 313.         self._name = 'MainProcess'</font>
+<font color="green"> 314.         self._parent_pid = None</font>
+<font color="green"> 315.         self._popen = None</font>
+<font color="green"> 316.         self._counter = itertools.count(1)</font>
+<font color="green"> 317.         self._children = set()</font>
+<font color="green"> 318.         self._authkey = AuthenticationString(os.urandom(32))</font>
+<font color="green"> 319.         self._tempdir = None</font>
+<font color="black"> 320. </font>
+<font color="green"> 321. _current_process = _MainProcess()</font>
+<font color="green"> 322. del _MainProcess</font>
+<font color="black"> 323. </font>
+<font color="black"> 324. #</font>
+<font color="black"> 325. # Give names to some return codes</font>
+<font color="black"> 326. #</font>
+<font color="black"> 327. </font>
+<font color="green"> 328. _exitcode_to_name = {}</font>
+<font color="black"> 329. </font>
+<font color="green"> 330. for name, signum in signal.__dict__.items():</font>
+<font color="green"> 331.     if name[:3]=='SIG' and '_' not in name:</font>
+<font color="green"> 332.         _exitcode_to_name[-signum] = name</font>
+</pre>
+

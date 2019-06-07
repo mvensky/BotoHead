@@ -1,0 +1,584 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/socket.py</b><br>
+
+
+file stats: <b>371 lines, 86 executed: 23.2% covered</b>
+<pre>
+<font color="black">   1. # Wrapper module for _socket, providing some additional facilities</font>
+<font color="black">   2. # implemented in Python.</font>
+<font color="black">   3. </font>
+<font color="black">   4. &quot;&quot;&quot;\</font>
+<font color="black">   5. This module provides socket operations and some related functions.</font>
+<font color="black">   6. On Unix, it supports IP (Internet Protocol) and Unix domain sockets.</font>
+<font color="black">   7. On other systems, it only supports IP. Functions specific for a</font>
+<font color="black">   8. socket are available as methods of the socket object.</font>
+<font color="black">   9. </font>
+<font color="black">  10. Functions:</font>
+<font color="black">  11. </font>
+<font color="black">  12. socket() -- create a new socket object</font>
+<font color="black">  13. socketpair() -- create a pair of new socket objects [*]</font>
+<font color="black">  14. fromfd() -- create a socket object from an open file descriptor [*]</font>
+<font color="black">  15. gethostname() -- return the current hostname</font>
+<font color="black">  16. gethostbyname() -- map a hostname to its IP number</font>
+<font color="black">  17. gethostbyaddr() -- map an IP number or hostname to DNS info</font>
+<font color="black">  18. getservbyname() -- map a service name and a protocol name to a port number</font>
+<font color="black">  19. getprotobyname() -- map a protocol name (e.g. 'tcp') to a number</font>
+<font color="black">  20. ntohs(), ntohl() -- convert 16, 32 bit int from network to host byte order</font>
+<font color="black">  21. htons(), htonl() -- convert 16, 32 bit int from host to network byte order</font>
+<font color="black">  22. inet_aton() -- convert IP addr string (123.45.67.89) to 32-bit packed format</font>
+<font color="black">  23. inet_ntoa() -- convert 32-bit packed format IP to string (123.45.67.89)</font>
+<font color="black">  24. ssl() -- secure socket layer support (only available if configured)</font>
+<font color="black">  25. socket.getdefaulttimeout() -- get the default timeout value</font>
+<font color="black">  26. socket.setdefaulttimeout() -- set the default timeout value</font>
+<font color="black">  27. create_connection() -- connects to an address, with an optional timeout and</font>
+<font color="black">  28.                        optional source address.</font>
+<font color="black">  29. </font>
+<font color="black">  30.  [*] not available on all platforms!</font>
+<font color="black">  31. </font>
+<font color="black">  32. Special objects:</font>
+<font color="black">  33. </font>
+<font color="black">  34. SocketType -- type object for socket objects</font>
+<font color="black">  35. error -- exception raised for I/O errors</font>
+<font color="black">  36. has_ipv6 -- boolean value indicating if IPv6 is supported</font>
+<font color="black">  37. </font>
+<font color="black">  38. Integer constants:</font>
+<font color="black">  39. </font>
+<font color="black">  40. AF_INET, AF_UNIX -- socket domains (first argument to socket() call)</font>
+<font color="black">  41. SOCK_STREAM, SOCK_DGRAM, SOCK_RAW -- socket types (second argument)</font>
+<font color="black">  42. </font>
+<font color="black">  43. Many other constants may be defined; these may be used in calls to</font>
+<font color="black">  44. the setsockopt() and getsockopt() methods.</font>
+<font color="red">  45. &quot;&quot;&quot;</font>
+<font color="black">  46. </font>
+<font color="red">  47. import _socket</font>
+<font color="red">  48. from _socket import *</font>
+<font color="red">  49. from functools import partial</font>
+<font color="red">  50. from types import MethodType</font>
+<font color="black">  51. </font>
+<font color="red">  52. try:</font>
+<font color="red">  53.     import _ssl</font>
+<font color="red">  54. except ImportError:</font>
+<font color="black">  55.     # no SSL support</font>
+<font color="red">  56.     pass</font>
+<font color="black">  57. else:</font>
+<font color="red">  58.     def ssl(sock, keyfile=None, certfile=None):</font>
+<font color="black">  59.         # we do an internal import here because the ssl</font>
+<font color="black">  60.         # module imports the socket module</font>
+<font color="red">  61.         import ssl as _realssl</font>
+<font color="red">  62.         warnings.warn(&quot;socket.ssl() is deprecated.  Use ssl.wrap_socket() instead.&quot;,</font>
+<font color="red">  63.                       DeprecationWarning, stacklevel=2)</font>
+<font color="red">  64.         return _realssl.sslwrap_simple(sock, keyfile, certfile)</font>
+<font color="black">  65. </font>
+<font color="black">  66.     # we need to import the same constants we used to...</font>
+<font color="red">  67.     from _ssl import SSLError as sslerror</font>
+<font color="red">  68.     from _ssl import \</font>
+<font color="black">  69.          RAND_add, \</font>
+<font color="black">  70.          RAND_status, \</font>
+<font color="black">  71.          SSL_ERROR_ZERO_RETURN, \</font>
+<font color="black">  72.          SSL_ERROR_WANT_READ, \</font>
+<font color="black">  73.          SSL_ERROR_WANT_WRITE, \</font>
+<font color="black">  74.          SSL_ERROR_WANT_X509_LOOKUP, \</font>
+<font color="black">  75.          SSL_ERROR_SYSCALL, \</font>
+<font color="black">  76.          SSL_ERROR_SSL, \</font>
+<font color="black">  77.          SSL_ERROR_WANT_CONNECT, \</font>
+<font color="black">  78.          SSL_ERROR_EOF, \</font>
+<font color="black">  79.          SSL_ERROR_INVALID_ERROR_CODE</font>
+<font color="red">  80.     try:</font>
+<font color="red">  81.         from _ssl import RAND_egd</font>
+<font color="red">  82.     except ImportError:</font>
+<font color="black">  83.         # LibreSSL does not provide RAND_egd</font>
+<font color="red">  84.         pass</font>
+<font color="black">  85. </font>
+<font color="red">  86. import os, sys, warnings</font>
+<font color="black">  87. </font>
+<font color="red">  88. try:</font>
+<font color="red">  89.     from cStringIO import StringIO</font>
+<font color="red">  90. except ImportError:</font>
+<font color="red">  91.     from StringIO import StringIO</font>
+<font color="black">  92. </font>
+<font color="red">  93. try:</font>
+<font color="red">  94.     import errno</font>
+<font color="red">  95. except ImportError:</font>
+<font color="red">  96.     errno = None</font>
+<font color="red">  97. EBADF = getattr(errno, 'EBADF', 9)</font>
+<font color="red">  98. EINTR = getattr(errno, 'EINTR', 4)</font>
+<font color="black">  99. </font>
+<font color="red"> 100. __all__ = [&quot;getfqdn&quot;, &quot;create_connection&quot;]</font>
+<font color="red"> 101. __all__.extend(os._get_exports_list(_socket))</font>
+<font color="black"> 102. </font>
+<font color="black"> 103. </font>
+<font color="red"> 104. _realsocket = socket</font>
+<font color="black"> 105. </font>
+<font color="black"> 106. # WSA error codes</font>
+<font color="red"> 107. if sys.platform.lower().startswith(&quot;win&quot;):</font>
+<font color="red"> 108.     errorTab = {}</font>
+<font color="red"> 109.     errorTab[10004] = &quot;The operation was interrupted.&quot;</font>
+<font color="red"> 110.     errorTab[10009] = &quot;A bad file handle was passed.&quot;</font>
+<font color="red"> 111.     errorTab[10013] = &quot;Permission denied.&quot;</font>
+<font color="red"> 112.     errorTab[10014] = &quot;A fault occurred on the network??&quot; # WSAEFAULT</font>
+<font color="red"> 113.     errorTab[10022] = &quot;An invalid operation was attempted.&quot;</font>
+<font color="red"> 114.     errorTab[10035] = &quot;The socket operation would block&quot;</font>
+<font color="red"> 115.     errorTab[10036] = &quot;A blocking operation is already in progress.&quot;</font>
+<font color="red"> 116.     errorTab[10048] = &quot;The network address is in use.&quot;</font>
+<font color="red"> 117.     errorTab[10054] = &quot;The connection has been reset.&quot;</font>
+<font color="red"> 118.     errorTab[10058] = &quot;The network has been shut down.&quot;</font>
+<font color="red"> 119.     errorTab[10060] = &quot;The operation timed out.&quot;</font>
+<font color="red"> 120.     errorTab[10061] = &quot;Connection refused.&quot;</font>
+<font color="red"> 121.     errorTab[10063] = &quot;The name is too long.&quot;</font>
+<font color="red"> 122.     errorTab[10064] = &quot;The host is down.&quot;</font>
+<font color="red"> 123.     errorTab[10065] = &quot;The host is unreachable.&quot;</font>
+<font color="red"> 124.     __all__.append(&quot;errorTab&quot;)</font>
+<font color="black"> 125. </font>
+<font color="black"> 126. </font>
+<font color="black"> 127. </font>
+<font color="red"> 128. def getfqdn(name=''):</font>
+<font color="black"> 129.     &quot;&quot;&quot;Get fully qualified domain name from name.</font>
+<font color="black"> 130. </font>
+<font color="black"> 131.     An empty argument is interpreted as meaning the local host.</font>
+<font color="black"> 132. </font>
+<font color="black"> 133.     First the hostname returned by gethostbyaddr() is checked, then</font>
+<font color="black"> 134.     possibly existing aliases. In case no FQDN is available, hostname</font>
+<font color="black"> 135.     from gethostname() is returned.</font>
+<font color="black"> 136.     &quot;&quot;&quot;</font>
+<font color="red"> 137.     name = name.strip()</font>
+<font color="red"> 138.     if not name or name == '0.0.0.0':</font>
+<font color="red"> 139.         name = gethostname()</font>
+<font color="red"> 140.     try:</font>
+<font color="red"> 141.         hostname, aliases, ipaddrs = gethostbyaddr(name)</font>
+<font color="red"> 142.     except error:</font>
+<font color="red"> 143.         pass</font>
+<font color="black"> 144.     else:</font>
+<font color="red"> 145.         aliases.insert(0, hostname)</font>
+<font color="red"> 146.         for name in aliases:</font>
+<font color="red"> 147.             if '.' in name:</font>
+<font color="red"> 148.                 break</font>
+<font color="black"> 149.         else:</font>
+<font color="red"> 150.             name = hostname</font>
+<font color="red"> 151.     return name</font>
+<font color="black"> 152. </font>
+<font color="black"> 153. </font>
+<font color="black"> 154. _socketmethods = (</font>
+<font color="red"> 155.     'bind', 'connect', 'connect_ex', 'fileno', 'listen',</font>
+<font color="red"> 156.     'getpeername', 'getsockname', 'getsockopt', 'setsockopt',</font>
+<font color="red"> 157.     'sendall', 'setblocking',</font>
+<font color="red"> 158.     'settimeout', 'gettimeout', 'shutdown')</font>
+<font color="black"> 159. </font>
+<font color="red"> 160. if os.name == &quot;nt&quot;:</font>
+<font color="red"> 161.     _socketmethods = _socketmethods + ('ioctl',)</font>
+<font color="black"> 162. </font>
+<font color="red"> 163. if sys.platform == &quot;riscos&quot;:</font>
+<font color="red"> 164.     _socketmethods = _socketmethods + ('sleeptaskw',)</font>
+<font color="black"> 165. </font>
+<font color="black"> 166. # All the method names that must be delegated to either the real socket</font>
+<font color="black"> 167. # object or the _closedsocket object.</font>
+<font color="red"> 168. _delegate_methods = (&quot;recv&quot;, &quot;recvfrom&quot;, &quot;recv_into&quot;, &quot;recvfrom_into&quot;,</font>
+<font color="red"> 169.                      &quot;send&quot;, &quot;sendto&quot;)</font>
+<font color="black"> 170. </font>
+<font color="red"> 171. class _closedsocket(object):</font>
+<font color="red"> 172.     __slots__ = []</font>
+<font color="red"> 173.     def _dummy(*args):</font>
+<font color="red"> 174.         raise error(EBADF, 'Bad file descriptor')</font>
+<font color="black"> 175.     # All _delegate_methods must also be initialized here.</font>
+<font color="red"> 176.     send = recv = recv_into = sendto = recvfrom = recvfrom_into = _dummy</font>
+<font color="red"> 177.     __getattr__ = _dummy</font>
+<font color="black"> 178. </font>
+<font color="black"> 179. # Wrapper around platform socket objects. This implements</font>
+<font color="black"> 180. # a platform-independent dup() functionality. The</font>
+<font color="black"> 181. # implementation currently relies on reference counting</font>
+<font color="black"> 182. # to close the underlying socket object.</font>
+<font color="red"> 183. class _socketobject(object):</font>
+<font color="black"> 184. </font>
+<font color="red"> 185.     __doc__ = _realsocket.__doc__</font>
+<font color="black"> 186. </font>
+<font color="red"> 187.     __slots__ = [&quot;_sock&quot;, &quot;__weakref__&quot;] + list(_delegate_methods)</font>
+<font color="black"> 188. </font>
+<font color="red"> 189.     def __init__(self, family=AF_INET, type=SOCK_STREAM, proto=0, _sock=None):</font>
+<font color="green"> 190.         if _sock is None:</font>
+<font color="green"> 191.             _sock = _realsocket(family, type, proto)</font>
+<font color="green"> 192.         self._sock = _sock</font>
+<font color="green"> 193.         for method in _delegate_methods:</font>
+<font color="green"> 194.             setattr(self, method, getattr(_sock, method))</font>
+<font color="black"> 195. </font>
+<font color="red"> 196.     def close(self, _closedsocket=_closedsocket,</font>
+<font color="red"> 197.               _delegate_methods=_delegate_methods, setattr=setattr):</font>
+<font color="black"> 198.         # This function should not reference any globals. See issue #808164.</font>
+<font color="green"> 199.         self._sock = _closedsocket()</font>
+<font color="green"> 200.         dummy = self._sock._dummy</font>
+<font color="green"> 201.         for method in _delegate_methods:</font>
+<font color="green"> 202.             setattr(self, method, dummy)</font>
+<font color="red"> 203.     close.__doc__ = _realsocket.close.__doc__</font>
+<font color="black"> 204. </font>
+<font color="red"> 205.     def accept(self):</font>
+<font color="red"> 206.         sock, addr = self._sock.accept()</font>
+<font color="red"> 207.         return _socketobject(_sock=sock), addr</font>
+<font color="red"> 208.     accept.__doc__ = _realsocket.accept.__doc__</font>
+<font color="black"> 209. </font>
+<font color="red"> 210.     def dup(self):</font>
+<font color="black"> 211.         &quot;&quot;&quot;dup() -&gt; socket object</font>
+<font color="black"> 212. </font>
+<font color="black"> 213.         Return a new socket object connected to the same system resource.&quot;&quot;&quot;</font>
+<font color="red"> 214.         return _socketobject(_sock=self._sock)</font>
+<font color="black"> 215. </font>
+<font color="red"> 216.     def makefile(self, mode='r', bufsize=-1):</font>
+<font color="black"> 217.         &quot;&quot;&quot;makefile([mode[, bufsize]]) -&gt; file object</font>
+<font color="black"> 218. </font>
+<font color="black"> 219.         Return a regular file object corresponding to the socket.  The mode</font>
+<font color="black"> 220.         and bufsize arguments are as for the built-in open() function.&quot;&quot;&quot;</font>
+<font color="red"> 221.         return _fileobject(self._sock, mode, bufsize)</font>
+<font color="black"> 222. </font>
+<font color="red"> 223.     family = property(lambda self: self._sock.family, doc=&quot;the socket family&quot;)</font>
+<font color="red"> 224.     type = property(lambda self: self._sock.type, doc=&quot;the socket type&quot;)</font>
+<font color="red"> 225.     proto = property(lambda self: self._sock.proto, doc=&quot;the socket protocol&quot;)</font>
+<font color="black"> 226. </font>
+<font color="red"> 227. def meth(name,self,*args):</font>
+<font color="green"> 228.     return getattr(self._sock,name)(*args)</font>
+<font color="black"> 229. </font>
+<font color="red"> 230. for _m in _socketmethods:</font>
+<font color="red"> 231.     p = partial(meth,_m)</font>
+<font color="red"> 232.     p.__name__ = _m</font>
+<font color="red"> 233.     p.__doc__ = getattr(_realsocket,_m).__doc__</font>
+<font color="red"> 234.     m = MethodType(p,None,_socketobject)</font>
+<font color="red"> 235.     setattr(_socketobject,_m,m)</font>
+<font color="black"> 236. </font>
+<font color="red"> 237. socket = SocketType = _socketobject</font>
+<font color="black"> 238. </font>
+<font color="red"> 239. class _fileobject(object):</font>
+<font color="red"> 240.     &quot;&quot;&quot;Faux file object attached to a socket object.&quot;&quot;&quot;</font>
+<font color="black"> 241. </font>
+<font color="red"> 242.     default_bufsize = 8192</font>
+<font color="red"> 243.     name = &quot;&lt;socket&gt;&quot;</font>
+<font color="black"> 244. </font>
+<font color="red"> 245.     __slots__ = [&quot;mode&quot;, &quot;bufsize&quot;, &quot;softspace&quot;,</font>
+<font color="black"> 246.                  # &quot;closed&quot; is a property, see below</font>
+<font color="red"> 247.                  &quot;_sock&quot;, &quot;_rbufsize&quot;, &quot;_wbufsize&quot;, &quot;_rbuf&quot;, &quot;_wbuf&quot;, &quot;_wbuf_len&quot;,</font>
+<font color="red"> 248.                  &quot;_close&quot;]</font>
+<font color="black"> 249. </font>
+<font color="red"> 250.     def __init__(self, sock, mode='rb', bufsize=-1, close=False):</font>
+<font color="green"> 251.         self._sock = sock</font>
+<font color="green"> 252.         self.mode = mode # Not actually used in this version</font>
+<font color="green"> 253.         if bufsize &lt; 0:</font>
+<font color="green"> 254.             bufsize = self.default_bufsize</font>
+<font color="green"> 255.         self.bufsize = bufsize</font>
+<font color="green"> 256.         self.softspace = False</font>
+<font color="black"> 257.         # _rbufsize is the suggested recv buffer size.  It is *strictly*</font>
+<font color="black"> 258.         # obeyed within readline() for recv calls.  If it is larger than</font>
+<font color="black"> 259.         # default_bufsize it will be used for recv calls within read().</font>
+<font color="green"> 260.         if bufsize == 0:</font>
+<font color="red"> 261.             self._rbufsize = 1</font>
+<font color="green"> 262.         elif bufsize == 1:</font>
+<font color="red"> 263.             self._rbufsize = self.default_bufsize</font>
+<font color="black"> 264.         else:</font>
+<font color="green"> 265.             self._rbufsize = bufsize</font>
+<font color="green"> 266.         self._wbufsize = bufsize</font>
+<font color="black"> 267.         # We use StringIO for the read buffer to avoid holding a list</font>
+<font color="black"> 268.         # of variously sized string objects which have been known to</font>
+<font color="black"> 269.         # fragment the heap due to how they are malloc()ed and often</font>
+<font color="black"> 270.         # realloc()ed down much smaller than their original allocation.</font>
+<font color="green"> 271.         self._rbuf = StringIO()</font>
+<font color="green"> 272.         self._wbuf = [] # A list of strings</font>
+<font color="green"> 273.         self._wbuf_len = 0</font>
+<font color="green"> 274.         self._close = close</font>
+<font color="black"> 275. </font>
+<font color="red"> 276.     def _getclosed(self):</font>
+<font color="red"> 277.         return self._sock is None</font>
+<font color="red"> 278.     closed = property(_getclosed, doc=&quot;True if the file is closed&quot;)</font>
+<font color="black"> 279. </font>
+<font color="red"> 280.     def close(self):</font>
+<font color="green"> 281.         try:</font>
+<font color="green"> 282.             if self._sock:</font>
+<font color="green"> 283.                 self.flush()</font>
+<font color="black"> 284.         finally:</font>
+<font color="green"> 285.             if self._close:</font>
+<font color="green"> 286.                 self._sock.close()</font>
+<font color="green"> 287.             self._sock = None</font>
+<font color="black"> 288. </font>
+<font color="red"> 289.     def __del__(self):</font>
+<font color="green"> 290.         try:</font>
+<font color="green"> 291.             self.close()</font>
+<font color="green"> 292.         except:</font>
+<font color="black"> 293.             # close() may fail if __init__ didn't complete</font>
+<font color="green"> 294.             pass</font>
+<font color="black"> 295. </font>
+<font color="red"> 296.     def flush(self):</font>
+<font color="green"> 297.         if self._wbuf:</font>
+<font color="red"> 298.             data = &quot;&quot;.join(self._wbuf)</font>
+<font color="red"> 299.             self._wbuf = []</font>
+<font color="red"> 300.             self._wbuf_len = 0</font>
+<font color="red"> 301.             buffer_size = max(self._rbufsize, self.default_bufsize)</font>
+<font color="red"> 302.             data_size = len(data)</font>
+<font color="red"> 303.             write_offset = 0</font>
+<font color="red"> 304.             view = memoryview(data)</font>
+<font color="red"> 305.             try:</font>
+<font color="red"> 306.                 while write_offset &lt; data_size:</font>
+<font color="red"> 307.                     self._sock.sendall(view[write_offset:write_offset+buffer_size])</font>
+<font color="red"> 308.                     write_offset += buffer_size</font>
+<font color="black"> 309.             finally:</font>
+<font color="red"> 310.                 if write_offset &lt; data_size:</font>
+<font color="red"> 311.                     remainder = data[write_offset:]</font>
+<font color="red"> 312.                     del view, data  # explicit free</font>
+<font color="red"> 313.                     self._wbuf.append(remainder)</font>
+<font color="red"> 314.                     self._wbuf_len = len(remainder)</font>
+<font color="black"> 315. </font>
+<font color="red"> 316.     def fileno(self):</font>
+<font color="red"> 317.         return self._sock.fileno()</font>
+<font color="black"> 318. </font>
+<font color="red"> 319.     def write(self, data):</font>
+<font color="red"> 320.         data = str(data) # XXX Should really reject non-string non-buffers</font>
+<font color="red"> 321.         if not data:</font>
+<font color="red"> 322.             return</font>
+<font color="red"> 323.         self._wbuf.append(data)</font>
+<font color="red"> 324.         self._wbuf_len += len(data)</font>
+<font color="red"> 325.         if (self._wbufsize == 0 or</font>
+<font color="red"> 326.             (self._wbufsize == 1 and '\n' in data) or</font>
+<font color="red"> 327.             (self._wbufsize &gt; 1 and self._wbuf_len &gt;= self._wbufsize)):</font>
+<font color="red"> 328.             self.flush()</font>
+<font color="black"> 329. </font>
+<font color="red"> 330.     def writelines(self, list):</font>
+<font color="black"> 331.         # XXX We could do better here for very long lists</font>
+<font color="black"> 332.         # XXX Should really reject non-string non-buffers</font>
+<font color="red"> 333.         lines = filter(None, map(str, list))</font>
+<font color="red"> 334.         self._wbuf_len += sum(map(len, lines))</font>
+<font color="red"> 335.         self._wbuf.extend(lines)</font>
+<font color="red"> 336.         if (self._wbufsize &lt;= 1 or</font>
+<font color="red"> 337.             self._wbuf_len &gt;= self._wbufsize):</font>
+<font color="red"> 338.             self.flush()</font>
+<font color="black"> 339. </font>
+<font color="red"> 340.     def read(self, size=-1):</font>
+<font color="black"> 341.         # Use max, disallow tiny reads in a loop as they are very inefficient.</font>
+<font color="black"> 342.         # We never leave read() with any leftover data from a new recv() call</font>
+<font color="black"> 343.         # in our internal buffer.</font>
+<font color="green"> 344.         rbufsize = max(self._rbufsize, self.default_bufsize)</font>
+<font color="black"> 345.         # Our use of StringIO rather than lists of string objects returned by</font>
+<font color="black"> 346.         # recv() minimizes memory usage and fragmentation that occurs when</font>
+<font color="black"> 347.         # rbufsize is large compared to the typical return value of recv().</font>
+<font color="green"> 348.         buf = self._rbuf</font>
+<font color="green"> 349.         buf.seek(0, 2)  # seek end</font>
+<font color="green"> 350.         if size &lt; 0:</font>
+<font color="black"> 351.             # Read until EOF</font>
+<font color="red"> 352.             self._rbuf = StringIO()  # reset _rbuf.  we consume it via buf.</font>
+<font color="red"> 353.             while True:</font>
+<font color="red"> 354.                 try:</font>
+<font color="red"> 355.                     data = self._sock.recv(rbufsize)</font>
+<font color="red"> 356.                 except error, e:</font>
+<font color="red"> 357.                     if e.args[0] == EINTR:</font>
+<font color="red"> 358.                         continue</font>
+<font color="red"> 359.                     raise</font>
+<font color="red"> 360.                 if not data:</font>
+<font color="red"> 361.                     break</font>
+<font color="red"> 362.                 buf.write(data)</font>
+<font color="red"> 363.             return buf.getvalue()</font>
+<font color="black"> 364.         else:</font>
+<font color="black"> 365.             # Read until size bytes or EOF seen, whichever comes first</font>
+<font color="green"> 366.             buf_len = buf.tell()</font>
+<font color="green"> 367.             if buf_len &gt;= size:</font>
+<font color="black"> 368.                 # Already have size bytes in our buffer?  Extract and return.</font>
+<font color="green"> 369.                 buf.seek(0)</font>
+<font color="green"> 370.                 rv = buf.read(size)</font>
+<font color="green"> 371.                 self._rbuf = StringIO()</font>
+<font color="green"> 372.                 self._rbuf.write(buf.read())</font>
+<font color="green"> 373.                 return rv</font>
+<font color="black"> 374. </font>
+<font color="red"> 375.             self._rbuf = StringIO()  # reset _rbuf.  we consume it via buf.</font>
+<font color="red"> 376.             while True:</font>
+<font color="red"> 377.                 left = size - buf_len</font>
+<font color="black"> 378.                 # recv() will malloc the amount of memory given as its</font>
+<font color="black"> 379.                 # parameter even though it often returns much less data</font>
+<font color="black"> 380.                 # than that.  The returned data string is short lived</font>
+<font color="black"> 381.                 # as we copy it into a StringIO and free it.  This avoids</font>
+<font color="black"> 382.                 # fragmentation issues on many platforms.</font>
+<font color="red"> 383.                 try:</font>
+<font color="red"> 384.                     data = self._sock.recv(left)</font>
+<font color="red"> 385.                 except error, e:</font>
+<font color="red"> 386.                     if e.args[0] == EINTR:</font>
+<font color="red"> 387.                         continue</font>
+<font color="red"> 388.                     raise</font>
+<font color="red"> 389.                 if not data:</font>
+<font color="red"> 390.                     break</font>
+<font color="red"> 391.                 n = len(data)</font>
+<font color="red"> 392.                 if n == size and not buf_len:</font>
+<font color="black"> 393.                     # Shortcut.  Avoid buffer data copies when:</font>
+<font color="black"> 394.                     # - We have no data in our buffer.</font>
+<font color="black"> 395.                     # AND</font>
+<font color="black"> 396.                     # - Our call to recv returned exactly the</font>
+<font color="black"> 397.                     #   number of bytes we were asked to read.</font>
+<font color="red"> 398.                     return data</font>
+<font color="red"> 399.                 if n == left:</font>
+<font color="red"> 400.                     buf.write(data)</font>
+<font color="red"> 401.                     del data  # explicit free</font>
+<font color="red"> 402.                     break</font>
+<font color="red"> 403.                 assert n &lt;= left, &quot;recv(%d) returned %d bytes&quot; % (left, n)</font>
+<font color="red"> 404.                 buf.write(data)</font>
+<font color="red"> 405.                 buf_len += n</font>
+<font color="red"> 406.                 del data  # explicit free</font>
+<font color="black"> 407.                 #assert buf_len == buf.tell()</font>
+<font color="red"> 408.             return buf.getvalue()</font>
+<font color="black"> 409. </font>
+<font color="red"> 410.     def readline(self, size=-1):</font>
+<font color="green"> 411.         buf = self._rbuf</font>
+<font color="green"> 412.         buf.seek(0, 2)  # seek end</font>
+<font color="green"> 413.         if buf.tell() &gt; 0:</font>
+<font color="black"> 414.             # check if we already have it in our buffer</font>
+<font color="green"> 415.             buf.seek(0)</font>
+<font color="green"> 416.             bline = buf.readline(size)</font>
+<font color="green"> 417.             if bline.endswith('\n') or len(bline) == size:</font>
+<font color="green"> 418.                 self._rbuf = StringIO()</font>
+<font color="green"> 419.                 self._rbuf.write(buf.read())</font>
+<font color="green"> 420.                 return bline</font>
+<font color="red"> 421.             del bline</font>
+<font color="green"> 422.         if size &lt; 0:</font>
+<font color="black"> 423.             # Read until \n or EOF, whichever comes first</font>
+<font color="green"> 424.             if self._rbufsize &lt;= 1:</font>
+<font color="black"> 425.                 # Speed up unbuffered case</font>
+<font color="red"> 426.                 buf.seek(0)</font>
+<font color="red"> 427.                 buffers = [buf.read()]</font>
+<font color="red"> 428.                 self._rbuf = StringIO()  # reset _rbuf.  we consume it via buf.</font>
+<font color="red"> 429.                 data = None</font>
+<font color="red"> 430.                 recv = self._sock.recv</font>
+<font color="red"> 431.                 while True:</font>
+<font color="red"> 432.                     try:</font>
+<font color="red"> 433.                         while data != &quot;\n&quot;:</font>
+<font color="red"> 434.                             data = recv(1)</font>
+<font color="red"> 435.                             if not data:</font>
+<font color="red"> 436.                                 break</font>
+<font color="red"> 437.                             buffers.append(data)</font>
+<font color="red"> 438.                     except error, e:</font>
+<font color="black"> 439.                         # The try..except to catch EINTR was moved outside the</font>
+<font color="black"> 440.                         # recv loop to avoid the per byte overhead.</font>
+<font color="red"> 441.                         if e.args[0] == EINTR:</font>
+<font color="red"> 442.                             continue</font>
+<font color="red"> 443.                         raise</font>
+<font color="red"> 444.                     break</font>
+<font color="red"> 445.                 return &quot;&quot;.join(buffers)</font>
+<font color="black"> 446. </font>
+<font color="green"> 447.             buf.seek(0, 2)  # seek end</font>
+<font color="green"> 448.             self._rbuf = StringIO()  # reset _rbuf.  we consume it via buf.</font>
+<font color="green"> 449.             while True:</font>
+<font color="green"> 450.                 try:</font>
+<font color="green"> 451.                     data = self._sock.recv(self._rbufsize)</font>
+<font color="red"> 452.                 except error, e:</font>
+<font color="red"> 453.                     if e.args[0] == EINTR:</font>
+<font color="red"> 454.                         continue</font>
+<font color="red"> 455.                     raise</font>
+<font color="green"> 456.                 if not data:</font>
+<font color="red"> 457.                     break</font>
+<font color="green"> 458.                 nl = data.find('\n')</font>
+<font color="green"> 459.                 if nl &gt;= 0:</font>
+<font color="green"> 460.                     nl += 1</font>
+<font color="green"> 461.                     buf.write(data[:nl])</font>
+<font color="green"> 462.                     self._rbuf.write(data[nl:])</font>
+<font color="green"> 463.                     del data</font>
+<font color="green"> 464.                     break</font>
+<font color="red"> 465.                 buf.write(data)</font>
+<font color="green"> 466.             return buf.getvalue()</font>
+<font color="black"> 467.         else:</font>
+<font color="black"> 468.             # Read until size bytes or \n or EOF seen, whichever comes first</font>
+<font color="green"> 469.             buf.seek(0, 2)  # seek end</font>
+<font color="green"> 470.             buf_len = buf.tell()</font>
+<font color="green"> 471.             if buf_len &gt;= size:</font>
+<font color="red"> 472.                 buf.seek(0)</font>
+<font color="red"> 473.                 rv = buf.read(size)</font>
+<font color="red"> 474.                 self._rbuf = StringIO()</font>
+<font color="red"> 475.                 self._rbuf.write(buf.read())</font>
+<font color="red"> 476.                 return rv</font>
+<font color="green"> 477.             self._rbuf = StringIO()  # reset _rbuf.  we consume it via buf.</font>
+<font color="green"> 478.             while True:</font>
+<font color="green"> 479.                 try:</font>
+<font color="green"> 480.                     data = self._sock.recv(self._rbufsize)</font>
+<font color="red"> 481.                 except error, e:</font>
+<font color="red"> 482.                     if e.args[0] == EINTR:</font>
+<font color="red"> 483.                         continue</font>
+<font color="red"> 484.                     raise</font>
+<font color="green"> 485.                 if not data:</font>
+<font color="red"> 486.                     break</font>
+<font color="green"> 487.                 left = size - buf_len</font>
+<font color="black"> 488.                 # did we just receive a newline?</font>
+<font color="green"> 489.                 nl = data.find('\n', 0, left)</font>
+<font color="green"> 490.                 if nl &gt;= 0:</font>
+<font color="green"> 491.                     nl += 1</font>
+<font color="black"> 492.                     # save the excess data to _rbuf</font>
+<font color="green"> 493.                     self._rbuf.write(data[nl:])</font>
+<font color="green"> 494.                     if buf_len:</font>
+<font color="red"> 495.                         buf.write(data[:nl])</font>
+<font color="red"> 496.                         break</font>
+<font color="black"> 497.                     else:</font>
+<font color="black"> 498.                         # Shortcut.  Avoid data copy through buf when returning</font>
+<font color="black"> 499.                         # a substring of our first recv().</font>
+<font color="green"> 500.                         return data[:nl]</font>
+<font color="red"> 501.                 n = len(data)</font>
+<font color="red"> 502.                 if n == size and not buf_len:</font>
+<font color="black"> 503.                     # Shortcut.  Avoid data copy through buf when</font>
+<font color="black"> 504.                     # returning exactly all of our first recv().</font>
+<font color="red"> 505.                     return data</font>
+<font color="red"> 506.                 if n &gt;= left:</font>
+<font color="red"> 507.                     buf.write(data[:left])</font>
+<font color="red"> 508.                     self._rbuf.write(data[left:])</font>
+<font color="red"> 509.                     break</font>
+<font color="red"> 510.                 buf.write(data)</font>
+<font color="red"> 511.                 buf_len += n</font>
+<font color="black"> 512.                 #assert buf_len == buf.tell()</font>
+<font color="red"> 513.             return buf.getvalue()</font>
+<font color="black"> 514. </font>
+<font color="red"> 515.     def readlines(self, sizehint=0):</font>
+<font color="red"> 516.         total = 0</font>
+<font color="red"> 517.         list = []</font>
+<font color="red"> 518.         while True:</font>
+<font color="red"> 519.             line = self.readline()</font>
+<font color="red"> 520.             if not line:</font>
+<font color="red"> 521.                 break</font>
+<font color="red"> 522.             list.append(line)</font>
+<font color="red"> 523.             total += len(line)</font>
+<font color="red"> 524.             if sizehint and total &gt;= sizehint:</font>
+<font color="red"> 525.                 break</font>
+<font color="red"> 526.         return list</font>
+<font color="black"> 527. </font>
+<font color="black"> 528.     # Iterator protocols</font>
+<font color="black"> 529. </font>
+<font color="red"> 530.     def __iter__(self):</font>
+<font color="red"> 531.         return self</font>
+<font color="black"> 532. </font>
+<font color="red"> 533.     def next(self):</font>
+<font color="red"> 534.         line = self.readline()</font>
+<font color="red"> 535.         if not line:</font>
+<font color="red"> 536.             raise StopIteration</font>
+<font color="red"> 537.         return line</font>
+<font color="black"> 538. </font>
+<font color="red"> 539. _GLOBAL_DEFAULT_TIMEOUT = object()</font>
+<font color="black"> 540. </font>
+<font color="red"> 541. def create_connection(address, timeout=_GLOBAL_DEFAULT_TIMEOUT,</font>
+<font color="red"> 542.                       source_address=None):</font>
+<font color="black"> 543.     &quot;&quot;&quot;Connect to *address* and return the socket object.</font>
+<font color="black"> 544. </font>
+<font color="black"> 545.     Convenience function.  Connect to *address* (a 2-tuple ``(host,</font>
+<font color="black"> 546.     port)``) and return the socket object.  Passing the optional</font>
+<font color="black"> 547.     *timeout* parameter will set the timeout on the socket instance</font>
+<font color="black"> 548.     before attempting to connect.  If no *timeout* is supplied, the</font>
+<font color="black"> 549.     global default timeout setting returned by :func:`getdefaulttimeout`</font>
+<font color="black"> 550.     is used.  If *source_address* is set it must be a tuple of (host, port)</font>
+<font color="black"> 551.     for the socket to bind as a source address before making the connection.</font>
+<font color="black"> 552.     A host of '' or port 0 tells the OS to use the default.</font>
+<font color="black"> 553.     &quot;&quot;&quot;</font>
+<font color="black"> 554. </font>
+<font color="red"> 555.     host, port = address</font>
+<font color="red"> 556.     err = None</font>
+<font color="red"> 557.     for res in getaddrinfo(host, port, 0, SOCK_STREAM):</font>
+<font color="red"> 558.         af, socktype, proto, canonname, sa = res</font>
+<font color="red"> 559.         sock = None</font>
+<font color="red"> 560.         try:</font>
+<font color="red"> 561.             sock = socket(af, socktype, proto)</font>
+<font color="red"> 562.             if timeout is not _GLOBAL_DEFAULT_TIMEOUT:</font>
+<font color="red"> 563.                 sock.settimeout(timeout)</font>
+<font color="red"> 564.             if source_address:</font>
+<font color="red"> 565.                 sock.bind(source_address)</font>
+<font color="red"> 566.             sock.connect(sa)</font>
+<font color="red"> 567.             return sock</font>
+<font color="black"> 568. </font>
+<font color="red"> 569.         except error as _:</font>
+<font color="red"> 570.             err = _</font>
+<font color="red"> 571.             if sock is not None:</font>
+<font color="red"> 572.                 sock.close()</font>
+<font color="black"> 573. </font>
+<font color="red"> 574.     if err is not None:</font>
+<font color="red"> 575.         raise err</font>
+<font color="black"> 576.     else:</font>
+<font color="red"> 577.         raise error(&quot;getaddrinfo returns an empty list&quot;)</font>
+</pre>
+

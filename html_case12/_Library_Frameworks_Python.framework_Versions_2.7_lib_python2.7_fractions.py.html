@@ -1,0 +1,612 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/fractions.py</b><br>
+
+
+file stats: <b>259 lines, 61 executed: 23.6% covered</b>
+<pre>
+<font color="black">   1. # Originally contributed by Sjoerd Mullender.</font>
+<font color="black">   2. # Significantly modified by Jeffrey Yasskin &lt;jyasskin at gmail.com&gt;.</font>
+<font color="black">   3. </font>
+<font color="green">   4. &quot;&quot;&quot;Rational, infinite-precision, real numbers.&quot;&quot;&quot;</font>
+<font color="black">   5. </font>
+<font color="green">   6. from __future__ import division</font>
+<font color="green">   7. from decimal import Decimal</font>
+<font color="green">   8. import math</font>
+<font color="green">   9. import numbers</font>
+<font color="green">  10. import operator</font>
+<font color="green">  11. import re</font>
+<font color="black">  12. </font>
+<font color="green">  13. __all__ = ['Fraction', 'gcd']</font>
+<font color="black">  14. </font>
+<font color="green">  15. Rational = numbers.Rational</font>
+<font color="black">  16. </font>
+<font color="black">  17. </font>
+<font color="green">  18. def gcd(a, b):</font>
+<font color="black">  19.     &quot;&quot;&quot;Calculate the Greatest Common Divisor of a and b.</font>
+<font color="black">  20. </font>
+<font color="black">  21.     Unless b==0, the result will have the same sign as b (so that when</font>
+<font color="black">  22.     b is divided by it, the result comes out positive).</font>
+<font color="black">  23.     &quot;&quot;&quot;</font>
+<font color="red">  24.     while b:</font>
+<font color="red">  25.         a, b = b, a%b</font>
+<font color="red">  26.     return a</font>
+<font color="black">  27. </font>
+<font color="black">  28. </font>
+<font color="green">  29. _RATIONAL_FORMAT = re.compile(r&quot;&quot;&quot;</font>
+<font color="black">  30.     \A\s*                      # optional whitespace at the start, then</font>
+<font color="black">  31.     (?P&lt;sign&gt;[-+]?)            # an optional sign, then</font>
+<font color="black">  32.     (?=\d|\.\d)                # lookahead for digit or .digit</font>
+<font color="black">  33.     (?P&lt;num&gt;\d*)               # numerator (possibly empty)</font>
+<font color="black">  34.     (?:                        # followed by</font>
+<font color="black">  35.        (?:/(?P&lt;denom&gt;\d+))?    # an optional denominator</font>
+<font color="black">  36.     |                          # or</font>
+<font color="black">  37.        (?:\.(?P&lt;decimal&gt;\d*))? # an optional fractional part</font>
+<font color="black">  38.        (?:E(?P&lt;exp&gt;[-+]?\d+))? # and optional exponent</font>
+<font color="black">  39.     )</font>
+<font color="black">  40.     \s*\Z                      # and optional whitespace to finish</font>
+<font color="green">  41. &quot;&quot;&quot;, re.VERBOSE | re.IGNORECASE)</font>
+<font color="black">  42. </font>
+<font color="black">  43. </font>
+<font color="green">  44. class Fraction(Rational):</font>
+<font color="black">  45.     &quot;&quot;&quot;This class implements rational numbers.</font>
+<font color="black">  46. </font>
+<font color="black">  47.     In the two-argument form of the constructor, Fraction(8, 6) will</font>
+<font color="black">  48.     produce a rational number equivalent to 4/3. Both arguments must</font>
+<font color="black">  49.     be Rational. The numerator defaults to 0 and the denominator</font>
+<font color="black">  50.     defaults to 1 so that Fraction(3) == 3 and Fraction() == 0.</font>
+<font color="black">  51. </font>
+<font color="black">  52.     Fractions can also be constructed from:</font>
+<font color="black">  53. </font>
+<font color="black">  54.       - numeric strings similar to those accepted by the</font>
+<font color="black">  55.         float constructor (for example, '-2.3' or '1e10')</font>
+<font color="black">  56. </font>
+<font color="black">  57.       - strings of the form '123/456'</font>
+<font color="black">  58. </font>
+<font color="black">  59.       - float and Decimal instances</font>
+<font color="black">  60. </font>
+<font color="black">  61.       - other Rational instances (including integers)</font>
+<font color="black">  62. </font>
+<font color="green">  63.     &quot;&quot;&quot;</font>
+<font color="black">  64. </font>
+<font color="green">  65.     __slots__ = ('_numerator', '_denominator')</font>
+<font color="black">  66. </font>
+<font color="black">  67.     # We're immutable, so use __new__ not __init__</font>
+<font color="green">  68.     def __new__(cls, numerator=0, denominator=None):</font>
+<font color="black">  69.         &quot;&quot;&quot;Constructs a Fraction.</font>
+<font color="black">  70. </font>
+<font color="black">  71.         Takes a string like '3/2' or '1.5', another Rational instance, a</font>
+<font color="black">  72.         numerator/denominator pair, or a float.</font>
+<font color="black">  73. </font>
+<font color="black">  74.         Examples</font>
+<font color="black">  75.         --------</font>
+<font color="black">  76. </font>
+<font color="black">  77.         &gt;&gt;&gt; Fraction(10, -8)</font>
+<font color="black">  78.         Fraction(-5, 4)</font>
+<font color="black">  79.         &gt;&gt;&gt; Fraction(Fraction(1, 7), 5)</font>
+<font color="black">  80.         Fraction(1, 35)</font>
+<font color="black">  81.         &gt;&gt;&gt; Fraction(Fraction(1, 7), Fraction(2, 3))</font>
+<font color="black">  82.         Fraction(3, 14)</font>
+<font color="black">  83.         &gt;&gt;&gt; Fraction('314')</font>
+<font color="black">  84.         Fraction(314, 1)</font>
+<font color="black">  85.         &gt;&gt;&gt; Fraction('-35/4')</font>
+<font color="black">  86.         Fraction(-35, 4)</font>
+<font color="black">  87.         &gt;&gt;&gt; Fraction('3.1415') # conversion from numeric string</font>
+<font color="black">  88.         Fraction(6283, 2000)</font>
+<font color="black">  89.         &gt;&gt;&gt; Fraction('-47e-2') # string may include a decimal exponent</font>
+<font color="black">  90.         Fraction(-47, 100)</font>
+<font color="black">  91.         &gt;&gt;&gt; Fraction(1.47)  # direct construction from float (exact conversion)</font>
+<font color="black">  92.         Fraction(6620291452234629, 4503599627370496)</font>
+<font color="black">  93.         &gt;&gt;&gt; Fraction(2.25)</font>
+<font color="black">  94.         Fraction(9, 4)</font>
+<font color="black">  95.         &gt;&gt;&gt; Fraction(Decimal('1.47'))</font>
+<font color="black">  96.         Fraction(147, 100)</font>
+<font color="black">  97. </font>
+<font color="black">  98.         &quot;&quot;&quot;</font>
+<font color="red">  99.         self = super(Fraction, cls).__new__(cls)</font>
+<font color="black"> 100. </font>
+<font color="red"> 101.         if denominator is None:</font>
+<font color="red"> 102.             if isinstance(numerator, Rational):</font>
+<font color="red"> 103.                 self._numerator = numerator.numerator</font>
+<font color="red"> 104.                 self._denominator = numerator.denominator</font>
+<font color="red"> 105.                 return self</font>
+<font color="black"> 106. </font>
+<font color="red"> 107.             elif isinstance(numerator, float):</font>
+<font color="black"> 108.                 # Exact conversion from float</font>
+<font color="red"> 109.                 value = Fraction.from_float(numerator)</font>
+<font color="red"> 110.                 self._numerator = value._numerator</font>
+<font color="red"> 111.                 self._denominator = value._denominator</font>
+<font color="red"> 112.                 return self</font>
+<font color="black"> 113. </font>
+<font color="red"> 114.             elif isinstance(numerator, Decimal):</font>
+<font color="red"> 115.                 value = Fraction.from_decimal(numerator)</font>
+<font color="red"> 116.                 self._numerator = value._numerator</font>
+<font color="red"> 117.                 self._denominator = value._denominator</font>
+<font color="red"> 118.                 return self</font>
+<font color="black"> 119. </font>
+<font color="red"> 120.             elif isinstance(numerator, basestring):</font>
+<font color="black"> 121.                 # Handle construction from strings.</font>
+<font color="red"> 122.                 m = _RATIONAL_FORMAT.match(numerator)</font>
+<font color="red"> 123.                 if m is None:</font>
+<font color="red"> 124.                     raise ValueError('Invalid literal for Fraction: %r' %</font>
+<font color="red"> 125.                                      numerator)</font>
+<font color="red"> 126.                 numerator = int(m.group('num') or '0')</font>
+<font color="red"> 127.                 denom = m.group('denom')</font>
+<font color="red"> 128.                 if denom:</font>
+<font color="red"> 129.                     denominator = int(denom)</font>
+<font color="black"> 130.                 else:</font>
+<font color="red"> 131.                     denominator = 1</font>
+<font color="red"> 132.                     decimal = m.group('decimal')</font>
+<font color="red"> 133.                     if decimal:</font>
+<font color="red"> 134.                         scale = 10**len(decimal)</font>
+<font color="red"> 135.                         numerator = numerator * scale + int(decimal)</font>
+<font color="red"> 136.                         denominator *= scale</font>
+<font color="red"> 137.                     exp = m.group('exp')</font>
+<font color="red"> 138.                     if exp:</font>
+<font color="red"> 139.                         exp = int(exp)</font>
+<font color="red"> 140.                         if exp &gt;= 0:</font>
+<font color="red"> 141.                             numerator *= 10**exp</font>
+<font color="black"> 142.                         else:</font>
+<font color="red"> 143.                             denominator *= 10**-exp</font>
+<font color="red"> 144.                 if m.group('sign') == '-':</font>
+<font color="red"> 145.                     numerator = -numerator</font>
+<font color="black"> 146. </font>
+<font color="black"> 147.             else:</font>
+<font color="red"> 148.                 raise TypeError(&quot;argument should be a string &quot;</font>
+<font color="black"> 149.                                 &quot;or a Rational instance&quot;)</font>
+<font color="black"> 150. </font>
+<font color="red"> 151.         elif (isinstance(numerator, Rational) and</font>
+<font color="red"> 152.             isinstance(denominator, Rational)):</font>
+<font color="black"> 153.             numerator, denominator = (</font>
+<font color="red"> 154.                 numerator.numerator * denominator.denominator,</font>
+<font color="red"> 155.                 denominator.numerator * numerator.denominator</font>
+<font color="black"> 156.                 )</font>
+<font color="black"> 157.         else:</font>
+<font color="red"> 158.             raise TypeError(&quot;both arguments should be &quot;</font>
+<font color="black"> 159.                             &quot;Rational instances&quot;)</font>
+<font color="black"> 160. </font>
+<font color="red"> 161.         if denominator == 0:</font>
+<font color="red"> 162.             raise ZeroDivisionError('Fraction(%s, 0)' % numerator)</font>
+<font color="red"> 163.         g = gcd(numerator, denominator)</font>
+<font color="red"> 164.         self._numerator = numerator // g</font>
+<font color="red"> 165.         self._denominator = denominator // g</font>
+<font color="red"> 166.         return self</font>
+<font color="black"> 167. </font>
+<font color="green"> 168.     @classmethod</font>
+<font color="black"> 169.     def from_float(cls, f):</font>
+<font color="black"> 170.         &quot;&quot;&quot;Converts a finite float to a rational number, exactly.</font>
+<font color="black"> 171. </font>
+<font color="black"> 172.         Beware that Fraction.from_float(0.3) != Fraction(3, 10).</font>
+<font color="black"> 173. </font>
+<font color="black"> 174.         &quot;&quot;&quot;</font>
+<font color="red"> 175.         if isinstance(f, numbers.Integral):</font>
+<font color="red"> 176.             return cls(f)</font>
+<font color="red"> 177.         elif not isinstance(f, float):</font>
+<font color="red"> 178.             raise TypeError(&quot;%s.from_float() only takes floats, not %r (%s)&quot; %</font>
+<font color="red"> 179.                             (cls.__name__, f, type(f).__name__))</font>
+<font color="red"> 180.         if math.isnan(f) or math.isinf(f):</font>
+<font color="red"> 181.             raise TypeError(&quot;Cannot convert %r to %s.&quot; % (f, cls.__name__))</font>
+<font color="red"> 182.         return cls(*f.as_integer_ratio())</font>
+<font color="black"> 183. </font>
+<font color="green"> 184.     @classmethod</font>
+<font color="black"> 185.     def from_decimal(cls, dec):</font>
+<font color="black"> 186.         &quot;&quot;&quot;Converts a finite Decimal instance to a rational number, exactly.&quot;&quot;&quot;</font>
+<font color="red"> 187.         from decimal import Decimal</font>
+<font color="red"> 188.         if isinstance(dec, numbers.Integral):</font>
+<font color="red"> 189.             dec = Decimal(int(dec))</font>
+<font color="red"> 190.         elif not isinstance(dec, Decimal):</font>
+<font color="red"> 191.             raise TypeError(</font>
+<font color="red"> 192.                 &quot;%s.from_decimal() only takes Decimals, not %r (%s)&quot; %</font>
+<font color="red"> 193.                 (cls.__name__, dec, type(dec).__name__))</font>
+<font color="red"> 194.         if not dec.is_finite():</font>
+<font color="black"> 195.             # Catches infinities and nans.</font>
+<font color="red"> 196.             raise TypeError(&quot;Cannot convert %s to %s.&quot; % (dec, cls.__name__))</font>
+<font color="red"> 197.         sign, digits, exp = dec.as_tuple()</font>
+<font color="red"> 198.         digits = int(''.join(map(str, digits)))</font>
+<font color="red"> 199.         if sign:</font>
+<font color="red"> 200.             digits = -digits</font>
+<font color="red"> 201.         if exp &gt;= 0:</font>
+<font color="red"> 202.             return cls(digits * 10 ** exp)</font>
+<font color="black"> 203.         else:</font>
+<font color="red"> 204.             return cls(digits, 10 ** -exp)</font>
+<font color="black"> 205. </font>
+<font color="green"> 206.     def limit_denominator(self, max_denominator=1000000):</font>
+<font color="black"> 207.         &quot;&quot;&quot;Closest Fraction to self with denominator at most max_denominator.</font>
+<font color="black"> 208. </font>
+<font color="black"> 209.         &gt;&gt;&gt; Fraction('3.141592653589793').limit_denominator(10)</font>
+<font color="black"> 210.         Fraction(22, 7)</font>
+<font color="black"> 211.         &gt;&gt;&gt; Fraction('3.141592653589793').limit_denominator(100)</font>
+<font color="black"> 212.         Fraction(311, 99)</font>
+<font color="black"> 213.         &gt;&gt;&gt; Fraction(4321, 8765).limit_denominator(10000)</font>
+<font color="black"> 214.         Fraction(4321, 8765)</font>
+<font color="black"> 215. </font>
+<font color="black"> 216.         &quot;&quot;&quot;</font>
+<font color="black"> 217.         # Algorithm notes: For any real number x, define a *best upper</font>
+<font color="black"> 218.         # approximation* to x to be a rational number p/q such that:</font>
+<font color="black"> 219.         #</font>
+<font color="black"> 220.         #   (1) p/q &gt;= x, and</font>
+<font color="black"> 221.         #   (2) if p/q &gt; r/s &gt;= x then s &gt; q, for any rational r/s.</font>
+<font color="black"> 222.         #</font>
+<font color="black"> 223.         # Define *best lower approximation* similarly.  Then it can be</font>
+<font color="black"> 224.         # proved that a rational number is a best upper or lower</font>
+<font color="black"> 225.         # approximation to x if, and only if, it is a convergent or</font>
+<font color="black"> 226.         # semiconvergent of the (unique shortest) continued fraction</font>
+<font color="black"> 227.         # associated to x.</font>
+<font color="black"> 228.         #</font>
+<font color="black"> 229.         # To find a best rational approximation with denominator &lt;= M,</font>
+<font color="black"> 230.         # we find the best upper and lower approximations with</font>
+<font color="black"> 231.         # denominator &lt;= M and take whichever of these is closer to x.</font>
+<font color="black"> 232.         # In the event of a tie, the bound with smaller denominator is</font>
+<font color="black"> 233.         # chosen.  If both denominators are equal (which can happen</font>
+<font color="black"> 234.         # only when max_denominator == 1 and self is midway between</font>
+<font color="black"> 235.         # two integers) the lower bound---i.e., the floor of self, is</font>
+<font color="black"> 236.         # taken.</font>
+<font color="black"> 237. </font>
+<font color="red"> 238.         if max_denominator &lt; 1:</font>
+<font color="red"> 239.             raise ValueError(&quot;max_denominator should be at least 1&quot;)</font>
+<font color="red"> 240.         if self._denominator &lt;= max_denominator:</font>
+<font color="red"> 241.             return Fraction(self)</font>
+<font color="black"> 242. </font>
+<font color="red"> 243.         p0, q0, p1, q1 = 0, 1, 1, 0</font>
+<font color="red"> 244.         n, d = self._numerator, self._denominator</font>
+<font color="red"> 245.         while True:</font>
+<font color="red"> 246.             a = n//d</font>
+<font color="red"> 247.             q2 = q0+a*q1</font>
+<font color="red"> 248.             if q2 &gt; max_denominator:</font>
+<font color="red"> 249.                 break</font>
+<font color="red"> 250.             p0, q0, p1, q1 = p1, q1, p0+a*p1, q2</font>
+<font color="red"> 251.             n, d = d, n-a*d</font>
+<font color="black"> 252. </font>
+<font color="red"> 253.         k = (max_denominator-q0)//q1</font>
+<font color="red"> 254.         bound1 = Fraction(p0+k*p1, q0+k*q1)</font>
+<font color="red"> 255.         bound2 = Fraction(p1, q1)</font>
+<font color="red"> 256.         if abs(bound2 - self) &lt;= abs(bound1-self):</font>
+<font color="red"> 257.             return bound2</font>
+<font color="black"> 258.         else:</font>
+<font color="red"> 259.             return bound1</font>
+<font color="black"> 260. </font>
+<font color="green"> 261.     @property</font>
+<font color="black"> 262.     def numerator(a):</font>
+<font color="red"> 263.         return a._numerator</font>
+<font color="black"> 264. </font>
+<font color="green"> 265.     @property</font>
+<font color="black"> 266.     def denominator(a):</font>
+<font color="red"> 267.         return a._denominator</font>
+<font color="black"> 268. </font>
+<font color="green"> 269.     def __repr__(self):</font>
+<font color="black"> 270.         &quot;&quot;&quot;repr(self)&quot;&quot;&quot;</font>
+<font color="red"> 271.         return ('Fraction(%s, %s)' % (self._numerator, self._denominator))</font>
+<font color="black"> 272. </font>
+<font color="green"> 273.     def __str__(self):</font>
+<font color="black"> 274.         &quot;&quot;&quot;str(self)&quot;&quot;&quot;</font>
+<font color="red"> 275.         if self._denominator == 1:</font>
+<font color="red"> 276.             return str(self._numerator)</font>
+<font color="black"> 277.         else:</font>
+<font color="red"> 278.             return '%s/%s' % (self._numerator, self._denominator)</font>
+<font color="black"> 279. </font>
+<font color="green"> 280.     def _operator_fallbacks(monomorphic_operator, fallback_operator):</font>
+<font color="black"> 281.         &quot;&quot;&quot;Generates forward and reverse operators given a purely-rational</font>
+<font color="black"> 282.         operator and a function from the operator module.</font>
+<font color="black"> 283. </font>
+<font color="black"> 284.         Use this like:</font>
+<font color="black"> 285.         __op__, __rop__ = _operator_fallbacks(just_rational_op, operator.op)</font>
+<font color="black"> 286. </font>
+<font color="black"> 287.         In general, we want to implement the arithmetic operations so</font>
+<font color="black"> 288.         that mixed-mode operations either call an implementation whose</font>
+<font color="black"> 289.         author knew about the types of both arguments, or convert both</font>
+<font color="black"> 290.         to the nearest built in type and do the operation there. In</font>
+<font color="black"> 291.         Fraction, that means that we define __add__ and __radd__ as:</font>
+<font color="black"> 292. </font>
+<font color="black"> 293.             def __add__(self, other):</font>
+<font color="black"> 294.                 # Both types have numerators/denominator attributes,</font>
+<font color="black"> 295.                 # so do the operation directly</font>
+<font color="black"> 296.                 if isinstance(other, (int, long, Fraction)):</font>
+<font color="black"> 297.                     return Fraction(self.numerator * other.denominator +</font>
+<font color="black"> 298.                                     other.numerator * self.denominator,</font>
+<font color="black"> 299.                                     self.denominator * other.denominator)</font>
+<font color="black"> 300.                 # float and complex don't have those operations, but we</font>
+<font color="black"> 301.                 # know about those types, so special case them.</font>
+<font color="black"> 302.                 elif isinstance(other, float):</font>
+<font color="black"> 303.                     return float(self) + other</font>
+<font color="black"> 304.                 elif isinstance(other, complex):</font>
+<font color="black"> 305.                     return complex(self) + other</font>
+<font color="black"> 306.                 # Let the other type take over.</font>
+<font color="black"> 307.                 return NotImplemented</font>
+<font color="black"> 308. </font>
+<font color="black"> 309.             def __radd__(self, other):</font>
+<font color="black"> 310.                 # radd handles more types than add because there's</font>
+<font color="black"> 311.                 # nothing left to fall back to.</font>
+<font color="black"> 312.                 if isinstance(other, Rational):</font>
+<font color="black"> 313.                     return Fraction(self.numerator * other.denominator +</font>
+<font color="black"> 314.                                     other.numerator * self.denominator,</font>
+<font color="black"> 315.                                     self.denominator * other.denominator)</font>
+<font color="black"> 316.                 elif isinstance(other, Real):</font>
+<font color="black"> 317.                     return float(other) + float(self)</font>
+<font color="black"> 318.                 elif isinstance(other, Complex):</font>
+<font color="black"> 319.                     return complex(other) + complex(self)</font>
+<font color="black"> 320.                 return NotImplemented</font>
+<font color="black"> 321. </font>
+<font color="black"> 322. </font>
+<font color="black"> 323.         There are 5 different cases for a mixed-type addition on</font>
+<font color="black"> 324.         Fraction. I'll refer to all of the above code that doesn't</font>
+<font color="black"> 325.         refer to Fraction, float, or complex as &quot;boilerplate&quot;. 'r'</font>
+<font color="black"> 326.         will be an instance of Fraction, which is a subtype of</font>
+<font color="black"> 327.         Rational (r : Fraction &lt;: Rational), and b : B &lt;:</font>
+<font color="black"> 328.         Complex. The first three involve 'r + b':</font>
+<font color="black"> 329. </font>
+<font color="black"> 330.             1. If B &lt;: Fraction, int, float, or complex, we handle</font>
+<font color="black"> 331.                that specially, and all is well.</font>
+<font color="black"> 332.             2. If Fraction falls back to the boilerplate code, and it</font>
+<font color="black"> 333.                were to return a value from __add__, we'd miss the</font>
+<font color="black"> 334.                possibility that B defines a more intelligent __radd__,</font>
+<font color="black"> 335.                so the boilerplate should return NotImplemented from</font>
+<font color="black"> 336.                __add__. In particular, we don't handle Rational</font>
+<font color="black"> 337.                here, even though we could get an exact answer, in case</font>
+<font color="black"> 338.                the other type wants to do something special.</font>
+<font color="black"> 339.             3. If B &lt;: Fraction, Python tries B.__radd__ before</font>
+<font color="black"> 340.                Fraction.__add__. This is ok, because it was</font>
+<font color="black"> 341.                implemented with knowledge of Fraction, so it can</font>
+<font color="black"> 342.                handle those instances before delegating to Real or</font>
+<font color="black"> 343.                Complex.</font>
+<font color="black"> 344. </font>
+<font color="black"> 345.         The next two situations describe 'b + r'. We assume that b</font>
+<font color="black"> 346.         didn't know about Fraction in its implementation, and that it</font>
+<font color="black"> 347.         uses similar boilerplate code:</font>
+<font color="black"> 348. </font>
+<font color="black"> 349.             4. If B &lt;: Rational, then __radd_ converts both to the</font>
+<font color="black"> 350.                builtin rational type (hey look, that's us) and</font>
+<font color="black"> 351.                proceeds.</font>
+<font color="black"> 352.             5. Otherwise, __radd__ tries to find the nearest common</font>
+<font color="black"> 353.                base ABC, and fall back to its builtin type. Since this</font>
+<font color="black"> 354.                class doesn't subclass a concrete type, there's no</font>
+<font color="black"> 355.                implementation to fall back to, so we need to try as</font>
+<font color="black"> 356.                hard as possible to return an actual value, or the user</font>
+<font color="black"> 357.                will get a TypeError.</font>
+<font color="black"> 358. </font>
+<font color="black"> 359.         &quot;&quot;&quot;</font>
+<font color="green"> 360.         def forward(a, b):</font>
+<font color="red"> 361.             if isinstance(b, (int, long, Fraction)):</font>
+<font color="red"> 362.                 return monomorphic_operator(a, b)</font>
+<font color="red"> 363.             elif isinstance(b, float):</font>
+<font color="red"> 364.                 return fallback_operator(float(a), b)</font>
+<font color="red"> 365.             elif isinstance(b, complex):</font>
+<font color="red"> 366.                 return fallback_operator(complex(a), b)</font>
+<font color="black"> 367.             else:</font>
+<font color="red"> 368.                 return NotImplemented</font>
+<font color="green"> 369.         forward.__name__ = '__' + fallback_operator.__name__ + '__'</font>
+<font color="green"> 370.         forward.__doc__ = monomorphic_operator.__doc__</font>
+<font color="black"> 371. </font>
+<font color="green"> 372.         def reverse(b, a):</font>
+<font color="red"> 373.             if isinstance(a, Rational):</font>
+<font color="black"> 374.                 # Includes ints.</font>
+<font color="red"> 375.                 return monomorphic_operator(a, b)</font>
+<font color="red"> 376.             elif isinstance(a, numbers.Real):</font>
+<font color="red"> 377.                 return fallback_operator(float(a), float(b))</font>
+<font color="red"> 378.             elif isinstance(a, numbers.Complex):</font>
+<font color="red"> 379.                 return fallback_operator(complex(a), complex(b))</font>
+<font color="black"> 380.             else:</font>
+<font color="red"> 381.                 return NotImplemented</font>
+<font color="green"> 382.         reverse.__name__ = '__r' + fallback_operator.__name__ + '__'</font>
+<font color="green"> 383.         reverse.__doc__ = monomorphic_operator.__doc__</font>
+<font color="black"> 384. </font>
+<font color="green"> 385.         return forward, reverse</font>
+<font color="black"> 386. </font>
+<font color="green"> 387.     def _add(a, b):</font>
+<font color="black"> 388.         &quot;&quot;&quot;a + b&quot;&quot;&quot;</font>
+<font color="red"> 389.         return Fraction(a.numerator * b.denominator +</font>
+<font color="red"> 390.                         b.numerator * a.denominator,</font>
+<font color="red"> 391.                         a.denominator * b.denominator)</font>
+<font color="black"> 392. </font>
+<font color="green"> 393.     __add__, __radd__ = _operator_fallbacks(_add, operator.add)</font>
+<font color="black"> 394. </font>
+<font color="green"> 395.     def _sub(a, b):</font>
+<font color="black"> 396.         &quot;&quot;&quot;a - b&quot;&quot;&quot;</font>
+<font color="red"> 397.         return Fraction(a.numerator * b.denominator -</font>
+<font color="red"> 398.                         b.numerator * a.denominator,</font>
+<font color="red"> 399.                         a.denominator * b.denominator)</font>
+<font color="black"> 400. </font>
+<font color="green"> 401.     __sub__, __rsub__ = _operator_fallbacks(_sub, operator.sub)</font>
+<font color="black"> 402. </font>
+<font color="green"> 403.     def _mul(a, b):</font>
+<font color="black"> 404.         &quot;&quot;&quot;a * b&quot;&quot;&quot;</font>
+<font color="red"> 405.         return Fraction(a.numerator * b.numerator, a.denominator * b.denominator)</font>
+<font color="black"> 406. </font>
+<font color="green"> 407.     __mul__, __rmul__ = _operator_fallbacks(_mul, operator.mul)</font>
+<font color="black"> 408. </font>
+<font color="green"> 409.     def _div(a, b):</font>
+<font color="black"> 410.         &quot;&quot;&quot;a / b&quot;&quot;&quot;</font>
+<font color="red"> 411.         return Fraction(a.numerator * b.denominator,</font>
+<font color="red"> 412.                         a.denominator * b.numerator)</font>
+<font color="black"> 413. </font>
+<font color="green"> 414.     __truediv__, __rtruediv__ = _operator_fallbacks(_div, operator.truediv)</font>
+<font color="green"> 415.     __div__, __rdiv__ = _operator_fallbacks(_div, operator.div)</font>
+<font color="black"> 416. </font>
+<font color="green"> 417.     def __floordiv__(a, b):</font>
+<font color="black"> 418.         &quot;&quot;&quot;a // b&quot;&quot;&quot;</font>
+<font color="black"> 419.         # Will be math.floor(a / b) in 3.0.</font>
+<font color="red"> 420.         div = a / b</font>
+<font color="red"> 421.         if isinstance(div, Rational):</font>
+<font color="black"> 422.             # trunc(math.floor(div)) doesn't work if the rational is</font>
+<font color="black"> 423.             # more precise than a float because the intermediate</font>
+<font color="black"> 424.             # rounding may cross an integer boundary.</font>
+<font color="red"> 425.             return div.numerator // div.denominator</font>
+<font color="black"> 426.         else:</font>
+<font color="red"> 427.             return math.floor(div)</font>
+<font color="black"> 428. </font>
+<font color="green"> 429.     def __rfloordiv__(b, a):</font>
+<font color="black"> 430.         &quot;&quot;&quot;a // b&quot;&quot;&quot;</font>
+<font color="black"> 431.         # Will be math.floor(a / b) in 3.0.</font>
+<font color="red"> 432.         div = a / b</font>
+<font color="red"> 433.         if isinstance(div, Rational):</font>
+<font color="black"> 434.             # trunc(math.floor(div)) doesn't work if the rational is</font>
+<font color="black"> 435.             # more precise than a float because the intermediate</font>
+<font color="black"> 436.             # rounding may cross an integer boundary.</font>
+<font color="red"> 437.             return div.numerator // div.denominator</font>
+<font color="black"> 438.         else:</font>
+<font color="red"> 439.             return math.floor(div)</font>
+<font color="black"> 440. </font>
+<font color="green"> 441.     def __mod__(a, b):</font>
+<font color="black"> 442.         &quot;&quot;&quot;a % b&quot;&quot;&quot;</font>
+<font color="red"> 443.         div = a // b</font>
+<font color="red"> 444.         return a - b * div</font>
+<font color="black"> 445. </font>
+<font color="green"> 446.     def __rmod__(b, a):</font>
+<font color="black"> 447.         &quot;&quot;&quot;a % b&quot;&quot;&quot;</font>
+<font color="red"> 448.         div = a // b</font>
+<font color="red"> 449.         return a - b * div</font>
+<font color="black"> 450. </font>
+<font color="green"> 451.     def __pow__(a, b):</font>
+<font color="black"> 452.         &quot;&quot;&quot;a ** b</font>
+<font color="black"> 453. </font>
+<font color="black"> 454.         If b is not an integer, the result will be a float or complex</font>
+<font color="black"> 455.         since roots are generally irrational. If b is an integer, the</font>
+<font color="black"> 456.         result will be rational.</font>
+<font color="black"> 457. </font>
+<font color="black"> 458.         &quot;&quot;&quot;</font>
+<font color="red"> 459.         if isinstance(b, Rational):</font>
+<font color="red"> 460.             if b.denominator == 1:</font>
+<font color="red"> 461.                 power = b.numerator</font>
+<font color="red"> 462.                 if power &gt;= 0:</font>
+<font color="red"> 463.                     return Fraction(a._numerator ** power,</font>
+<font color="red"> 464.                                     a._denominator ** power)</font>
+<font color="black"> 465.                 else:</font>
+<font color="red"> 466.                     return Fraction(a._denominator ** -power,</font>
+<font color="red"> 467.                                     a._numerator ** -power)</font>
+<font color="black"> 468.             else:</font>
+<font color="black"> 469.                 # A fractional power will generally produce an</font>
+<font color="black"> 470.                 # irrational number.</font>
+<font color="red"> 471.                 return float(a) ** float(b)</font>
+<font color="black"> 472.         else:</font>
+<font color="red"> 473.             return float(a) ** b</font>
+<font color="black"> 474. </font>
+<font color="green"> 475.     def __rpow__(b, a):</font>
+<font color="black"> 476.         &quot;&quot;&quot;a ** b&quot;&quot;&quot;</font>
+<font color="red"> 477.         if b._denominator == 1 and b._numerator &gt;= 0:</font>
+<font color="black"> 478.             # If a is an int, keep it that way if possible.</font>
+<font color="red"> 479.             return a ** b._numerator</font>
+<font color="black"> 480. </font>
+<font color="red"> 481.         if isinstance(a, Rational):</font>
+<font color="red"> 482.             return Fraction(a.numerator, a.denominator) ** b</font>
+<font color="black"> 483. </font>
+<font color="red"> 484.         if b._denominator == 1:</font>
+<font color="red"> 485.             return a ** b._numerator</font>
+<font color="black"> 486. </font>
+<font color="red"> 487.         return a ** float(b)</font>
+<font color="black"> 488. </font>
+<font color="green"> 489.     def __pos__(a):</font>
+<font color="black"> 490.         &quot;&quot;&quot;+a: Coerces a subclass instance to Fraction&quot;&quot;&quot;</font>
+<font color="red"> 491.         return Fraction(a._numerator, a._denominator)</font>
+<font color="black"> 492. </font>
+<font color="green"> 493.     def __neg__(a):</font>
+<font color="black"> 494.         &quot;&quot;&quot;-a&quot;&quot;&quot;</font>
+<font color="red"> 495.         return Fraction(-a._numerator, a._denominator)</font>
+<font color="black"> 496. </font>
+<font color="green"> 497.     def __abs__(a):</font>
+<font color="black"> 498.         &quot;&quot;&quot;abs(a)&quot;&quot;&quot;</font>
+<font color="red"> 499.         return Fraction(abs(a._numerator), a._denominator)</font>
+<font color="black"> 500. </font>
+<font color="green"> 501.     def __trunc__(a):</font>
+<font color="black"> 502.         &quot;&quot;&quot;trunc(a)&quot;&quot;&quot;</font>
+<font color="red"> 503.         if a._numerator &lt; 0:</font>
+<font color="red"> 504.             return -(-a._numerator // a._denominator)</font>
+<font color="black"> 505.         else:</font>
+<font color="red"> 506.             return a._numerator // a._denominator</font>
+<font color="black"> 507. </font>
+<font color="green"> 508.     def __hash__(self):</font>
+<font color="black"> 509.         &quot;&quot;&quot;hash(self)</font>
+<font color="black"> 510. </font>
+<font color="black"> 511.         Tricky because values that are exactly representable as a</font>
+<font color="black"> 512.         float must have the same hash as that float.</font>
+<font color="black"> 513. </font>
+<font color="black"> 514.         &quot;&quot;&quot;</font>
+<font color="black"> 515.         # XXX since this method is expensive, consider caching the result</font>
+<font color="red"> 516.         if self._denominator == 1:</font>
+<font color="black"> 517.             # Get integers right.</font>
+<font color="red"> 518.             return hash(self._numerator)</font>
+<font color="black"> 519.         # Expensive check, but definitely correct.</font>
+<font color="red"> 520.         if self == float(self):</font>
+<font color="red"> 521.             return hash(float(self))</font>
+<font color="black"> 522.         else:</font>
+<font color="black"> 523.             # Use tuple's hash to avoid a high collision rate on</font>
+<font color="black"> 524.             # simple fractions.</font>
+<font color="red"> 525.             return hash((self._numerator, self._denominator))</font>
+<font color="black"> 526. </font>
+<font color="green"> 527.     def __eq__(a, b):</font>
+<font color="black"> 528.         &quot;&quot;&quot;a == b&quot;&quot;&quot;</font>
+<font color="red"> 529.         if isinstance(b, Rational):</font>
+<font color="red"> 530.             return (a._numerator == b.numerator and</font>
+<font color="red"> 531.                     a._denominator == b.denominator)</font>
+<font color="red"> 532.         if isinstance(b, numbers.Complex) and b.imag == 0:</font>
+<font color="red"> 533.             b = b.real</font>
+<font color="red"> 534.         if isinstance(b, float):</font>
+<font color="red"> 535.             if math.isnan(b) or math.isinf(b):</font>
+<font color="black"> 536.                 # comparisons with an infinity or nan should behave in</font>
+<font color="black"> 537.                 # the same way for any finite a, so treat a as zero.</font>
+<font color="red"> 538.                 return 0.0 == b</font>
+<font color="black"> 539.             else:</font>
+<font color="red"> 540.                 return a == a.from_float(b)</font>
+<font color="black"> 541.         else:</font>
+<font color="black"> 542.             # Since a doesn't know how to compare with b, let's give b</font>
+<font color="black"> 543.             # a chance to compare itself with a.</font>
+<font color="red"> 544.             return NotImplemented</font>
+<font color="black"> 545. </font>
+<font color="green"> 546.     def _richcmp(self, other, op):</font>
+<font color="black"> 547.         &quot;&quot;&quot;Helper for comparison operators, for internal use only.</font>
+<font color="black"> 548. </font>
+<font color="black"> 549.         Implement comparison between a Rational instance `self`, and</font>
+<font color="black"> 550.         either another Rational instance or a float `other`.  If</font>
+<font color="black"> 551.         `other` is not a Rational instance or a float, return</font>
+<font color="black"> 552.         NotImplemented. `op` should be one of the six standard</font>
+<font color="black"> 553.         comparison operators.</font>
+<font color="black"> 554. </font>
+<font color="black"> 555.         &quot;&quot;&quot;</font>
+<font color="black"> 556.         # convert other to a Rational instance where reasonable.</font>
+<font color="red"> 557.         if isinstance(other, Rational):</font>
+<font color="red"> 558.             return op(self._numerator * other.denominator,</font>
+<font color="red"> 559.                       self._denominator * other.numerator)</font>
+<font color="black"> 560.         # comparisons with complex should raise a TypeError, for consistency</font>
+<font color="black"> 561.         # with int&lt;-&gt;complex, float&lt;-&gt;complex, and complex&lt;-&gt;complex comparisons.</font>
+<font color="red"> 562.         if isinstance(other, complex):</font>
+<font color="red"> 563.             raise TypeError(&quot;no ordering relation is defined for complex numbers&quot;)</font>
+<font color="red"> 564.         if isinstance(other, float):</font>
+<font color="red"> 565.             if math.isnan(other) or math.isinf(other):</font>
+<font color="red"> 566.                 return op(0.0, other)</font>
+<font color="black"> 567.             else:</font>
+<font color="red"> 568.                 return op(self, self.from_float(other))</font>
+<font color="black"> 569.         else:</font>
+<font color="red"> 570.             return NotImplemented</font>
+<font color="black"> 571. </font>
+<font color="green"> 572.     def __lt__(a, b):</font>
+<font color="black"> 573.         &quot;&quot;&quot;a &lt; b&quot;&quot;&quot;</font>
+<font color="red"> 574.         return a._richcmp(b, operator.lt)</font>
+<font color="black"> 575. </font>
+<font color="green"> 576.     def __gt__(a, b):</font>
+<font color="black"> 577.         &quot;&quot;&quot;a &gt; b&quot;&quot;&quot;</font>
+<font color="red"> 578.         return a._richcmp(b, operator.gt)</font>
+<font color="black"> 579. </font>
+<font color="green"> 580.     def __le__(a, b):</font>
+<font color="black"> 581.         &quot;&quot;&quot;a &lt;= b&quot;&quot;&quot;</font>
+<font color="red"> 582.         return a._richcmp(b, operator.le)</font>
+<font color="black"> 583. </font>
+<font color="green"> 584.     def __ge__(a, b):</font>
+<font color="black"> 585.         &quot;&quot;&quot;a &gt;= b&quot;&quot;&quot;</font>
+<font color="red"> 586.         return a._richcmp(b, operator.ge)</font>
+<font color="black"> 587. </font>
+<font color="green"> 588.     def __nonzero__(a):</font>
+<font color="black"> 589.         &quot;&quot;&quot;a != 0&quot;&quot;&quot;</font>
+<font color="red"> 590.         return a._numerator != 0</font>
+<font color="black"> 591. </font>
+<font color="black"> 592.     # support for pickling, copy, and deepcopy</font>
+<font color="black"> 593. </font>
+<font color="green"> 594.     def __reduce__(self):</font>
+<font color="red"> 595.         return (self.__class__, (str(self),))</font>
+<font color="black"> 596. </font>
+<font color="green"> 597.     def __copy__(self):</font>
+<font color="red"> 598.         if type(self) == Fraction:</font>
+<font color="red"> 599.             return self     # I'm immutable; therefore I am my own clone</font>
+<font color="red"> 600.         return self.__class__(self._numerator, self._denominator)</font>
+<font color="black"> 601. </font>
+<font color="green"> 602.     def __deepcopy__(self, memo):</font>
+<font color="red"> 603.         if type(self) == Fraction:</font>
+<font color="red"> 604.             return self     # My components are also immutable</font>
+<font color="red"> 605.         return self.__class__(self._numerator, self._denominator)</font>
+</pre>
+

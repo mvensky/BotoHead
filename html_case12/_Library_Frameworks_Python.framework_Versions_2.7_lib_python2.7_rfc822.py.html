@@ -1,0 +1,1023 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/rfc822.py</b><br>
+
+
+file stats: <b>593 lines, 112 executed: 18.9% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;RFC 2822 message manipulation.</font>
+<font color="black">   2. </font>
+<font color="black">   3. Note: This is only a very rough sketch of a full RFC-822 parser; in particular</font>
+<font color="black">   4. the tokenizing of addresses does not adhere to all the quoting rules.</font>
+<font color="black">   5. </font>
+<font color="black">   6. Note: RFC 2822 is a long awaited update to RFC 822.  This module should</font>
+<font color="black">   7. conform to RFC 2822, and is thus mis-named (it's not worth renaming it).  Some</font>
+<font color="black">   8. effort at RFC 2822 updates have been made, but a thorough audit has not been</font>
+<font color="black">   9. performed.  Consider any RFC 2822 non-conformance to be a bug.</font>
+<font color="black">  10. </font>
+<font color="black">  11.     RFC 2822: http://www.faqs.org/rfcs/rfc2822.html</font>
+<font color="black">  12.     RFC 822 : http://www.faqs.org/rfcs/rfc822.html (obsolete)</font>
+<font color="black">  13. </font>
+<font color="black">  14. Directions for use:</font>
+<font color="black">  15. </font>
+<font color="black">  16. To create a Message object: first open a file, e.g.:</font>
+<font color="black">  17. </font>
+<font color="black">  18.   fp = open(file, 'r')</font>
+<font color="black">  19. </font>
+<font color="black">  20. You can use any other legal way of getting an open file object, e.g. use</font>
+<font color="black">  21. sys.stdin or call os.popen().  Then pass the open file object to the Message()</font>
+<font color="black">  22. constructor:</font>
+<font color="black">  23. </font>
+<font color="black">  24.   m = Message(fp)</font>
+<font color="black">  25. </font>
+<font color="black">  26. This class can work with any input object that supports a readline method.  If</font>
+<font color="black">  27. the input object has seek and tell capability, the rewindbody method will</font>
+<font color="black">  28. work; also illegal lines will be pushed back onto the input stream.  If the</font>
+<font color="black">  29. input object lacks seek but has an `unread' method that can push back a line</font>
+<font color="black">  30. of input, Message will use that to push back illegal lines.  Thus this class</font>
+<font color="black">  31. can be used to parse messages coming from a buffered stream.</font>
+<font color="black">  32. </font>
+<font color="black">  33. The optional `seekable' argument is provided as a workaround for certain stdio</font>
+<font color="black">  34. libraries in which tell() discards buffered data before discovering that the</font>
+<font color="black">  35. lseek() system call doesn't work.  For maximum portability, you should set the</font>
+<font color="black">  36. seekable argument to zero to prevent that initial \code{tell} when passing in</font>
+<font color="black">  37. an unseekable object such as a file object created from a socket object.  If</font>
+<font color="black">  38. it is 1 on entry -- which it is by default -- the tell() method of the open</font>
+<font color="black">  39. file object is called once; if this raises an exception, seekable is reset to</font>
+<font color="black">  40. 0.  For other nonzero values of seekable, this test is not made.</font>
+<font color="black">  41. </font>
+<font color="black">  42. To get the text of a particular header there are several methods:</font>
+<font color="black">  43. </font>
+<font color="black">  44.   str = m.getheader(name)</font>
+<font color="black">  45.   str = m.getrawheader(name)</font>
+<font color="black">  46. </font>
+<font color="black">  47. where name is the name of the header, e.g. 'Subject'.  The difference is that</font>
+<font color="black">  48. getheader() strips the leading and trailing whitespace, while getrawheader()</font>
+<font color="black">  49. doesn't.  Both functions retain embedded whitespace (including newlines)</font>
+<font color="black">  50. exactly as they are specified in the header, and leave the case of the text</font>
+<font color="black">  51. unchanged.</font>
+<font color="black">  52. </font>
+<font color="black">  53. For addresses and address lists there are functions</font>
+<font color="black">  54. </font>
+<font color="black">  55.   realname, mailaddress = m.getaddr(name)</font>
+<font color="black">  56.   list = m.getaddrlist(name)</font>
+<font color="black">  57. </font>
+<font color="black">  58. where the latter returns a list of (realname, mailaddr) tuples.</font>
+<font color="black">  59. </font>
+<font color="black">  60. There is also a method</font>
+<font color="black">  61. </font>
+<font color="black">  62.   time = m.getdate(name)</font>
+<font color="black">  63. </font>
+<font color="black">  64. which parses a Date-like field and returns a time-compatible tuple,</font>
+<font color="black">  65. i.e. a tuple such as returned by time.localtime() or accepted by</font>
+<font color="black">  66. time.mktime().</font>
+<font color="black">  67. </font>
+<font color="black">  68. See the class definition for lower level access methods.</font>
+<font color="black">  69. </font>
+<font color="black">  70. There are also some utility functions here.</font>
+<font color="green">  71. &quot;&quot;&quot;</font>
+<font color="black">  72. # Cleanup and extensions by Eric S. Raymond &lt;esr@thyrsus.com&gt;</font>
+<font color="black">  73. </font>
+<font color="green">  74. import time</font>
+<font color="black">  75. </font>
+<font color="green">  76. from warnings import warnpy3k</font>
+<font color="green">  77. warnpy3k(&quot;in 3.x, rfc822 has been removed in favor of the email package&quot;,</font>
+<font color="green">  78.          stacklevel=2)</font>
+<font color="black">  79. </font>
+<font color="green">  80. __all__ = [&quot;Message&quot;,&quot;AddressList&quot;,&quot;parsedate&quot;,&quot;parsedate_tz&quot;,&quot;mktime_tz&quot;]</font>
+<font color="black">  81. </font>
+<font color="green">  82. _blanklines = ('\r\n', '\n')            # Optimization for islast()</font>
+<font color="black">  83. </font>
+<font color="black">  84. </font>
+<font color="green">  85. class Message:</font>
+<font color="green">  86.     &quot;&quot;&quot;Represents a single RFC 2822-compliant message.&quot;&quot;&quot;</font>
+<font color="black">  87. </font>
+<font color="green">  88.     def __init__(self, fp, seekable = 1):</font>
+<font color="black">  89.         &quot;&quot;&quot;Initialize the class instance and read the headers.&quot;&quot;&quot;</font>
+<font color="green">  90.         if seekable == 1:</font>
+<font color="black">  91.             # Exercise tell() to make sure it works</font>
+<font color="black">  92.             # (and then assume seek() works, too)</font>
+<font color="red">  93.             try:</font>
+<font color="red">  94.                 fp.tell()</font>
+<font color="red">  95.             except (AttributeError, IOError):</font>
+<font color="red">  96.                 seekable = 0</font>
+<font color="green">  97.         self.fp = fp</font>
+<font color="green">  98.         self.seekable = seekable</font>
+<font color="green">  99.         self.startofheaders = None</font>
+<font color="green"> 100.         self.startofbody = None</font>
+<font color="black"> 101.         #</font>
+<font color="green"> 102.         if self.seekable:</font>
+<font color="red"> 103.             try:</font>
+<font color="red"> 104.                 self.startofheaders = self.fp.tell()</font>
+<font color="red"> 105.             except IOError:</font>
+<font color="red"> 106.                 self.seekable = 0</font>
+<font color="black"> 107.         #</font>
+<font color="green"> 108.         self.readheaders()</font>
+<font color="black"> 109.         #</font>
+<font color="green"> 110.         if self.seekable:</font>
+<font color="red"> 111.             try:</font>
+<font color="red"> 112.                 self.startofbody = self.fp.tell()</font>
+<font color="red"> 113.             except IOError:</font>
+<font color="red"> 114.                 self.seekable = 0</font>
+<font color="black"> 115. </font>
+<font color="green"> 116.     def rewindbody(self):</font>
+<font color="black"> 117.         &quot;&quot;&quot;Rewind the file to the start of the body (if seekable).&quot;&quot;&quot;</font>
+<font color="red"> 118.         if not self.seekable:</font>
+<font color="red"> 119.             raise IOError, &quot;unseekable file&quot;</font>
+<font color="red"> 120.         self.fp.seek(self.startofbody)</font>
+<font color="black"> 121. </font>
+<font color="green"> 122.     def readheaders(self):</font>
+<font color="black"> 123.         &quot;&quot;&quot;Read header lines.</font>
+<font color="black"> 124. </font>
+<font color="black"> 125.         Read header lines up to the entirely blank line that terminates them.</font>
+<font color="black"> 126.         The (normally blank) line that ends the headers is skipped, but not</font>
+<font color="black"> 127.         included in the returned list.  If a non-header line ends the headers,</font>
+<font color="black"> 128.         (which is an error), an attempt is made to backspace over it; it is</font>
+<font color="black"> 129.         never included in the returned list.</font>
+<font color="black"> 130. </font>
+<font color="black"> 131.         The variable self.status is set to the empty string if all went well,</font>
+<font color="black"> 132.         otherwise it is an error message.  The variable self.headers is a</font>
+<font color="black"> 133.         completely uninterpreted list of lines contained in the header (so</font>
+<font color="black"> 134.         printing them will reproduce the header exactly as it appears in the</font>
+<font color="black"> 135.         file).</font>
+<font color="black"> 136.         &quot;&quot;&quot;</font>
+<font color="red"> 137.         self.dict = {}</font>
+<font color="red"> 138.         self.unixfrom = ''</font>
+<font color="red"> 139.         self.headers = lst = []</font>
+<font color="red"> 140.         self.status = ''</font>
+<font color="red"> 141.         headerseen = &quot;&quot;</font>
+<font color="red"> 142.         firstline = 1</font>
+<font color="red"> 143.         startofline = unread = tell = None</font>
+<font color="red"> 144.         if hasattr(self.fp, 'unread'):</font>
+<font color="red"> 145.             unread = self.fp.unread</font>
+<font color="red"> 146.         elif self.seekable:</font>
+<font color="red"> 147.             tell = self.fp.tell</font>
+<font color="red"> 148.         while 1:</font>
+<font color="red"> 149.             if tell:</font>
+<font color="red"> 150.                 try:</font>
+<font color="red"> 151.                     startofline = tell()</font>
+<font color="red"> 152.                 except IOError:</font>
+<font color="red"> 153.                     startofline = tell = None</font>
+<font color="red"> 154.                     self.seekable = 0</font>
+<font color="red"> 155.             line = self.fp.readline()</font>
+<font color="red"> 156.             if not line:</font>
+<font color="red"> 157.                 self.status = 'EOF in headers'</font>
+<font color="red"> 158.                 break</font>
+<font color="black"> 159.             # Skip unix From name time lines</font>
+<font color="red"> 160.             if firstline and line.startswith('From '):</font>
+<font color="red"> 161.                 self.unixfrom = self.unixfrom + line</font>
+<font color="red"> 162.                 continue</font>
+<font color="red"> 163.             firstline = 0</font>
+<font color="red"> 164.             if headerseen and line[0] in ' \t':</font>
+<font color="black"> 165.                 # It's a continuation line.</font>
+<font color="red"> 166.                 lst.append(line)</font>
+<font color="red"> 167.                 x = (self.dict[headerseen] + &quot;\n &quot; + line.strip())</font>
+<font color="red"> 168.                 self.dict[headerseen] = x.strip()</font>
+<font color="red"> 169.                 continue</font>
+<font color="red"> 170.             elif self.iscomment(line):</font>
+<font color="black"> 171.                 # It's a comment.  Ignore it.</font>
+<font color="red"> 172.                 continue</font>
+<font color="red"> 173.             elif self.islast(line):</font>
+<font color="black"> 174.                 # Note! No pushback here!  The delimiter line gets eaten.</font>
+<font color="red"> 175.                 break</font>
+<font color="red"> 176.             headerseen = self.isheader(line)</font>
+<font color="red"> 177.             if headerseen:</font>
+<font color="black"> 178.                 # It's a legal header line, save it.</font>
+<font color="red"> 179.                 lst.append(line)</font>
+<font color="red"> 180.                 self.dict[headerseen] = line[len(headerseen)+1:].strip()</font>
+<font color="red"> 181.                 continue</font>
+<font color="red"> 182.             elif headerseen is not None:</font>
+<font color="black"> 183.                 # An empty header name. These aren't allowed in HTTP, but it's</font>
+<font color="black"> 184.                 # probably a benign mistake. Don't add the header, just keep</font>
+<font color="black"> 185.                 # going.</font>
+<font color="red"> 186.                 continue</font>
+<font color="black"> 187.             else:</font>
+<font color="black"> 188.                 # It's not a header line; throw it back and stop here.</font>
+<font color="red"> 189.                 if not self.dict:</font>
+<font color="red"> 190.                     self.status = 'No headers'</font>
+<font color="black"> 191.                 else:</font>
+<font color="red"> 192.                     self.status = 'Non-header line where header expected'</font>
+<font color="black"> 193.                 # Try to undo the read.</font>
+<font color="red"> 194.                 if unread:</font>
+<font color="red"> 195.                     unread(line)</font>
+<font color="red"> 196.                 elif tell:</font>
+<font color="red"> 197.                     self.fp.seek(startofline)</font>
+<font color="black"> 198.                 else:</font>
+<font color="red"> 199.                     self.status = self.status + '; bad seek'</font>
+<font color="red"> 200.                 break</font>
+<font color="black"> 201. </font>
+<font color="green"> 202.     def isheader(self, line):</font>
+<font color="black"> 203.         &quot;&quot;&quot;Determine whether a given line is a legal header.</font>
+<font color="black"> 204. </font>
+<font color="black"> 205.         This method should return the header name, suitably canonicalized.</font>
+<font color="black"> 206.         You may override this method in order to use Message parsing on tagged</font>
+<font color="black"> 207.         data in RFC 2822-like formats with special header formats.</font>
+<font color="black"> 208.         &quot;&quot;&quot;</font>
+<font color="green"> 209.         i = line.find(':')</font>
+<font color="green"> 210.         if i &gt; -1:</font>
+<font color="green"> 211.             return line[:i].lower()</font>
+<font color="red"> 212.         return None</font>
+<font color="black"> 213. </font>
+<font color="green"> 214.     def islast(self, line):</font>
+<font color="black"> 215.         &quot;&quot;&quot;Determine whether a line is a legal end of RFC 2822 headers.</font>
+<font color="black"> 216. </font>
+<font color="black"> 217.         You may override this method if your application wants to bend the</font>
+<font color="black"> 218.         rules, e.g. to strip trailing whitespace, or to recognize MH template</font>
+<font color="black"> 219.         separators ('--------').  For convenience (e.g. for code reading from</font>
+<font color="black"> 220.         sockets) a line consisting of \\r\\n also matches.</font>
+<font color="black"> 221.         &quot;&quot;&quot;</font>
+<font color="green"> 222.         return line in _blanklines</font>
+<font color="black"> 223. </font>
+<font color="green"> 224.     def iscomment(self, line):</font>
+<font color="black"> 225.         &quot;&quot;&quot;Determine whether a line should be skipped entirely.</font>
+<font color="black"> 226. </font>
+<font color="black"> 227.         You may override this method in order to use Message parsing on tagged</font>
+<font color="black"> 228.         data in RFC 2822-like formats that support embedded comments or</font>
+<font color="black"> 229.         free-text data.</font>
+<font color="black"> 230.         &quot;&quot;&quot;</font>
+<font color="green"> 231.         return False</font>
+<font color="black"> 232. </font>
+<font color="green"> 233.     def getallmatchingheaders(self, name):</font>
+<font color="black"> 234.         &quot;&quot;&quot;Find all header lines matching a given header name.</font>
+<font color="black"> 235. </font>
+<font color="black"> 236.         Look through the list of headers and find all lines matching a given</font>
+<font color="black"> 237.         header name (and their continuation lines).  A list of the lines is</font>
+<font color="black"> 238.         returned, without interpretation.  If the header does not occur, an</font>
+<font color="black"> 239.         empty list is returned.  If the header occurs multiple times, all</font>
+<font color="black"> 240.         occurrences are returned.  Case is not important in the header name.</font>
+<font color="black"> 241.         &quot;&quot;&quot;</font>
+<font color="green"> 242.         name = name.lower() + ':'</font>
+<font color="green"> 243.         n = len(name)</font>
+<font color="green"> 244.         lst = []</font>
+<font color="green"> 245.         hit = 0</font>
+<font color="green"> 246.         for line in self.headers:</font>
+<font color="green"> 247.             if line[:n].lower() == name:</font>
+<font color="red"> 248.                 hit = 1</font>
+<font color="green"> 249.             elif not line[:1].isspace():</font>
+<font color="green"> 250.                 hit = 0</font>
+<font color="green"> 251.             if hit:</font>
+<font color="red"> 252.                 lst.append(line)</font>
+<font color="green"> 253.         return lst</font>
+<font color="black"> 254. </font>
+<font color="green"> 255.     def getfirstmatchingheader(self, name):</font>
+<font color="black"> 256.         &quot;&quot;&quot;Get the first header line matching name.</font>
+<font color="black"> 257. </font>
+<font color="black"> 258.         This is similar to getallmatchingheaders, but it returns only the</font>
+<font color="black"> 259.         first matching header (and its continuation lines).</font>
+<font color="black"> 260.         &quot;&quot;&quot;</font>
+<font color="red"> 261.         name = name.lower() + ':'</font>
+<font color="red"> 262.         n = len(name)</font>
+<font color="red"> 263.         lst = []</font>
+<font color="red"> 264.         hit = 0</font>
+<font color="red"> 265.         for line in self.headers:</font>
+<font color="red"> 266.             if hit:</font>
+<font color="red"> 267.                 if not line[:1].isspace():</font>
+<font color="red"> 268.                     break</font>
+<font color="red"> 269.             elif line[:n].lower() == name:</font>
+<font color="red"> 270.                 hit = 1</font>
+<font color="red"> 271.             if hit:</font>
+<font color="red"> 272.                 lst.append(line)</font>
+<font color="red"> 273.         return lst</font>
+<font color="black"> 274. </font>
+<font color="green"> 275.     def getrawheader(self, name):</font>
+<font color="black"> 276.         &quot;&quot;&quot;A higher-level interface to getfirstmatchingheader().</font>
+<font color="black"> 277. </font>
+<font color="black"> 278.         Return a string containing the literal text of the header but with the</font>
+<font color="black"> 279.         keyword stripped.  All leading, trailing and embedded whitespace is</font>
+<font color="black"> 280.         kept in the string, however.  Return None if the header does not</font>
+<font color="black"> 281.         occur.</font>
+<font color="black"> 282.         &quot;&quot;&quot;</font>
+<font color="black"> 283. </font>
+<font color="red"> 284.         lst = self.getfirstmatchingheader(name)</font>
+<font color="red"> 285.         if not lst:</font>
+<font color="red"> 286.             return None</font>
+<font color="red"> 287.         lst[0] = lst[0][len(name) + 1:]</font>
+<font color="red"> 288.         return ''.join(lst)</font>
+<font color="black"> 289. </font>
+<font color="green"> 290.     def getheader(self, name, default=None):</font>
+<font color="black"> 291.         &quot;&quot;&quot;Get the header value for a name.</font>
+<font color="black"> 292. </font>
+<font color="black"> 293.         This is the normal interface: it returns a stripped version of the</font>
+<font color="black"> 294.         header value for a given header name, or None if it doesn't exist.</font>
+<font color="black"> 295.         This uses the dictionary version which finds the *last* such header.</font>
+<font color="black"> 296.         &quot;&quot;&quot;</font>
+<font color="green"> 297.         return self.dict.get(name.lower(), default)</font>
+<font color="green"> 298.     get = getheader</font>
+<font color="black"> 299. </font>
+<font color="green"> 300.     def getheaders(self, name):</font>
+<font color="black"> 301.         &quot;&quot;&quot;Get all values for a header.</font>
+<font color="black"> 302. </font>
+<font color="black"> 303.         This returns a list of values for headers given more than once; each</font>
+<font color="black"> 304.         value in the result list is stripped in the same way as the result of</font>
+<font color="black"> 305.         getheader().  If the header is not given, return an empty list.</font>
+<font color="black"> 306.         &quot;&quot;&quot;</font>
+<font color="green"> 307.         result = []</font>
+<font color="green"> 308.         current = ''</font>
+<font color="green"> 309.         have_header = 0</font>
+<font color="green"> 310.         for s in self.getallmatchingheaders(name):</font>
+<font color="red"> 311.             if s[0].isspace():</font>
+<font color="red"> 312.                 if current:</font>
+<font color="red"> 313.                     current = &quot;%s\n %s&quot; % (current, s.strip())</font>
+<font color="black"> 314.                 else:</font>
+<font color="red"> 315.                     current = s.strip()</font>
+<font color="black"> 316.             else:</font>
+<font color="red"> 317.                 if have_header:</font>
+<font color="red"> 318.                     result.append(current)</font>
+<font color="red"> 319.                 current = s[s.find(&quot;:&quot;) + 1:].strip()</font>
+<font color="red"> 320.                 have_header = 1</font>
+<font color="green"> 321.         if have_header:</font>
+<font color="red"> 322.             result.append(current)</font>
+<font color="green"> 323.         return result</font>
+<font color="black"> 324. </font>
+<font color="green"> 325.     def getaddr(self, name):</font>
+<font color="black"> 326.         &quot;&quot;&quot;Get a single address from a header, as a tuple.</font>
+<font color="black"> 327. </font>
+<font color="black"> 328.         An example return value:</font>
+<font color="black"> 329.         ('Guido van Rossum', 'guido@cwi.nl')</font>
+<font color="black"> 330.         &quot;&quot;&quot;</font>
+<font color="black"> 331.         # New, by Ben Escoto</font>
+<font color="red"> 332.         alist = self.getaddrlist(name)</font>
+<font color="red"> 333.         if alist:</font>
+<font color="red"> 334.             return alist[0]</font>
+<font color="black"> 335.         else:</font>
+<font color="red"> 336.             return (None, None)</font>
+<font color="black"> 337. </font>
+<font color="green"> 338.     def getaddrlist(self, name):</font>
+<font color="black"> 339.         &quot;&quot;&quot;Get a list of addresses from a header.</font>
+<font color="black"> 340. </font>
+<font color="black"> 341.         Retrieves a list of addresses from a header, where each address is a</font>
+<font color="black"> 342.         tuple as returned by getaddr().  Scans all named headers, so it works</font>
+<font color="black"> 343.         properly with multiple To: or Cc: headers for example.</font>
+<font color="black"> 344.         &quot;&quot;&quot;</font>
+<font color="red"> 345.         raw = []</font>
+<font color="red"> 346.         for h in self.getallmatchingheaders(name):</font>
+<font color="red"> 347.             if h[0] in ' \t':</font>
+<font color="red"> 348.                 raw.append(h)</font>
+<font color="black"> 349.             else:</font>
+<font color="red"> 350.                 if raw:</font>
+<font color="red"> 351.                     raw.append(', ')</font>
+<font color="red"> 352.                 i = h.find(':')</font>
+<font color="red"> 353.                 if i &gt; 0:</font>
+<font color="red"> 354.                     addr = h[i+1:]</font>
+<font color="red"> 355.                 raw.append(addr)</font>
+<font color="red"> 356.         alladdrs = ''.join(raw)</font>
+<font color="red"> 357.         a = AddressList(alladdrs)</font>
+<font color="red"> 358.         return a.addresslist</font>
+<font color="black"> 359. </font>
+<font color="green"> 360.     def getdate(self, name):</font>
+<font color="black"> 361.         &quot;&quot;&quot;Retrieve a date field from a header.</font>
+<font color="black"> 362. </font>
+<font color="black"> 363.         Retrieves a date field from the named header, returning a tuple</font>
+<font color="black"> 364.         compatible with time.mktime().</font>
+<font color="black"> 365.         &quot;&quot;&quot;</font>
+<font color="red"> 366.         try:</font>
+<font color="red"> 367.             data = self[name]</font>
+<font color="red"> 368.         except KeyError:</font>
+<font color="red"> 369.             return None</font>
+<font color="red"> 370.         return parsedate(data)</font>
+<font color="black"> 371. </font>
+<font color="green"> 372.     def getdate_tz(self, name):</font>
+<font color="black"> 373.         &quot;&quot;&quot;Retrieve a date field from a header as a 10-tuple.</font>
+<font color="black"> 374. </font>
+<font color="black"> 375.         The first 9 elements make up a tuple compatible with time.mktime(),</font>
+<font color="black"> 376.         and the 10th is the offset of the poster's time zone from GMT/UTC.</font>
+<font color="black"> 377.         &quot;&quot;&quot;</font>
+<font color="red"> 378.         try:</font>
+<font color="red"> 379.             data = self[name]</font>
+<font color="red"> 380.         except KeyError:</font>
+<font color="red"> 381.             return None</font>
+<font color="red"> 382.         return parsedate_tz(data)</font>
+<font color="black"> 383. </font>
+<font color="black"> 384. </font>
+<font color="black"> 385.     # Access as a dictionary (only finds *last* header of each type):</font>
+<font color="black"> 386. </font>
+<font color="green"> 387.     def __len__(self):</font>
+<font color="black"> 388.         &quot;&quot;&quot;Get the number of headers in a message.&quot;&quot;&quot;</font>
+<font color="red"> 389.         return len(self.dict)</font>
+<font color="black"> 390. </font>
+<font color="green"> 391.     def __getitem__(self, name):</font>
+<font color="black"> 392.         &quot;&quot;&quot;Get a specific header, as from a dictionary.&quot;&quot;&quot;</font>
+<font color="red"> 393.         return self.dict[name.lower()]</font>
+<font color="black"> 394. </font>
+<font color="green"> 395.     def __setitem__(self, name, value):</font>
+<font color="black"> 396.         &quot;&quot;&quot;Set the value of a header.</font>
+<font color="black"> 397. </font>
+<font color="black"> 398.         Note: This is not a perfect inversion of __getitem__, because any</font>
+<font color="black"> 399.         changed headers get stuck at the end of the raw-headers list rather</font>
+<font color="black"> 400.         than where the altered header was.</font>
+<font color="black"> 401.         &quot;&quot;&quot;</font>
+<font color="red"> 402.         del self[name] # Won't fail if it doesn't exist</font>
+<font color="red"> 403.         self.dict[name.lower()] = value</font>
+<font color="red"> 404.         text = name + &quot;: &quot; + value</font>
+<font color="red"> 405.         for line in text.split(&quot;\n&quot;):</font>
+<font color="red"> 406.             self.headers.append(line + &quot;\n&quot;)</font>
+<font color="black"> 407. </font>
+<font color="green"> 408.     def __delitem__(self, name):</font>
+<font color="black"> 409.         &quot;&quot;&quot;Delete all occurrences of a specific header, if it is present.&quot;&quot;&quot;</font>
+<font color="red"> 410.         name = name.lower()</font>
+<font color="red"> 411.         if not name in self.dict:</font>
+<font color="red"> 412.             return</font>
+<font color="red"> 413.         del self.dict[name]</font>
+<font color="red"> 414.         name = name + ':'</font>
+<font color="red"> 415.         n = len(name)</font>
+<font color="red"> 416.         lst = []</font>
+<font color="red"> 417.         hit = 0</font>
+<font color="red"> 418.         for i in range(len(self.headers)):</font>
+<font color="red"> 419.             line = self.headers[i]</font>
+<font color="red"> 420.             if line[:n].lower() == name:</font>
+<font color="red"> 421.                 hit = 1</font>
+<font color="red"> 422.             elif not line[:1].isspace():</font>
+<font color="red"> 423.                 hit = 0</font>
+<font color="red"> 424.             if hit:</font>
+<font color="red"> 425.                 lst.append(i)</font>
+<font color="red"> 426.         for i in reversed(lst):</font>
+<font color="red"> 427.             del self.headers[i]</font>
+<font color="black"> 428. </font>
+<font color="green"> 429.     def setdefault(self, name, default=&quot;&quot;):</font>
+<font color="red"> 430.         lowername = name.lower()</font>
+<font color="red"> 431.         if lowername in self.dict:</font>
+<font color="red"> 432.             return self.dict[lowername]</font>
+<font color="black"> 433.         else:</font>
+<font color="red"> 434.             text = name + &quot;: &quot; + default</font>
+<font color="red"> 435.             for line in text.split(&quot;\n&quot;):</font>
+<font color="red"> 436.                 self.headers.append(line + &quot;\n&quot;)</font>
+<font color="red"> 437.             self.dict[lowername] = default</font>
+<font color="red"> 438.             return default</font>
+<font color="black"> 439. </font>
+<font color="green"> 440.     def has_key(self, name):</font>
+<font color="black"> 441.         &quot;&quot;&quot;Determine whether a message contains the named header.&quot;&quot;&quot;</font>
+<font color="red"> 442.         return name.lower() in self.dict</font>
+<font color="black"> 443. </font>
+<font color="green"> 444.     def __contains__(self, name):</font>
+<font color="black"> 445.         &quot;&quot;&quot;Determine whether a message contains the named header.&quot;&quot;&quot;</font>
+<font color="red"> 446.         return name.lower() in self.dict</font>
+<font color="black"> 447. </font>
+<font color="green"> 448.     def __iter__(self):</font>
+<font color="red"> 449.         return iter(self.dict)</font>
+<font color="black"> 450. </font>
+<font color="green"> 451.     def keys(self):</font>
+<font color="black"> 452.         &quot;&quot;&quot;Get all of a message's header field names.&quot;&quot;&quot;</font>
+<font color="red"> 453.         return self.dict.keys()</font>
+<font color="black"> 454. </font>
+<font color="green"> 455.     def values(self):</font>
+<font color="black"> 456.         &quot;&quot;&quot;Get all of a message's header field values.&quot;&quot;&quot;</font>
+<font color="red"> 457.         return self.dict.values()</font>
+<font color="black"> 458. </font>
+<font color="green"> 459.     def items(self):</font>
+<font color="black"> 460.         &quot;&quot;&quot;Get all of a message's headers.</font>
+<font color="black"> 461. </font>
+<font color="black"> 462.         Returns a list of name, value tuples.</font>
+<font color="black"> 463.         &quot;&quot;&quot;</font>
+<font color="red"> 464.         return self.dict.items()</font>
+<font color="black"> 465. </font>
+<font color="green"> 466.     def __str__(self):</font>
+<font color="red"> 467.         return ''.join(self.headers)</font>
+<font color="black"> 468. </font>
+<font color="black"> 469. </font>
+<font color="black"> 470. # Utility functions</font>
+<font color="black"> 471. # -----------------</font>
+<font color="black"> 472. </font>
+<font color="black"> 473. # XXX Should fix unquote() and quote() to be really conformant.</font>
+<font color="black"> 474. # XXX The inverses of the parse functions may also be useful.</font>
+<font color="black"> 475. </font>
+<font color="black"> 476. </font>
+<font color="green"> 477. def unquote(s):</font>
+<font color="black"> 478.     &quot;&quot;&quot;Remove quotes from a string.&quot;&quot;&quot;</font>
+<font color="red"> 479.     if len(s) &gt; 1:</font>
+<font color="red"> 480.         if s.startswith('&quot;') and s.endswith('&quot;'):</font>
+<font color="red"> 481.             return s[1:-1].replace('\\\\', '\\').replace('\\&quot;', '&quot;')</font>
+<font color="red"> 482.         if s.startswith('&lt;') and s.endswith('&gt;'):</font>
+<font color="red"> 483.             return s[1:-1]</font>
+<font color="red"> 484.     return s</font>
+<font color="black"> 485. </font>
+<font color="black"> 486. </font>
+<font color="green"> 487. def quote(s):</font>
+<font color="black"> 488.     &quot;&quot;&quot;Add quotes around a string.&quot;&quot;&quot;</font>
+<font color="red"> 489.     return s.replace('\\', '\\\\').replace('&quot;', '\\&quot;')</font>
+<font color="black"> 490. </font>
+<font color="black"> 491. </font>
+<font color="green"> 492. def parseaddr(address):</font>
+<font color="black"> 493.     &quot;&quot;&quot;Parse an address into a (realname, mailaddr) tuple.&quot;&quot;&quot;</font>
+<font color="red"> 494.     a = AddressList(address)</font>
+<font color="red"> 495.     lst = a.addresslist</font>
+<font color="red"> 496.     if not lst:</font>
+<font color="red"> 497.         return (None, None)</font>
+<font color="red"> 498.     return lst[0]</font>
+<font color="black"> 499. </font>
+<font color="black"> 500. </font>
+<font color="green"> 501. class AddrlistClass:</font>
+<font color="black"> 502.     &quot;&quot;&quot;Address parser class by Ben Escoto.</font>
+<font color="black"> 503. </font>
+<font color="black"> 504.     To understand what this class does, it helps to have a copy of</font>
+<font color="black"> 505.     RFC 2822 in front of you.</font>
+<font color="black"> 506. </font>
+<font color="black"> 507.     http://www.faqs.org/rfcs/rfc2822.html</font>
+<font color="black"> 508. </font>
+<font color="black"> 509.     Note: this class interface is deprecated and may be removed in the future.</font>
+<font color="black"> 510.     Use rfc822.AddressList instead.</font>
+<font color="green"> 511.     &quot;&quot;&quot;</font>
+<font color="black"> 512. </font>
+<font color="green"> 513.     def __init__(self, field):</font>
+<font color="black"> 514.         &quot;&quot;&quot;Initialize a new instance.</font>
+<font color="black"> 515. </font>
+<font color="black"> 516.         `field' is an unparsed address header field, containing one or more</font>
+<font color="black"> 517.         addresses.</font>
+<font color="black"> 518.         &quot;&quot;&quot;</font>
+<font color="red"> 519.         self.specials = '()&lt;&gt;@,:;.\&quot;[]'</font>
+<font color="red"> 520.         self.pos = 0</font>
+<font color="red"> 521.         self.LWS = ' \t'</font>
+<font color="red"> 522.         self.CR = '\r\n'</font>
+<font color="red"> 523.         self.atomends = self.specials + self.LWS + self.CR</font>
+<font color="black"> 524.         # Note that RFC 2822 now specifies `.' as obs-phrase, meaning that it</font>
+<font color="black"> 525.         # is obsolete syntax.  RFC 2822 requires that we recognize obsolete</font>
+<font color="black"> 526.         # syntax, so allow dots in phrases.</font>
+<font color="red"> 527.         self.phraseends = self.atomends.replace('.', '')</font>
+<font color="red"> 528.         self.field = field</font>
+<font color="red"> 529.         self.commentlist = []</font>
+<font color="black"> 530. </font>
+<font color="green"> 531.     def gotonext(self):</font>
+<font color="black"> 532.         &quot;&quot;&quot;Parse up to the start of the next address.&quot;&quot;&quot;</font>
+<font color="red"> 533.         while self.pos &lt; len(self.field):</font>
+<font color="red"> 534.             if self.field[self.pos] in self.LWS + '\n\r':</font>
+<font color="red"> 535.                 self.pos = self.pos + 1</font>
+<font color="red"> 536.             elif self.field[self.pos] == '(':</font>
+<font color="red"> 537.                 self.commentlist.append(self.getcomment())</font>
+<font color="red"> 538.             else: break</font>
+<font color="black"> 539. </font>
+<font color="green"> 540.     def getaddrlist(self):</font>
+<font color="black"> 541.         &quot;&quot;&quot;Parse all addresses.</font>
+<font color="black"> 542. </font>
+<font color="black"> 543.         Returns a list containing all of the addresses.</font>
+<font color="black"> 544.         &quot;&quot;&quot;</font>
+<font color="red"> 545.         result = []</font>
+<font color="red"> 546.         ad = self.getaddress()</font>
+<font color="red"> 547.         while ad:</font>
+<font color="red"> 548.             result += ad</font>
+<font color="red"> 549.             ad = self.getaddress()</font>
+<font color="red"> 550.         return result</font>
+<font color="black"> 551. </font>
+<font color="green"> 552.     def getaddress(self):</font>
+<font color="black"> 553.         &quot;&quot;&quot;Parse the next address.&quot;&quot;&quot;</font>
+<font color="red"> 554.         self.commentlist = []</font>
+<font color="red"> 555.         self.gotonext()</font>
+<font color="black"> 556. </font>
+<font color="red"> 557.         oldpos = self.pos</font>
+<font color="red"> 558.         oldcl = self.commentlist</font>
+<font color="red"> 559.         plist = self.getphraselist()</font>
+<font color="black"> 560. </font>
+<font color="red"> 561.         self.gotonext()</font>
+<font color="red"> 562.         returnlist = []</font>
+<font color="black"> 563. </font>
+<font color="red"> 564.         if self.pos &gt;= len(self.field):</font>
+<font color="black"> 565.             # Bad email address technically, no domain.</font>
+<font color="red"> 566.             if plist:</font>
+<font color="red"> 567.                 returnlist = [(' '.join(self.commentlist), plist[0])]</font>
+<font color="black"> 568. </font>
+<font color="red"> 569.         elif self.field[self.pos] in '.@':</font>
+<font color="black"> 570.             # email address is just an addrspec</font>
+<font color="black"> 571.             # this isn't very efficient since we start over</font>
+<font color="red"> 572.             self.pos = oldpos</font>
+<font color="red"> 573.             self.commentlist = oldcl</font>
+<font color="red"> 574.             addrspec = self.getaddrspec()</font>
+<font color="red"> 575.             returnlist = [(' '.join(self.commentlist), addrspec)]</font>
+<font color="black"> 576. </font>
+<font color="red"> 577.         elif self.field[self.pos] == ':':</font>
+<font color="black"> 578.             # address is a group</font>
+<font color="red"> 579.             returnlist = []</font>
+<font color="black"> 580. </font>
+<font color="red"> 581.             fieldlen = len(self.field)</font>
+<font color="red"> 582.             self.pos += 1</font>
+<font color="red"> 583.             while self.pos &lt; len(self.field):</font>
+<font color="red"> 584.                 self.gotonext()</font>
+<font color="red"> 585.                 if self.pos &lt; fieldlen and self.field[self.pos] == ';':</font>
+<font color="red"> 586.                     self.pos += 1</font>
+<font color="red"> 587.                     break</font>
+<font color="red"> 588.                 returnlist = returnlist + self.getaddress()</font>
+<font color="black"> 589. </font>
+<font color="red"> 590.         elif self.field[self.pos] == '&lt;':</font>
+<font color="black"> 591.             # Address is a phrase then a route addr</font>
+<font color="red"> 592.             routeaddr = self.getrouteaddr()</font>
+<font color="black"> 593. </font>
+<font color="red"> 594.             if self.commentlist:</font>
+<font color="black"> 595.                 returnlist = [(' '.join(plist) + ' (' + \</font>
+<font color="red"> 596.                          ' '.join(self.commentlist) + ')', routeaddr)]</font>
+<font color="red"> 597.             else: returnlist = [(' '.join(plist), routeaddr)]</font>
+<font color="black"> 598. </font>
+<font color="black"> 599.         else:</font>
+<font color="red"> 600.             if plist:</font>
+<font color="red"> 601.                 returnlist = [(' '.join(self.commentlist), plist[0])]</font>
+<font color="red"> 602.             elif self.field[self.pos] in self.specials:</font>
+<font color="red"> 603.                 self.pos += 1</font>
+<font color="black"> 604. </font>
+<font color="red"> 605.         self.gotonext()</font>
+<font color="red"> 606.         if self.pos &lt; len(self.field) and self.field[self.pos] == ',':</font>
+<font color="red"> 607.             self.pos += 1</font>
+<font color="red"> 608.         return returnlist</font>
+<font color="black"> 609. </font>
+<font color="green"> 610.     def getrouteaddr(self):</font>
+<font color="black"> 611.         &quot;&quot;&quot;Parse a route address (Return-path value).</font>
+<font color="black"> 612. </font>
+<font color="black"> 613.         This method just skips all the route stuff and returns the addrspec.</font>
+<font color="black"> 614.         &quot;&quot;&quot;</font>
+<font color="red"> 615.         if self.field[self.pos] != '&lt;':</font>
+<font color="red"> 616.             return</font>
+<font color="black"> 617. </font>
+<font color="red"> 618.         expectroute = 0</font>
+<font color="red"> 619.         self.pos += 1</font>
+<font color="red"> 620.         self.gotonext()</font>
+<font color="red"> 621.         adlist = &quot;&quot;</font>
+<font color="red"> 622.         while self.pos &lt; len(self.field):</font>
+<font color="red"> 623.             if expectroute:</font>
+<font color="red"> 624.                 self.getdomain()</font>
+<font color="red"> 625.                 expectroute = 0</font>
+<font color="red"> 626.             elif self.field[self.pos] == '&gt;':</font>
+<font color="red"> 627.                 self.pos += 1</font>
+<font color="red"> 628.                 break</font>
+<font color="red"> 629.             elif self.field[self.pos] == '@':</font>
+<font color="red"> 630.                 self.pos += 1</font>
+<font color="red"> 631.                 expectroute = 1</font>
+<font color="red"> 632.             elif self.field[self.pos] == ':':</font>
+<font color="red"> 633.                 self.pos += 1</font>
+<font color="black"> 634.             else:</font>
+<font color="red"> 635.                 adlist = self.getaddrspec()</font>
+<font color="red"> 636.                 self.pos += 1</font>
+<font color="red"> 637.                 break</font>
+<font color="red"> 638.             self.gotonext()</font>
+<font color="black"> 639. </font>
+<font color="red"> 640.         return adlist</font>
+<font color="black"> 641. </font>
+<font color="green"> 642.     def getaddrspec(self):</font>
+<font color="black"> 643.         &quot;&quot;&quot;Parse an RFC 2822 addr-spec.&quot;&quot;&quot;</font>
+<font color="red"> 644.         aslist = []</font>
+<font color="black"> 645. </font>
+<font color="red"> 646.         self.gotonext()</font>
+<font color="red"> 647.         while self.pos &lt; len(self.field):</font>
+<font color="red"> 648.             if self.field[self.pos] == '.':</font>
+<font color="red"> 649.                 aslist.append('.')</font>
+<font color="red"> 650.                 self.pos += 1</font>
+<font color="red"> 651.             elif self.field[self.pos] == '&quot;':</font>
+<font color="red"> 652.                 aslist.append('&quot;%s&quot;' % self.getquote())</font>
+<font color="red"> 653.             elif self.field[self.pos] in self.atomends:</font>
+<font color="red"> 654.                 break</font>
+<font color="red"> 655.             else: aslist.append(self.getatom())</font>
+<font color="red"> 656.             self.gotonext()</font>
+<font color="black"> 657. </font>
+<font color="red"> 658.         if self.pos &gt;= len(self.field) or self.field[self.pos] != '@':</font>
+<font color="red"> 659.             return ''.join(aslist)</font>
+<font color="black"> 660. </font>
+<font color="red"> 661.         aslist.append('@')</font>
+<font color="red"> 662.         self.pos += 1</font>
+<font color="red"> 663.         self.gotonext()</font>
+<font color="red"> 664.         return ''.join(aslist) + self.getdomain()</font>
+<font color="black"> 665. </font>
+<font color="green"> 666.     def getdomain(self):</font>
+<font color="black"> 667.         &quot;&quot;&quot;Get the complete domain name from an address.&quot;&quot;&quot;</font>
+<font color="red"> 668.         sdlist = []</font>
+<font color="red"> 669.         while self.pos &lt; len(self.field):</font>
+<font color="red"> 670.             if self.field[self.pos] in self.LWS:</font>
+<font color="red"> 671.                 self.pos += 1</font>
+<font color="red"> 672.             elif self.field[self.pos] == '(':</font>
+<font color="red"> 673.                 self.commentlist.append(self.getcomment())</font>
+<font color="red"> 674.             elif self.field[self.pos] == '[':</font>
+<font color="red"> 675.                 sdlist.append(self.getdomainliteral())</font>
+<font color="red"> 676.             elif self.field[self.pos] == '.':</font>
+<font color="red"> 677.                 self.pos += 1</font>
+<font color="red"> 678.                 sdlist.append('.')</font>
+<font color="red"> 679.             elif self.field[self.pos] in self.atomends:</font>
+<font color="red"> 680.                 break</font>
+<font color="red"> 681.             else: sdlist.append(self.getatom())</font>
+<font color="red"> 682.         return ''.join(sdlist)</font>
+<font color="black"> 683. </font>
+<font color="green"> 684.     def getdelimited(self, beginchar, endchars, allowcomments = 1):</font>
+<font color="black"> 685.         &quot;&quot;&quot;Parse a header fragment delimited by special characters.</font>
+<font color="black"> 686. </font>
+<font color="black"> 687.         `beginchar' is the start character for the fragment.  If self is not</font>
+<font color="black"> 688.         looking at an instance of `beginchar' then getdelimited returns the</font>
+<font color="black"> 689.         empty string.</font>
+<font color="black"> 690. </font>
+<font color="black"> 691.         `endchars' is a sequence of allowable end-delimiting characters.</font>
+<font color="black"> 692.         Parsing stops when one of these is encountered.</font>
+<font color="black"> 693. </font>
+<font color="black"> 694.         If `allowcomments' is non-zero, embedded RFC 2822 comments are allowed</font>
+<font color="black"> 695.         within the parsed fragment.</font>
+<font color="black"> 696.         &quot;&quot;&quot;</font>
+<font color="red"> 697.         if self.field[self.pos] != beginchar:</font>
+<font color="red"> 698.             return ''</font>
+<font color="black"> 699. </font>
+<font color="red"> 700.         slist = ['']</font>
+<font color="red"> 701.         quote = 0</font>
+<font color="red"> 702.         self.pos += 1</font>
+<font color="red"> 703.         while self.pos &lt; len(self.field):</font>
+<font color="red"> 704.             if quote == 1:</font>
+<font color="red"> 705.                 slist.append(self.field[self.pos])</font>
+<font color="red"> 706.                 quote = 0</font>
+<font color="red"> 707.             elif self.field[self.pos] in endchars:</font>
+<font color="red"> 708.                 self.pos += 1</font>
+<font color="red"> 709.                 break</font>
+<font color="red"> 710.             elif allowcomments and self.field[self.pos] == '(':</font>
+<font color="red"> 711.                 slist.append(self.getcomment())</font>
+<font color="red"> 712.                 continue        # have already advanced pos from getcomment</font>
+<font color="red"> 713.             elif self.field[self.pos] == '\\':</font>
+<font color="red"> 714.                 quote = 1</font>
+<font color="black"> 715.             else:</font>
+<font color="red"> 716.                 slist.append(self.field[self.pos])</font>
+<font color="red"> 717.             self.pos += 1</font>
+<font color="black"> 718. </font>
+<font color="red"> 719.         return ''.join(slist)</font>
+<font color="black"> 720. </font>
+<font color="green"> 721.     def getquote(self):</font>
+<font color="black"> 722.         &quot;&quot;&quot;Get a quote-delimited fragment from self's field.&quot;&quot;&quot;</font>
+<font color="red"> 723.         return self.getdelimited('&quot;', '&quot;\r', 0)</font>
+<font color="black"> 724. </font>
+<font color="green"> 725.     def getcomment(self):</font>
+<font color="black"> 726.         &quot;&quot;&quot;Get a parenthesis-delimited fragment from self's field.&quot;&quot;&quot;</font>
+<font color="red"> 727.         return self.getdelimited('(', ')\r', 1)</font>
+<font color="black"> 728. </font>
+<font color="green"> 729.     def getdomainliteral(self):</font>
+<font color="black"> 730.         &quot;&quot;&quot;Parse an RFC 2822 domain-literal.&quot;&quot;&quot;</font>
+<font color="red"> 731.         return '[%s]' % self.getdelimited('[', ']\r', 0)</font>
+<font color="black"> 732. </font>
+<font color="green"> 733.     def getatom(self, atomends=None):</font>
+<font color="black"> 734.         &quot;&quot;&quot;Parse an RFC 2822 atom.</font>
+<font color="black"> 735. </font>
+<font color="black"> 736.         Optional atomends specifies a different set of end token delimiters</font>
+<font color="black"> 737.         (the default is to use self.atomends).  This is used e.g. in</font>
+<font color="black"> 738.         getphraselist() since phrase endings must not include the `.' (which</font>
+<font color="black"> 739.         is legal in phrases).&quot;&quot;&quot;</font>
+<font color="red"> 740.         atomlist = ['']</font>
+<font color="red"> 741.         if atomends is None:</font>
+<font color="red"> 742.             atomends = self.atomends</font>
+<font color="black"> 743. </font>
+<font color="red"> 744.         while self.pos &lt; len(self.field):</font>
+<font color="red"> 745.             if self.field[self.pos] in atomends:</font>
+<font color="red"> 746.                 break</font>
+<font color="red"> 747.             else: atomlist.append(self.field[self.pos])</font>
+<font color="red"> 748.             self.pos += 1</font>
+<font color="black"> 749. </font>
+<font color="red"> 750.         return ''.join(atomlist)</font>
+<font color="black"> 751. </font>
+<font color="green"> 752.     def getphraselist(self):</font>
+<font color="black"> 753.         &quot;&quot;&quot;Parse a sequence of RFC 2822 phrases.</font>
+<font color="black"> 754. </font>
+<font color="black"> 755.         A phrase is a sequence of words, which are in turn either RFC 2822</font>
+<font color="black"> 756.         atoms or quoted-strings.  Phrases are canonicalized by squeezing all</font>
+<font color="black"> 757.         runs of continuous whitespace into one space.</font>
+<font color="black"> 758.         &quot;&quot;&quot;</font>
+<font color="red"> 759.         plist = []</font>
+<font color="black"> 760. </font>
+<font color="red"> 761.         while self.pos &lt; len(self.field):</font>
+<font color="red"> 762.             if self.field[self.pos] in self.LWS:</font>
+<font color="red"> 763.                 self.pos += 1</font>
+<font color="red"> 764.             elif self.field[self.pos] == '&quot;':</font>
+<font color="red"> 765.                 plist.append(self.getquote())</font>
+<font color="red"> 766.             elif self.field[self.pos] == '(':</font>
+<font color="red"> 767.                 self.commentlist.append(self.getcomment())</font>
+<font color="red"> 768.             elif self.field[self.pos] in self.phraseends:</font>
+<font color="red"> 769.                 break</font>
+<font color="black"> 770.             else:</font>
+<font color="red"> 771.                 plist.append(self.getatom(self.phraseends))</font>
+<font color="black"> 772. </font>
+<font color="red"> 773.         return plist</font>
+<font color="black"> 774. </font>
+<font color="green"> 775. class AddressList(AddrlistClass):</font>
+<font color="green"> 776.     &quot;&quot;&quot;An AddressList encapsulates a list of parsed RFC 2822 addresses.&quot;&quot;&quot;</font>
+<font color="green"> 777.     def __init__(self, field):</font>
+<font color="red"> 778.         AddrlistClass.__init__(self, field)</font>
+<font color="red"> 779.         if field:</font>
+<font color="red"> 780.             self.addresslist = self.getaddrlist()</font>
+<font color="black"> 781.         else:</font>
+<font color="red"> 782.             self.addresslist = []</font>
+<font color="black"> 783. </font>
+<font color="green"> 784.     def __len__(self):</font>
+<font color="red"> 785.         return len(self.addresslist)</font>
+<font color="black"> 786. </font>
+<font color="green"> 787.     def __str__(self):</font>
+<font color="red"> 788.         return &quot;, &quot;.join(map(dump_address_pair, self.addresslist))</font>
+<font color="black"> 789. </font>
+<font color="green"> 790.     def __add__(self, other):</font>
+<font color="black"> 791.         # Set union</font>
+<font color="red"> 792.         newaddr = AddressList(None)</font>
+<font color="red"> 793.         newaddr.addresslist = self.addresslist[:]</font>
+<font color="red"> 794.         for x in other.addresslist:</font>
+<font color="red"> 795.             if not x in self.addresslist:</font>
+<font color="red"> 796.                 newaddr.addresslist.append(x)</font>
+<font color="red"> 797.         return newaddr</font>
+<font color="black"> 798. </font>
+<font color="green"> 799.     def __iadd__(self, other):</font>
+<font color="black"> 800.         # Set union, in-place</font>
+<font color="red"> 801.         for x in other.addresslist:</font>
+<font color="red"> 802.             if not x in self.addresslist:</font>
+<font color="red"> 803.                 self.addresslist.append(x)</font>
+<font color="red"> 804.         return self</font>
+<font color="black"> 805. </font>
+<font color="green"> 806.     def __sub__(self, other):</font>
+<font color="black"> 807.         # Set difference</font>
+<font color="red"> 808.         newaddr = AddressList(None)</font>
+<font color="red"> 809.         for x in self.addresslist:</font>
+<font color="red"> 810.             if not x in other.addresslist:</font>
+<font color="red"> 811.                 newaddr.addresslist.append(x)</font>
+<font color="red"> 812.         return newaddr</font>
+<font color="black"> 813. </font>
+<font color="green"> 814.     def __isub__(self, other):</font>
+<font color="black"> 815.         # Set difference, in-place</font>
+<font color="red"> 816.         for x in other.addresslist:</font>
+<font color="red"> 817.             if x in self.addresslist:</font>
+<font color="red"> 818.                 self.addresslist.remove(x)</font>
+<font color="red"> 819.         return self</font>
+<font color="black"> 820. </font>
+<font color="green"> 821.     def __getitem__(self, index):</font>
+<font color="black"> 822.         # Make indexing, slices, and 'in' work</font>
+<font color="red"> 823.         return self.addresslist[index]</font>
+<font color="black"> 824. </font>
+<font color="green"> 825. def dump_address_pair(pair):</font>
+<font color="black"> 826.     &quot;&quot;&quot;Dump a (name, address) pair in a canonicalized form.&quot;&quot;&quot;</font>
+<font color="red"> 827.     if pair[0]:</font>
+<font color="red"> 828.         return '&quot;' + pair[0] + '&quot; &lt;' + pair[1] + '&gt;'</font>
+<font color="black"> 829.     else:</font>
+<font color="red"> 830.         return pair[1]</font>
+<font color="black"> 831. </font>
+<font color="black"> 832. # Parse a date field</font>
+<font color="black"> 833. </font>
+<font color="green"> 834. _monthnames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul',</font>
+<font color="green"> 835.                'aug', 'sep', 'oct', 'nov', 'dec',</font>
+<font color="green"> 836.                'january', 'february', 'march', 'april', 'may', 'june', 'july',</font>
+<font color="green"> 837.                'august', 'september', 'october', 'november', 'december']</font>
+<font color="green"> 838. _daynames = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']</font>
+<font color="black"> 839. </font>
+<font color="black"> 840. # The timezone table does not include the military time zones defined</font>
+<font color="black"> 841. # in RFC822, other than Z.  According to RFC1123, the description in</font>
+<font color="black"> 842. # RFC822 gets the signs wrong, so we can't rely on any such time</font>
+<font color="black"> 843. # zones.  RFC1123 recommends that numeric timezone indicators be used</font>
+<font color="black"> 844. # instead of timezone names.</font>
+<font color="black"> 845. </font>
+<font color="green"> 846. _timezones = {'UT':0, 'UTC':0, 'GMT':0, 'Z':0,</font>
+<font color="green"> 847.               'AST': -400, 'ADT': -300,  # Atlantic (used in Canada)</font>
+<font color="green"> 848.               'EST': -500, 'EDT': -400,  # Eastern</font>
+<font color="green"> 849.               'CST': -600, 'CDT': -500,  # Central</font>
+<font color="green"> 850.               'MST': -700, 'MDT': -600,  # Mountain</font>
+<font color="green"> 851.               'PST': -800, 'PDT': -700   # Pacific</font>
+<font color="black"> 852.               }</font>
+<font color="black"> 853. </font>
+<font color="black"> 854. </font>
+<font color="green"> 855. def parsedate_tz(data):</font>
+<font color="black"> 856.     &quot;&quot;&quot;Convert a date string to a time tuple.</font>
+<font color="black"> 857. </font>
+<font color="black"> 858.     Accounts for military timezones.</font>
+<font color="black"> 859.     &quot;&quot;&quot;</font>
+<font color="red"> 860.     if not data:</font>
+<font color="red"> 861.         return None</font>
+<font color="red"> 862.     data = data.split()</font>
+<font color="red"> 863.     if data[0][-1] in (',', '.') or data[0].lower() in _daynames:</font>
+<font color="black"> 864.         # There's a dayname here. Skip it</font>
+<font color="red"> 865.         del data[0]</font>
+<font color="black"> 866.     else:</font>
+<font color="black"> 867.         # no space after the &quot;weekday,&quot;?</font>
+<font color="red"> 868.         i = data[0].rfind(',')</font>
+<font color="red"> 869.         if i &gt;= 0:</font>
+<font color="red"> 870.             data[0] = data[0][i+1:]</font>
+<font color="red"> 871.     if len(data) == 3: # RFC 850 date, deprecated</font>
+<font color="red"> 872.         stuff = data[0].split('-')</font>
+<font color="red"> 873.         if len(stuff) == 3:</font>
+<font color="red"> 874.             data = stuff + data[1:]</font>
+<font color="red"> 875.     if len(data) == 4:</font>
+<font color="red"> 876.         s = data[3]</font>
+<font color="red"> 877.         i = s.find('+')</font>
+<font color="red"> 878.         if i &gt; 0:</font>
+<font color="red"> 879.             data[3:] = [s[:i], s[i+1:]]</font>
+<font color="black"> 880.         else:</font>
+<font color="red"> 881.             data.append('') # Dummy tz</font>
+<font color="red"> 882.     if len(data) &lt; 5:</font>
+<font color="red"> 883.         return None</font>
+<font color="red"> 884.     data = data[:5]</font>
+<font color="red"> 885.     [dd, mm, yy, tm, tz] = data</font>
+<font color="red"> 886.     mm = mm.lower()</font>
+<font color="red"> 887.     if not mm in _monthnames:</font>
+<font color="red"> 888.         dd, mm = mm, dd.lower()</font>
+<font color="red"> 889.         if not mm in _monthnames:</font>
+<font color="red"> 890.             return None</font>
+<font color="red"> 891.     mm = _monthnames.index(mm)+1</font>
+<font color="red"> 892.     if mm &gt; 12: mm = mm - 12</font>
+<font color="red"> 893.     if dd[-1] == ',':</font>
+<font color="red"> 894.         dd = dd[:-1]</font>
+<font color="red"> 895.     i = yy.find(':')</font>
+<font color="red"> 896.     if i &gt; 0:</font>
+<font color="red"> 897.         yy, tm = tm, yy</font>
+<font color="red"> 898.     if yy[-1] == ',':</font>
+<font color="red"> 899.         yy = yy[:-1]</font>
+<font color="red"> 900.     if not yy[0].isdigit():</font>
+<font color="red"> 901.         yy, tz = tz, yy</font>
+<font color="red"> 902.     if tm[-1] == ',':</font>
+<font color="red"> 903.         tm = tm[:-1]</font>
+<font color="red"> 904.     tm = tm.split(':')</font>
+<font color="red"> 905.     if len(tm) == 2:</font>
+<font color="red"> 906.         [thh, tmm] = tm</font>
+<font color="red"> 907.         tss = '0'</font>
+<font color="red"> 908.     elif len(tm) == 3:</font>
+<font color="red"> 909.         [thh, tmm, tss] = tm</font>
+<font color="black"> 910.     else:</font>
+<font color="red"> 911.         return None</font>
+<font color="red"> 912.     try:</font>
+<font color="red"> 913.         yy = int(yy)</font>
+<font color="red"> 914.         dd = int(dd)</font>
+<font color="red"> 915.         thh = int(thh)</font>
+<font color="red"> 916.         tmm = int(tmm)</font>
+<font color="red"> 917.         tss = int(tss)</font>
+<font color="red"> 918.     except ValueError:</font>
+<font color="red"> 919.         return None</font>
+<font color="red"> 920.     tzoffset = None</font>
+<font color="red"> 921.     tz = tz.upper()</font>
+<font color="red"> 922.     if tz in _timezones:</font>
+<font color="red"> 923.         tzoffset = _timezones[tz]</font>
+<font color="black"> 924.     else:</font>
+<font color="red"> 925.         try:</font>
+<font color="red"> 926.             tzoffset = int(tz)</font>
+<font color="red"> 927.         except ValueError:</font>
+<font color="red"> 928.             pass</font>
+<font color="black"> 929.     # Convert a timezone offset into seconds ; -0500 -&gt; -18000</font>
+<font color="red"> 930.     if tzoffset:</font>
+<font color="red"> 931.         if tzoffset &lt; 0:</font>
+<font color="red"> 932.             tzsign = -1</font>
+<font color="red"> 933.             tzoffset = -tzoffset</font>
+<font color="black"> 934.         else:</font>
+<font color="red"> 935.             tzsign = 1</font>
+<font color="red"> 936.         tzoffset = tzsign * ( (tzoffset//100)*3600 + (tzoffset % 100)*60)</font>
+<font color="red"> 937.     return (yy, mm, dd, thh, tmm, tss, 0, 1, 0, tzoffset)</font>
+<font color="black"> 938. </font>
+<font color="black"> 939. </font>
+<font color="green"> 940. def parsedate(data):</font>
+<font color="black"> 941.     &quot;&quot;&quot;Convert a time string to a time tuple.&quot;&quot;&quot;</font>
+<font color="red"> 942.     t = parsedate_tz(data)</font>
+<font color="red"> 943.     if t is None:</font>
+<font color="red"> 944.         return t</font>
+<font color="red"> 945.     return t[:9]</font>
+<font color="black"> 946. </font>
+<font color="black"> 947. </font>
+<font color="green"> 948. def mktime_tz(data):</font>
+<font color="black"> 949.     &quot;&quot;&quot;Turn a 10-tuple as returned by parsedate_tz() into a UTC timestamp.&quot;&quot;&quot;</font>
+<font color="red"> 950.     if data[9] is None:</font>
+<font color="black"> 951.         # No zone info, so localtime is better assumption than GMT</font>
+<font color="red"> 952.         return time.mktime(data[:8] + (-1,))</font>
+<font color="black"> 953.     else:</font>
+<font color="red"> 954.         t = time.mktime(data[:8] + (0,))</font>
+<font color="red"> 955.         return t - data[9] - time.timezone</font>
+<font color="black"> 956. </font>
+<font color="green"> 957. def formatdate(timeval=None):</font>
+<font color="black"> 958.     &quot;&quot;&quot;Returns time format preferred for Internet standards.</font>
+<font color="black"> 959. </font>
+<font color="black"> 960.     Sun, 06 Nov 1994 08:49:37 GMT  ; RFC 822, updated by RFC 1123</font>
+<font color="black"> 961. </font>
+<font color="black"> 962.     According to RFC 1123, day and month names must always be in</font>
+<font color="black"> 963.     English.  If not for that, this code could use strftime().  It</font>
+<font color="black"> 964.     can't because strftime() honors the locale and could generate</font>
+<font color="black"> 965.     non-English names.</font>
+<font color="black"> 966.     &quot;&quot;&quot;</font>
+<font color="red"> 967.     if timeval is None:</font>
+<font color="red"> 968.         timeval = time.time()</font>
+<font color="red"> 969.     timeval = time.gmtime(timeval)</font>
+<font color="red"> 970.     return &quot;%s, %02d %s %04d %02d:%02d:%02d GMT&quot; % (</font>
+<font color="red"> 971.             (&quot;Mon&quot;, &quot;Tue&quot;, &quot;Wed&quot;, &quot;Thu&quot;, &quot;Fri&quot;, &quot;Sat&quot;, &quot;Sun&quot;)[timeval[6]],</font>
+<font color="red"> 972.             timeval[2],</font>
+<font color="black"> 973.             (&quot;Jan&quot;, &quot;Feb&quot;, &quot;Mar&quot;, &quot;Apr&quot;, &quot;May&quot;, &quot;Jun&quot;,</font>
+<font color="red"> 974.              &quot;Jul&quot;, &quot;Aug&quot;, &quot;Sep&quot;, &quot;Oct&quot;, &quot;Nov&quot;, &quot;Dec&quot;)[timeval[1]-1],</font>
+<font color="red"> 975.                                 timeval[0], timeval[3], timeval[4], timeval[5])</font>
+<font color="black"> 976. </font>
+<font color="black"> 977. </font>
+<font color="black"> 978. # When used as script, run a small test program.</font>
+<font color="black"> 979. # The first command line argument must be a filename containing one</font>
+<font color="black"> 980. # message in RFC-822 format.</font>
+<font color="black"> 981. </font>
+<font color="green"> 982. if __name__ == '__main__':</font>
+<font color="red"> 983.     import sys, os</font>
+<font color="red"> 984.     file = os.path.join(os.environ['HOME'], 'Mail/inbox/1')</font>
+<font color="red"> 985.     if sys.argv[1:]: file = sys.argv[1]</font>
+<font color="red"> 986.     f = open(file, 'r')</font>
+<font color="red"> 987.     m = Message(f)</font>
+<font color="red"> 988.     print 'From:', m.getaddr('from')</font>
+<font color="red"> 989.     print 'To:', m.getaddrlist('to')</font>
+<font color="red"> 990.     print 'Subject:', m.getheader('subject')</font>
+<font color="red"> 991.     print 'Date:', m.getheader('date')</font>
+<font color="red"> 992.     date = m.getdate_tz('date')</font>
+<font color="red"> 993.     tz = date[-1]</font>
+<font color="red"> 994.     date = time.localtime(mktime_tz(date))</font>
+<font color="red"> 995.     if date:</font>
+<font color="red"> 996.         print 'ParsedDate:', time.asctime(date),</font>
+<font color="red"> 997.         hhmmss = tz</font>
+<font color="red"> 998.         hhmm, ss = divmod(hhmmss, 60)</font>
+<font color="red"> 999.         hh, mm = divmod(hhmm, 60)</font>
+<font color="red">1000.         print &quot;%+03d%02d&quot; % (hh, mm),</font>
+<font color="red">1001.         if ss: print &quot;.%02d&quot; % ss,</font>
+<font color="red">1002.         print</font>
+<font color="black">1003.     else:</font>
+<font color="red">1004.         print 'ParsedDate:', None</font>
+<font color="red">1005.     m.rewindbody()</font>
+<font color="red">1006.     n = 0</font>
+<font color="red">1007.     while f.readline():</font>
+<font color="red">1008.         n += 1</font>
+<font color="red">1009.     print 'Lines:', n</font>
+<font color="red">1010.     print '-'*70</font>
+<font color="red">1011.     print 'len =', len(m)</font>
+<font color="red">1012.     if 'Date' in m: print 'Date =', m['Date']</font>
+<font color="red">1013.     if 'X-Nonsense' in m: pass</font>
+<font color="red">1014.     print 'keys =', m.keys()</font>
+<font color="red">1015.     print 'values =', m.values()</font>
+<font color="red">1016.     print 'items =', m.items()</font>
+</pre>
+

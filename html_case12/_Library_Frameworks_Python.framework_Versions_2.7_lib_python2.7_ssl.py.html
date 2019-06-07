@@ -1,0 +1,1060 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/ssl.py</b><br>
+
+
+file stats: <b>582 lines, 105 executed: 18.0% covered</b>
+<pre>
+<font color="black">   1. # Wrapper module for _ssl, providing some additional facilities</font>
+<font color="black">   2. # implemented in Python.  Written by Bill Janssen.</font>
+<font color="black">   3. </font>
+<font color="black">   4. &quot;&quot;&quot;This module provides some more Pythonic support for SSL.</font>
+<font color="black">   5. </font>
+<font color="black">   6. Object types:</font>
+<font color="black">   7. </font>
+<font color="black">   8.   SSLSocket -- subtype of socket.socket which does SSL over the socket</font>
+<font color="black">   9. </font>
+<font color="black">  10. Exceptions:</font>
+<font color="black">  11. </font>
+<font color="black">  12.   SSLError -- exception raised for I/O errors</font>
+<font color="black">  13. </font>
+<font color="black">  14. Functions:</font>
+<font color="black">  15. </font>
+<font color="black">  16.   cert_time_to_seconds -- convert time string used for certificate</font>
+<font color="black">  17.                           notBefore and notAfter functions to integer</font>
+<font color="black">  18.                           seconds past the Epoch (the time values</font>
+<font color="black">  19.                           returned from time.time())</font>
+<font color="black">  20. </font>
+<font color="black">  21.   fetch_server_certificate (HOST, PORT) -- fetch the certificate provided</font>
+<font color="black">  22.                           by the server running on HOST at port PORT.  No</font>
+<font color="black">  23.                           validation of the certificate is performed.</font>
+<font color="black">  24. </font>
+<font color="black">  25. Integer constants:</font>
+<font color="black">  26. </font>
+<font color="black">  27. SSL_ERROR_ZERO_RETURN</font>
+<font color="black">  28. SSL_ERROR_WANT_READ</font>
+<font color="black">  29. SSL_ERROR_WANT_WRITE</font>
+<font color="black">  30. SSL_ERROR_WANT_X509_LOOKUP</font>
+<font color="black">  31. SSL_ERROR_SYSCALL</font>
+<font color="black">  32. SSL_ERROR_SSL</font>
+<font color="black">  33. SSL_ERROR_WANT_CONNECT</font>
+<font color="black">  34. </font>
+<font color="black">  35. SSL_ERROR_EOF</font>
+<font color="black">  36. SSL_ERROR_INVALID_ERROR_CODE</font>
+<font color="black">  37. </font>
+<font color="black">  38. The following group define certificate requirements that one side is</font>
+<font color="black">  39. allowing/requiring from the other side:</font>
+<font color="black">  40. </font>
+<font color="black">  41. CERT_NONE - no certificates from the other side are required (or will</font>
+<font color="black">  42.             be looked at if provided)</font>
+<font color="black">  43. CERT_OPTIONAL - certificates are not required, but if provided will be</font>
+<font color="black">  44.                 validated, and if validation fails, the connection will</font>
+<font color="black">  45.                 also fail</font>
+<font color="black">  46. CERT_REQUIRED - certificates are required, and will be validated, and</font>
+<font color="black">  47.                 if validation fails, the connection will also fail</font>
+<font color="black">  48. </font>
+<font color="black">  49. The following constants identify various SSL protocol variants:</font>
+<font color="black">  50. </font>
+<font color="black">  51. PROTOCOL_SSLv2</font>
+<font color="black">  52. PROTOCOL_SSLv3</font>
+<font color="black">  53. PROTOCOL_SSLv23</font>
+<font color="black">  54. PROTOCOL_TLS</font>
+<font color="black">  55. PROTOCOL_TLSv1</font>
+<font color="black">  56. PROTOCOL_TLSv1_1</font>
+<font color="black">  57. PROTOCOL_TLSv1_2</font>
+<font color="black">  58. </font>
+<font color="black">  59. The following constants identify various SSL alert message descriptions as per</font>
+<font color="black">  60. http://www.iana.org/assignments/tls-parameters/tls-parameters.xml#tls-parameters-6</font>
+<font color="black">  61. </font>
+<font color="black">  62. ALERT_DESCRIPTION_CLOSE_NOTIFY</font>
+<font color="black">  63. ALERT_DESCRIPTION_UNEXPECTED_MESSAGE</font>
+<font color="black">  64. ALERT_DESCRIPTION_BAD_RECORD_MAC</font>
+<font color="black">  65. ALERT_DESCRIPTION_RECORD_OVERFLOW</font>
+<font color="black">  66. ALERT_DESCRIPTION_DECOMPRESSION_FAILURE</font>
+<font color="black">  67. ALERT_DESCRIPTION_HANDSHAKE_FAILURE</font>
+<font color="black">  68. ALERT_DESCRIPTION_BAD_CERTIFICATE</font>
+<font color="black">  69. ALERT_DESCRIPTION_UNSUPPORTED_CERTIFICATE</font>
+<font color="black">  70. ALERT_DESCRIPTION_CERTIFICATE_REVOKED</font>
+<font color="black">  71. ALERT_DESCRIPTION_CERTIFICATE_EXPIRED</font>
+<font color="black">  72. ALERT_DESCRIPTION_CERTIFICATE_UNKNOWN</font>
+<font color="black">  73. ALERT_DESCRIPTION_ILLEGAL_PARAMETER</font>
+<font color="black">  74. ALERT_DESCRIPTION_UNKNOWN_CA</font>
+<font color="black">  75. ALERT_DESCRIPTION_ACCESS_DENIED</font>
+<font color="black">  76. ALERT_DESCRIPTION_DECODE_ERROR</font>
+<font color="black">  77. ALERT_DESCRIPTION_DECRYPT_ERROR</font>
+<font color="black">  78. ALERT_DESCRIPTION_PROTOCOL_VERSION</font>
+<font color="black">  79. ALERT_DESCRIPTION_INSUFFICIENT_SECURITY</font>
+<font color="black">  80. ALERT_DESCRIPTION_INTERNAL_ERROR</font>
+<font color="black">  81. ALERT_DESCRIPTION_USER_CANCELLED</font>
+<font color="black">  82. ALERT_DESCRIPTION_NO_RENEGOTIATION</font>
+<font color="black">  83. ALERT_DESCRIPTION_UNSUPPORTED_EXTENSION</font>
+<font color="black">  84. ALERT_DESCRIPTION_CERTIFICATE_UNOBTAINABLE</font>
+<font color="black">  85. ALERT_DESCRIPTION_UNRECOGNIZED_NAME</font>
+<font color="black">  86. ALERT_DESCRIPTION_BAD_CERTIFICATE_STATUS_RESPONSE</font>
+<font color="black">  87. ALERT_DESCRIPTION_BAD_CERTIFICATE_HASH_VALUE</font>
+<font color="black">  88. ALERT_DESCRIPTION_UNKNOWN_PSK_IDENTITY</font>
+<font color="red">  89. &quot;&quot;&quot;</font>
+<font color="black">  90. </font>
+<font color="red">  91. import textwrap</font>
+<font color="red">  92. import re</font>
+<font color="red">  93. import sys</font>
+<font color="red">  94. import os</font>
+<font color="red">  95. from collections import namedtuple</font>
+<font color="red">  96. from contextlib import closing</font>
+<font color="black">  97. </font>
+<font color="red">  98. import _ssl             # if we can't import it, let the error propagate</font>
+<font color="black">  99. </font>
+<font color="red"> 100. from _ssl import OPENSSL_VERSION_NUMBER, OPENSSL_VERSION_INFO, OPENSSL_VERSION</font>
+<font color="red"> 101. from _ssl import _SSLContext</font>
+<font color="red"> 102. from _ssl import (</font>
+<font color="black"> 103.     SSLError, SSLZeroReturnError, SSLWantReadError, SSLWantWriteError,</font>
+<font color="black"> 104.     SSLSyscallError, SSLEOFError,</font>
+<font color="black"> 105.     )</font>
+<font color="red"> 106. from _ssl import CERT_NONE, CERT_OPTIONAL, CERT_REQUIRED</font>
+<font color="red"> 107. from _ssl import txt2obj as _txt2obj, nid2obj as _nid2obj</font>
+<font color="red"> 108. from _ssl import RAND_status, RAND_add</font>
+<font color="red"> 109. try:</font>
+<font color="red"> 110.     from _ssl import RAND_egd</font>
+<font color="red"> 111. except ImportError:</font>
+<font color="black"> 112.     # LibreSSL does not provide RAND_egd</font>
+<font color="red"> 113.     pass</font>
+<font color="black"> 114. </font>
+<font color="red"> 115. def _import_symbols(prefix):</font>
+<font color="red"> 116.     for n in dir(_ssl):</font>
+<font color="red"> 117.         if n.startswith(prefix):</font>
+<font color="red"> 118.             globals()[n] = getattr(_ssl, n)</font>
+<font color="black"> 119. </font>
+<font color="red"> 120. _import_symbols('OP_')</font>
+<font color="red"> 121. _import_symbols('ALERT_DESCRIPTION_')</font>
+<font color="red"> 122. _import_symbols('SSL_ERROR_')</font>
+<font color="red"> 123. _import_symbols('PROTOCOL_')</font>
+<font color="red"> 124. _import_symbols('VERIFY_')</font>
+<font color="black"> 125. </font>
+<font color="red"> 126. from _ssl import HAS_SNI, HAS_ECDH, HAS_NPN, HAS_ALPN, HAS_TLSv1_3</font>
+<font color="black"> 127. </font>
+<font color="red"> 128. from _ssl import _OPENSSL_API_VERSION</font>
+<font color="black"> 129. </font>
+<font color="red"> 130. _PROTOCOL_NAMES = {value: name for name, value in globals().items()</font>
+<font color="red"> 131.                    if name.startswith('PROTOCOL_')</font>
+<font color="red"> 132.                        and name != 'PROTOCOL_SSLv23'}</font>
+<font color="red"> 133. PROTOCOL_SSLv23 = PROTOCOL_TLS</font>
+<font color="black"> 134. </font>
+<font color="red"> 135. try:</font>
+<font color="red"> 136.     _SSLv2_IF_EXISTS = PROTOCOL_SSLv2</font>
+<font color="red"> 137. except NameError:</font>
+<font color="red"> 138.     _SSLv2_IF_EXISTS = None</font>
+<font color="black"> 139. </font>
+<font color="red"> 140. from socket import socket, _fileobject, _delegate_methods, error as socket_error</font>
+<font color="red"> 141. if sys.platform == &quot;win32&quot;:</font>
+<font color="red"> 142.     from _ssl import enum_certificates, enum_crls</font>
+<font color="black"> 143. </font>
+<font color="red"> 144. from socket import socket, AF_INET, SOCK_STREAM, create_connection</font>
+<font color="red"> 145. from socket import SOL_SOCKET, SO_TYPE</font>
+<font color="red"> 146. import base64        # for DER-to-PEM translation</font>
+<font color="red"> 147. import errno</font>
+<font color="red"> 148. import warnings</font>
+<font color="black"> 149. </font>
+<font color="red"> 150. if _ssl.HAS_TLS_UNIQUE:</font>
+<font color="red"> 151.     CHANNEL_BINDING_TYPES = ['tls-unique']</font>
+<font color="black"> 152. else:</font>
+<font color="red"> 153.     CHANNEL_BINDING_TYPES = []</font>
+<font color="black"> 154. </font>
+<font color="black"> 155. </font>
+<font color="black"> 156. # Disable weak or insecure ciphers by default</font>
+<font color="black"> 157. # (OpenSSL's default setting is 'DEFAULT:!aNULL:!eNULL')</font>
+<font color="black"> 158. # Enable a better set of ciphers by default</font>
+<font color="black"> 159. # This list has been explicitly chosen to:</font>
+<font color="black"> 160. #   * TLS 1.3 ChaCha20 and AES-GCM cipher suites</font>
+<font color="black"> 161. #   * Prefer cipher suites that offer perfect forward secrecy (DHE/ECDHE)</font>
+<font color="black"> 162. #   * Prefer ECDHE over DHE for better performance</font>
+<font color="black"> 163. #   * Prefer AEAD over CBC for better performance and security</font>
+<font color="black"> 164. #   * Prefer AES-GCM over ChaCha20 because most platforms have AES-NI</font>
+<font color="black"> 165. #     (ChaCha20 needs OpenSSL 1.1.0 or patched 1.0.2)</font>
+<font color="black"> 166. #   * Prefer any AES-GCM and ChaCha20 over any AES-CBC for better</font>
+<font color="black"> 167. #     performance and security</font>
+<font color="black"> 168. #   * Then Use HIGH cipher suites as a fallback</font>
+<font color="black"> 169. #   * Disable NULL authentication, NULL encryption, 3DES and MD5 MACs</font>
+<font color="black"> 170. #     for security reasons</font>
+<font color="black"> 171. _DEFAULT_CIPHERS = (</font>
+<font color="red"> 172.     'TLS13-AES-256-GCM-SHA384:TLS13-CHACHA20-POLY1305-SHA256:'</font>
+<font color="black"> 173.     'TLS13-AES-128-GCM-SHA256:'</font>
+<font color="black"> 174.     'ECDH+AESGCM:ECDH+CHACHA20:DH+AESGCM:DH+CHACHA20:ECDH+AES256:DH+AES256:'</font>
+<font color="black"> 175.     'ECDH+AES128:DH+AES:ECDH+HIGH:DH+HIGH:RSA+AESGCM:RSA+AES:RSA+HIGH:'</font>
+<font color="black"> 176.     '!aNULL:!eNULL:!MD5:!3DES'</font>
+<font color="black"> 177.     )</font>
+<font color="black"> 178. </font>
+<font color="black"> 179. # Restricted and more secure ciphers for the server side</font>
+<font color="black"> 180. # This list has been explicitly chosen to:</font>
+<font color="black"> 181. #   * TLS 1.3 ChaCha20 and AES-GCM cipher suites</font>
+<font color="black"> 182. #   * Prefer cipher suites that offer perfect forward secrecy (DHE/ECDHE)</font>
+<font color="black"> 183. #   * Prefer ECDHE over DHE for better performance</font>
+<font color="black"> 184. #   * Prefer AEAD over CBC for better performance and security</font>
+<font color="black"> 185. #   * Prefer AES-GCM over ChaCha20 because most platforms have AES-NI</font>
+<font color="black"> 186. #   * Prefer any AES-GCM and ChaCha20 over any AES-CBC for better</font>
+<font color="black"> 187. #     performance and security</font>
+<font color="black"> 188. #   * Then Use HIGH cipher suites as a fallback</font>
+<font color="black"> 189. #   * Disable NULL authentication, NULL encryption, MD5 MACs, DSS, RC4, and</font>
+<font color="black"> 190. #     3DES for security reasons</font>
+<font color="black"> 191. _RESTRICTED_SERVER_CIPHERS = (</font>
+<font color="red"> 192.     'TLS13-AES-256-GCM-SHA384:TLS13-CHACHA20-POLY1305-SHA256:'</font>
+<font color="black"> 193.     'TLS13-AES-128-GCM-SHA256:'</font>
+<font color="black"> 194.     'ECDH+AESGCM:ECDH+CHACHA20:DH+AESGCM:DH+CHACHA20:ECDH+AES256:DH+AES256:'</font>
+<font color="black"> 195.     'ECDH+AES128:DH+AES:ECDH+HIGH:DH+HIGH:RSA+AESGCM:RSA+AES:RSA+HIGH:'</font>
+<font color="black"> 196.     '!aNULL:!eNULL:!MD5:!DSS:!RC4:!3DES'</font>
+<font color="black"> 197. )</font>
+<font color="black"> 198. </font>
+<font color="black"> 199. </font>
+<font color="red"> 200. class CertificateError(ValueError):</font>
+<font color="red"> 201.     pass</font>
+<font color="black"> 202. </font>
+<font color="black"> 203. </font>
+<font color="red"> 204. def _dnsname_match(dn, hostname, max_wildcards=1):</font>
+<font color="black"> 205.     &quot;&quot;&quot;Matching according to RFC 6125, section 6.4.3</font>
+<font color="black"> 206. </font>
+<font color="black"> 207.     http://tools.ietf.org/html/rfc6125#section-6.4.3</font>
+<font color="black"> 208.     &quot;&quot;&quot;</font>
+<font color="green"> 209.     pats = []</font>
+<font color="green"> 210.     if not dn:</font>
+<font color="red"> 211.         return False</font>
+<font color="black"> 212. </font>
+<font color="green"> 213.     pieces = dn.split(r'.')</font>
+<font color="green"> 214.     leftmost = pieces[0]</font>
+<font color="green"> 215.     remainder = pieces[1:]</font>
+<font color="black"> 216. </font>
+<font color="green"> 217.     wildcards = leftmost.count('*')</font>
+<font color="green"> 218.     if wildcards &gt; max_wildcards:</font>
+<font color="black"> 219.         # Issue #17980: avoid denials of service by refusing more</font>
+<font color="black"> 220.         # than one wildcard per fragment.  A survery of established</font>
+<font color="black"> 221.         # policy among SSL implementations showed it to be a</font>
+<font color="black"> 222.         # reasonable choice.</font>
+<font color="red"> 223.         raise CertificateError(</font>
+<font color="red"> 224.             &quot;too many wildcards in certificate DNS name: &quot; + repr(dn))</font>
+<font color="black"> 225. </font>
+<font color="black"> 226.     # speed up common case w/o wildcards</font>
+<font color="green"> 227.     if not wildcards:</font>
+<font color="green"> 228.         return dn.lower() == hostname.lower()</font>
+<font color="black"> 229. </font>
+<font color="black"> 230.     # RFC 6125, section 6.4.3, subitem 1.</font>
+<font color="black"> 231.     # The client SHOULD NOT attempt to match a presented identifier in which</font>
+<font color="black"> 232.     # the wildcard character comprises a label other than the left-most label.</font>
+<font color="green"> 233.     if leftmost == '*':</font>
+<font color="black"> 234.         # When '*' is a fragment by itself, it matches a non-empty dotless</font>
+<font color="black"> 235.         # fragment.</font>
+<font color="green"> 236.         pats.append('[^.]+')</font>
+<font color="red"> 237.     elif leftmost.startswith('xn--') or hostname.startswith('xn--'):</font>
+<font color="black"> 238.         # RFC 6125, section 6.4.3, subitem 3.</font>
+<font color="black"> 239.         # The client SHOULD NOT attempt to match a presented identifier</font>
+<font color="black"> 240.         # where the wildcard character is embedded within an A-label or</font>
+<font color="black"> 241.         # U-label of an internationalized domain name.</font>
+<font color="red"> 242.         pats.append(re.escape(leftmost))</font>
+<font color="black"> 243.     else:</font>
+<font color="black"> 244.         # Otherwise, '*' matches any dotless string, e.g. www*</font>
+<font color="red"> 245.         pats.append(re.escape(leftmost).replace(r'\*', '[^.]*'))</font>
+<font color="black"> 246. </font>
+<font color="black"> 247.     # add the remaining fragments, ignore any wildcards</font>
+<font color="green"> 248.     for frag in remainder:</font>
+<font color="green"> 249.         pats.append(re.escape(frag))</font>
+<font color="black"> 250. </font>
+<font color="green"> 251.     pat = re.compile(r'\A' + r'\.'.join(pats) + r'\Z', re.IGNORECASE)</font>
+<font color="green"> 252.     return pat.match(hostname)</font>
+<font color="black"> 253. </font>
+<font color="black"> 254. </font>
+<font color="red"> 255. def match_hostname(cert, hostname):</font>
+<font color="black"> 256.     &quot;&quot;&quot;Verify that *cert* (in decoded format as returned by</font>
+<font color="black"> 257.     SSLSocket.getpeercert()) matches the *hostname*.  RFC 2818 and RFC 6125</font>
+<font color="black"> 258.     rules are followed, but IP addresses are not accepted for *hostname*.</font>
+<font color="black"> 259. </font>
+<font color="black"> 260.     CertificateError is raised on failure. On success, the function</font>
+<font color="black"> 261.     returns nothing.</font>
+<font color="black"> 262.     &quot;&quot;&quot;</font>
+<font color="green"> 263.     if not cert:</font>
+<font color="red"> 264.         raise ValueError(&quot;empty or no certificate, match_hostname needs a &quot;</font>
+<font color="black"> 265.                          &quot;SSL socket or SSL context with either &quot;</font>
+<font color="black"> 266.                          &quot;CERT_OPTIONAL or CERT_REQUIRED&quot;)</font>
+<font color="green"> 267.     dnsnames = []</font>
+<font color="green"> 268.     san = cert.get('subjectAltName', ())</font>
+<font color="green"> 269.     for key, value in san:</font>
+<font color="green"> 270.         if key == 'DNS':</font>
+<font color="green"> 271.             if _dnsname_match(value, hostname):</font>
+<font color="green"> 272.                 return</font>
+<font color="green"> 273.             dnsnames.append(value)</font>
+<font color="red"> 274.     if not dnsnames:</font>
+<font color="black"> 275.         # The subject is only checked when there is no dNSName entry</font>
+<font color="black"> 276.         # in subjectAltName</font>
+<font color="red"> 277.         for sub in cert.get('subject', ()):</font>
+<font color="red"> 278.             for key, value in sub:</font>
+<font color="black"> 279.                 # XXX according to RFC 2818, the most specific Common Name</font>
+<font color="black"> 280.                 # must be used.</font>
+<font color="red"> 281.                 if key == 'commonName':</font>
+<font color="red"> 282.                     if _dnsname_match(value, hostname):</font>
+<font color="red"> 283.                         return</font>
+<font color="red"> 284.                     dnsnames.append(value)</font>
+<font color="red"> 285.     if len(dnsnames) &gt; 1:</font>
+<font color="red"> 286.         raise CertificateError(&quot;hostname %r &quot;</font>
+<font color="black"> 287.             &quot;doesn't match either of %s&quot;</font>
+<font color="red"> 288.             % (hostname, ', '.join(map(repr, dnsnames))))</font>
+<font color="red"> 289.     elif len(dnsnames) == 1:</font>
+<font color="red"> 290.         raise CertificateError(&quot;hostname %r &quot;</font>
+<font color="black"> 291.             &quot;doesn't match %r&quot;</font>
+<font color="red"> 292.             % (hostname, dnsnames[0]))</font>
+<font color="black"> 293.     else:</font>
+<font color="red"> 294.         raise CertificateError(&quot;no appropriate commonName or &quot;</font>
+<font color="black"> 295.             &quot;subjectAltName fields were found&quot;)</font>
+<font color="black"> 296. </font>
+<font color="black"> 297. </font>
+<font color="red"> 298. DefaultVerifyPaths = namedtuple(&quot;DefaultVerifyPaths&quot;,</font>
+<font color="red"> 299.     &quot;cafile capath openssl_cafile_env openssl_cafile openssl_capath_env &quot;</font>
+<font color="black"> 300.     &quot;openssl_capath&quot;)</font>
+<font color="black"> 301. </font>
+<font color="red"> 302. def get_default_verify_paths():</font>
+<font color="black"> 303.     &quot;&quot;&quot;Return paths to default cafile and capath.</font>
+<font color="black"> 304.     &quot;&quot;&quot;</font>
+<font color="red"> 305.     parts = _ssl.get_default_verify_paths()</font>
+<font color="black"> 306. </font>
+<font color="black"> 307.     # environment vars shadow paths</font>
+<font color="red"> 308.     cafile = os.environ.get(parts[0], parts[1])</font>
+<font color="red"> 309.     capath = os.environ.get(parts[2], parts[3])</font>
+<font color="black"> 310. </font>
+<font color="red"> 311.     return DefaultVerifyPaths(cafile if os.path.isfile(cafile) else None,</font>
+<font color="red"> 312.                               capath if os.path.isdir(capath) else None,</font>
+<font color="red"> 313.                               *parts)</font>
+<font color="black"> 314. </font>
+<font color="black"> 315. </font>
+<font color="red"> 316. class _ASN1Object(namedtuple(&quot;_ASN1Object&quot;, &quot;nid shortname longname oid&quot;)):</font>
+<font color="black"> 317.     &quot;&quot;&quot;ASN.1 object identifier lookup</font>
+<font color="red"> 318.     &quot;&quot;&quot;</font>
+<font color="red"> 319.     __slots__ = ()</font>
+<font color="black"> 320. </font>
+<font color="red"> 321.     def __new__(cls, oid):</font>
+<font color="red"> 322.         return super(_ASN1Object, cls).__new__(cls, *_txt2obj(oid, name=False))</font>
+<font color="black"> 323. </font>
+<font color="red"> 324.     @classmethod</font>
+<font color="black"> 325.     def fromnid(cls, nid):</font>
+<font color="black"> 326.         &quot;&quot;&quot;Create _ASN1Object from OpenSSL numeric ID</font>
+<font color="black"> 327.         &quot;&quot;&quot;</font>
+<font color="red"> 328.         return super(_ASN1Object, cls).__new__(cls, *_nid2obj(nid))</font>
+<font color="black"> 329. </font>
+<font color="red"> 330.     @classmethod</font>
+<font color="black"> 331.     def fromname(cls, name):</font>
+<font color="black"> 332.         &quot;&quot;&quot;Create _ASN1Object from short name, long name or OID</font>
+<font color="black"> 333.         &quot;&quot;&quot;</font>
+<font color="red"> 334.         return super(_ASN1Object, cls).__new__(cls, *_txt2obj(name, name=True))</font>
+<font color="black"> 335. </font>
+<font color="black"> 336. </font>
+<font color="red"> 337. class Purpose(_ASN1Object):</font>
+<font color="black"> 338.     &quot;&quot;&quot;SSLContext purpose flags with X509v3 Extended Key Usage objects</font>
+<font color="red"> 339.     &quot;&quot;&quot;</font>
+<font color="black"> 340. </font>
+<font color="red"> 341. Purpose.SERVER_AUTH = Purpose('1.3.6.1.5.5.7.3.1')</font>
+<font color="red"> 342. Purpose.CLIENT_AUTH = Purpose('1.3.6.1.5.5.7.3.2')</font>
+<font color="black"> 343. </font>
+<font color="black"> 344. </font>
+<font color="red"> 345. class SSLContext(_SSLContext):</font>
+<font color="black"> 346.     &quot;&quot;&quot;An SSLContext holds various SSL-related configuration options and</font>
+<font color="red"> 347.     data, such as certificates and possibly a private key.&quot;&quot;&quot;</font>
+<font color="black"> 348. </font>
+<font color="red"> 349.     __slots__ = ('protocol', '__weakref__')</font>
+<font color="red"> 350.     _windows_cert_stores = (&quot;CA&quot;, &quot;ROOT&quot;)</font>
+<font color="black"> 351. </font>
+<font color="red"> 352.     def __new__(cls, protocol, *args, **kwargs):</font>
+<font color="green"> 353.         self = _SSLContext.__new__(cls, protocol)</font>
+<font color="green"> 354.         if protocol != _SSLv2_IF_EXISTS:</font>
+<font color="green"> 355.             self.set_ciphers(_DEFAULT_CIPHERS)</font>
+<font color="green"> 356.         return self</font>
+<font color="black"> 357. </font>
+<font color="red"> 358.     def __init__(self, protocol):</font>
+<font color="green"> 359.         self.protocol = protocol</font>
+<font color="black"> 360. </font>
+<font color="red"> 361.     def wrap_socket(self, sock, server_side=False,</font>
+<font color="red"> 362.                     do_handshake_on_connect=True,</font>
+<font color="red"> 363.                     suppress_ragged_eofs=True,</font>
+<font color="red"> 364.                     server_hostname=None):</font>
+<font color="green"> 365.         return SSLSocket(sock=sock, server_side=server_side,</font>
+<font color="green"> 366.                          do_handshake_on_connect=do_handshake_on_connect,</font>
+<font color="green"> 367.                          suppress_ragged_eofs=suppress_ragged_eofs,</font>
+<font color="green"> 368.                          server_hostname=server_hostname,</font>
+<font color="green"> 369.                          _context=self)</font>
+<font color="black"> 370. </font>
+<font color="red"> 371.     def set_npn_protocols(self, npn_protocols):</font>
+<font color="red"> 372.         protos = bytearray()</font>
+<font color="red"> 373.         for protocol in npn_protocols:</font>
+<font color="red"> 374.             b = protocol.encode('ascii')</font>
+<font color="red"> 375.             if len(b) == 0 or len(b) &gt; 255:</font>
+<font color="red"> 376.                 raise SSLError('NPN protocols must be 1 to 255 in length')</font>
+<font color="red"> 377.             protos.append(len(b))</font>
+<font color="red"> 378.             protos.extend(b)</font>
+<font color="black"> 379. </font>
+<font color="red"> 380.         self._set_npn_protocols(protos)</font>
+<font color="black"> 381. </font>
+<font color="red"> 382.     def set_alpn_protocols(self, alpn_protocols):</font>
+<font color="red"> 383.         protos = bytearray()</font>
+<font color="red"> 384.         for protocol in alpn_protocols:</font>
+<font color="red"> 385.             b = protocol.encode('ascii')</font>
+<font color="red"> 386.             if len(b) == 0 or len(b) &gt; 255:</font>
+<font color="red"> 387.                 raise SSLError('ALPN protocols must be 1 to 255 in length')</font>
+<font color="red"> 388.             protos.append(len(b))</font>
+<font color="red"> 389.             protos.extend(b)</font>
+<font color="black"> 390. </font>
+<font color="red"> 391.         self._set_alpn_protocols(protos)</font>
+<font color="black"> 392. </font>
+<font color="red"> 393.     def _load_windows_store_certs(self, storename, purpose):</font>
+<font color="red"> 394.         certs = bytearray()</font>
+<font color="red"> 395.         try:</font>
+<font color="red"> 396.             for cert, encoding, trust in enum_certificates(storename):</font>
+<font color="black"> 397.                 # CA certs are never PKCS#7 encoded</font>
+<font color="red"> 398.                 if encoding == &quot;x509_asn&quot;:</font>
+<font color="red"> 399.                     if trust is True or purpose.oid in trust:</font>
+<font color="red"> 400.                         certs.extend(cert)</font>
+<font color="red"> 401.         except OSError:</font>
+<font color="red"> 402.             warnings.warn(&quot;unable to enumerate Windows certificate store&quot;)</font>
+<font color="red"> 403.         if certs:</font>
+<font color="red"> 404.             self.load_verify_locations(cadata=certs)</font>
+<font color="red"> 405.         return certs</font>
+<font color="black"> 406. </font>
+<font color="red"> 407.     def load_default_certs(self, purpose=Purpose.SERVER_AUTH):</font>
+<font color="red"> 408.         if not isinstance(purpose, _ASN1Object):</font>
+<font color="red"> 409.             raise TypeError(purpose)</font>
+<font color="red"> 410.         if sys.platform == &quot;win32&quot;:</font>
+<font color="red"> 411.             for storename in self._windows_cert_stores:</font>
+<font color="red"> 412.                 self._load_windows_store_certs(storename, purpose)</font>
+<font color="red"> 413.         self.set_default_verify_paths()</font>
+<font color="black"> 414. </font>
+<font color="black"> 415. </font>
+<font color="red"> 416. def create_default_context(purpose=Purpose.SERVER_AUTH, cafile=None,</font>
+<font color="red"> 417.                            capath=None, cadata=None):</font>
+<font color="black"> 418.     &quot;&quot;&quot;Create a SSLContext object with default settings.</font>
+<font color="black"> 419. </font>
+<font color="black"> 420.     NOTE: The protocol and settings may change anytime without prior</font>
+<font color="black"> 421.           deprecation. The values represent a fair balance between maximum</font>
+<font color="black"> 422.           compatibility and security.</font>
+<font color="black"> 423.     &quot;&quot;&quot;</font>
+<font color="red"> 424.     if not isinstance(purpose, _ASN1Object):</font>
+<font color="red"> 425.         raise TypeError(purpose)</font>
+<font color="black"> 426. </font>
+<font color="red"> 427.     context = SSLContext(PROTOCOL_TLS)</font>
+<font color="black"> 428. </font>
+<font color="black"> 429.     # SSLv2 considered harmful.</font>
+<font color="red"> 430.     context.options |= OP_NO_SSLv2</font>
+<font color="black"> 431. </font>
+<font color="black"> 432.     # SSLv3 has problematic security and is only required for really old</font>
+<font color="black"> 433.     # clients such as IE6 on Windows XP</font>
+<font color="red"> 434.     context.options |= OP_NO_SSLv3</font>
+<font color="black"> 435. </font>
+<font color="black"> 436.     # disable compression to prevent CRIME attacks (OpenSSL 1.0+)</font>
+<font color="red"> 437.     context.options |= getattr(_ssl, &quot;OP_NO_COMPRESSION&quot;, 0)</font>
+<font color="black"> 438. </font>
+<font color="red"> 439.     if purpose == Purpose.SERVER_AUTH:</font>
+<font color="black"> 440.         # verify certs and host name in client mode</font>
+<font color="red"> 441.         context.verify_mode = CERT_REQUIRED</font>
+<font color="red"> 442.         context.check_hostname = True</font>
+<font color="red"> 443.     elif purpose == Purpose.CLIENT_AUTH:</font>
+<font color="black"> 444.         # Prefer the server's ciphers by default so that we get stronger</font>
+<font color="black"> 445.         # encryption</font>
+<font color="red"> 446.         context.options |= getattr(_ssl, &quot;OP_CIPHER_SERVER_PREFERENCE&quot;, 0)</font>
+<font color="black"> 447. </font>
+<font color="black"> 448.         # Use single use keys in order to improve forward secrecy</font>
+<font color="red"> 449.         context.options |= getattr(_ssl, &quot;OP_SINGLE_DH_USE&quot;, 0)</font>
+<font color="red"> 450.         context.options |= getattr(_ssl, &quot;OP_SINGLE_ECDH_USE&quot;, 0)</font>
+<font color="black"> 451. </font>
+<font color="black"> 452.         # disallow ciphers with known vulnerabilities</font>
+<font color="red"> 453.         context.set_ciphers(_RESTRICTED_SERVER_CIPHERS)</font>
+<font color="black"> 454. </font>
+<font color="red"> 455.     if cafile or capath or cadata:</font>
+<font color="red"> 456.         context.load_verify_locations(cafile, capath, cadata)</font>
+<font color="red"> 457.     elif context.verify_mode != CERT_NONE:</font>
+<font color="black"> 458.         # no explicit cafile, capath or cadata but the verify mode is</font>
+<font color="black"> 459.         # CERT_OPTIONAL or CERT_REQUIRED. Let's try to load default system</font>
+<font color="black"> 460.         # root CA certificates for the given purpose. This may fail silently.</font>
+<font color="red"> 461.         context.load_default_certs(purpose)</font>
+<font color="red"> 462.     return context</font>
+<font color="black"> 463. </font>
+<font color="red"> 464. def _create_unverified_context(protocol=PROTOCOL_TLS, cert_reqs=None,</font>
+<font color="red"> 465.                            check_hostname=False, purpose=Purpose.SERVER_AUTH,</font>
+<font color="red"> 466.                            certfile=None, keyfile=None,</font>
+<font color="red"> 467.                            cafile=None, capath=None, cadata=None):</font>
+<font color="black"> 468.     &quot;&quot;&quot;Create a SSLContext object for Python stdlib modules</font>
+<font color="black"> 469. </font>
+<font color="black"> 470.     All Python stdlib modules shall use this function to create SSLContext</font>
+<font color="black"> 471.     objects in order to keep common settings in one place. The configuration</font>
+<font color="black"> 472.     is less restrict than create_default_context()'s to increase backward</font>
+<font color="black"> 473.     compatibility.</font>
+<font color="black"> 474.     &quot;&quot;&quot;</font>
+<font color="red"> 475.     if not isinstance(purpose, _ASN1Object):</font>
+<font color="red"> 476.         raise TypeError(purpose)</font>
+<font color="black"> 477. </font>
+<font color="red"> 478.     context = SSLContext(protocol)</font>
+<font color="black"> 479.     # SSLv2 considered harmful.</font>
+<font color="red"> 480.     context.options |= OP_NO_SSLv2</font>
+<font color="black"> 481.     # SSLv3 has problematic security and is only required for really old</font>
+<font color="black"> 482.     # clients such as IE6 on Windows XP</font>
+<font color="red"> 483.     context.options |= OP_NO_SSLv3</font>
+<font color="black"> 484. </font>
+<font color="red"> 485.     if cert_reqs is not None:</font>
+<font color="red"> 486.         context.verify_mode = cert_reqs</font>
+<font color="red"> 487.     context.check_hostname = check_hostname</font>
+<font color="black"> 488. </font>
+<font color="red"> 489.     if keyfile and not certfile:</font>
+<font color="red"> 490.         raise ValueError(&quot;certfile must be specified&quot;)</font>
+<font color="red"> 491.     if certfile or keyfile:</font>
+<font color="red"> 492.         context.load_cert_chain(certfile, keyfile)</font>
+<font color="black"> 493. </font>
+<font color="black"> 494.     # load CA root certs</font>
+<font color="red"> 495.     if cafile or capath or cadata:</font>
+<font color="red"> 496.         context.load_verify_locations(cafile, capath, cadata)</font>
+<font color="red"> 497.     elif context.verify_mode != CERT_NONE:</font>
+<font color="black"> 498.         # no explicit cafile, capath or cadata but the verify mode is</font>
+<font color="black"> 499.         # CERT_OPTIONAL or CERT_REQUIRED. Let's try to load default system</font>
+<font color="black"> 500.         # root CA certificates for the given purpose. This may fail silently.</font>
+<font color="red"> 501.         context.load_default_certs(purpose)</font>
+<font color="black"> 502. </font>
+<font color="red"> 503.     return context</font>
+<font color="black"> 504. </font>
+<font color="black"> 505. # Backwards compatibility alias, even though it's not a public name.</font>
+<font color="red"> 506. _create_stdlib_context = _create_unverified_context</font>
+<font color="black"> 507. </font>
+<font color="black"> 508. # PEP 493: Verify HTTPS by default, but allow envvar to override that</font>
+<font color="red"> 509. _https_verify_envvar = 'PYTHONHTTPSVERIFY'</font>
+<font color="black"> 510. </font>
+<font color="red"> 511. def _get_https_context_factory():</font>
+<font color="red"> 512.     if not sys.flags.ignore_environment:</font>
+<font color="red"> 513.         config_setting = os.environ.get(_https_verify_envvar)</font>
+<font color="red"> 514.         if config_setting == '0':</font>
+<font color="red"> 515.             return _create_unverified_context</font>
+<font color="red"> 516.     return create_default_context</font>
+<font color="black"> 517. </font>
+<font color="red"> 518. _create_default_https_context = _get_https_context_factory()</font>
+<font color="black"> 519. </font>
+<font color="black"> 520. # PEP 493: &quot;private&quot; API to configure HTTPS defaults without monkeypatching</font>
+<font color="red"> 521. def _https_verify_certificates(enable=True):</font>
+<font color="black"> 522.     &quot;&quot;&quot;Verify server HTTPS certificates by default?&quot;&quot;&quot;</font>
+<font color="black"> 523.     global _create_default_https_context</font>
+<font color="red"> 524.     if enable:</font>
+<font color="red"> 525.         _create_default_https_context = create_default_context</font>
+<font color="black"> 526.     else:</font>
+<font color="red"> 527.         _create_default_https_context = _create_unverified_context</font>
+<font color="black"> 528. </font>
+<font color="black"> 529. </font>
+<font color="red"> 530. class SSLSocket(socket):</font>
+<font color="black"> 531.     &quot;&quot;&quot;This class implements a subtype of socket.socket that wraps</font>
+<font color="black"> 532.     the underlying OS socket in an SSL context when necessary, and</font>
+<font color="red"> 533.     provides read and write methods over that channel.&quot;&quot;&quot;</font>
+<font color="black"> 534. </font>
+<font color="red"> 535.     def __init__(self, sock=None, keyfile=None, certfile=None,</font>
+<font color="red"> 536.                  server_side=False, cert_reqs=CERT_NONE,</font>
+<font color="red"> 537.                  ssl_version=PROTOCOL_TLS, ca_certs=None,</font>
+<font color="red"> 538.                  do_handshake_on_connect=True,</font>
+<font color="red"> 539.                  family=AF_INET, type=SOCK_STREAM, proto=0, fileno=None,</font>
+<font color="red"> 540.                  suppress_ragged_eofs=True, npn_protocols=None, ciphers=None,</font>
+<font color="red"> 541.                  server_hostname=None,</font>
+<font color="red"> 542.                  _context=None):</font>
+<font color="black"> 543. </font>
+<font color="green"> 544.         self._makefile_refs = 0</font>
+<font color="green"> 545.         if _context:</font>
+<font color="green"> 546.             self._context = _context</font>
+<font color="black"> 547.         else:</font>
+<font color="red"> 548.             if server_side and not certfile:</font>
+<font color="red"> 549.                 raise ValueError(&quot;certfile must be specified for server-side &quot;</font>
+<font color="black"> 550.                                  &quot;operations&quot;)</font>
+<font color="red"> 551.             if keyfile and not certfile:</font>
+<font color="red"> 552.                 raise ValueError(&quot;certfile must be specified&quot;)</font>
+<font color="red"> 553.             if certfile and not keyfile:</font>
+<font color="red"> 554.                 keyfile = certfile</font>
+<font color="red"> 555.             self._context = SSLContext(ssl_version)</font>
+<font color="red"> 556.             self._context.verify_mode = cert_reqs</font>
+<font color="red"> 557.             if ca_certs:</font>
+<font color="red"> 558.                 self._context.load_verify_locations(ca_certs)</font>
+<font color="red"> 559.             if certfile:</font>
+<font color="red"> 560.                 self._context.load_cert_chain(certfile, keyfile)</font>
+<font color="red"> 561.             if npn_protocols:</font>
+<font color="red"> 562.                 self._context.set_npn_protocols(npn_protocols)</font>
+<font color="red"> 563.             if ciphers:</font>
+<font color="red"> 564.                 self._context.set_ciphers(ciphers)</font>
+<font color="red"> 565.             self.keyfile = keyfile</font>
+<font color="red"> 566.             self.certfile = certfile</font>
+<font color="red"> 567.             self.cert_reqs = cert_reqs</font>
+<font color="red"> 568.             self.ssl_version = ssl_version</font>
+<font color="red"> 569.             self.ca_certs = ca_certs</font>
+<font color="red"> 570.             self.ciphers = ciphers</font>
+<font color="black"> 571.         # Can't use sock.type as other flags (such as SOCK_NONBLOCK) get</font>
+<font color="black"> 572.         # mixed in.</font>
+<font color="green"> 573.         if sock.getsockopt(SOL_SOCKET, SO_TYPE) != SOCK_STREAM:</font>
+<font color="red"> 574.             raise NotImplementedError(&quot;only stream sockets are supported&quot;)</font>
+<font color="green"> 575.         socket.__init__(self, _sock=sock._sock)</font>
+<font color="black"> 576.         # The initializer for socket overrides the methods send(), recv(), etc.</font>
+<font color="black"> 577.         # in the instancce, which we don't need -- but we want to provide the</font>
+<font color="black"> 578.         # methods defined in SSLSocket.</font>
+<font color="green"> 579.         for attr in _delegate_methods:</font>
+<font color="green"> 580.             try:</font>
+<font color="green"> 581.                 delattr(self, attr)</font>
+<font color="red"> 582.             except AttributeError:</font>
+<font color="red"> 583.                 pass</font>
+<font color="green"> 584.         if server_side and server_hostname:</font>
+<font color="red"> 585.             raise ValueError(&quot;server_hostname can only be specified &quot;</font>
+<font color="black"> 586.                              &quot;in client mode&quot;)</font>
+<font color="green"> 587.         if self._context.check_hostname and not server_hostname:</font>
+<font color="red"> 588.             raise ValueError(&quot;check_hostname requires server_hostname&quot;)</font>
+<font color="green"> 589.         self.server_side = server_side</font>
+<font color="green"> 590.         self.server_hostname = server_hostname</font>
+<font color="green"> 591.         self.do_handshake_on_connect = do_handshake_on_connect</font>
+<font color="green"> 592.         self.suppress_ragged_eofs = suppress_ragged_eofs</font>
+<font color="black"> 593. </font>
+<font color="black"> 594.         # See if we are connected</font>
+<font color="green"> 595.         try:</font>
+<font color="green"> 596.             self.getpeername()</font>
+<font color="red"> 597.         except socket_error as e:</font>
+<font color="red"> 598.             if e.errno != errno.ENOTCONN:</font>
+<font color="red"> 599.                 raise</font>
+<font color="red"> 600.             connected = False</font>
+<font color="black"> 601.         else:</font>
+<font color="green"> 602.             connected = True</font>
+<font color="black"> 603. </font>
+<font color="green"> 604.         self._closed = False</font>
+<font color="green"> 605.         self._sslobj = None</font>
+<font color="green"> 606.         self._connected = connected</font>
+<font color="green"> 607.         if connected:</font>
+<font color="black"> 608.             # create the SSL object</font>
+<font color="green"> 609.             try:</font>
+<font color="green"> 610.                 self._sslobj = self._context._wrap_socket(self._sock, server_side,</font>
+<font color="green"> 611.                                                           server_hostname, ssl_sock=self)</font>
+<font color="green"> 612.                 if do_handshake_on_connect:</font>
+<font color="green"> 613.                     timeout = self.gettimeout()</font>
+<font color="green"> 614.                     if timeout == 0.0:</font>
+<font color="black"> 615.                         # non-blocking</font>
+<font color="red"> 616.                         raise ValueError(&quot;do_handshake_on_connect should not be specified for non-blocking sockets&quot;)</font>
+<font color="green"> 617.                     self.do_handshake()</font>
+<font color="black"> 618. </font>
+<font color="red"> 619.             except (OSError, ValueError):</font>
+<font color="red"> 620.                 self.close()</font>
+<font color="red"> 621.                 raise</font>
+<font color="black"> 622. </font>
+<font color="red"> 623.     @property</font>
+<font color="black"> 624.     def context(self):</font>
+<font color="green"> 625.         return self._context</font>
+<font color="black"> 626. </font>
+<font color="red"> 627.     @context.setter</font>
+<font color="black"> 628.     def context(self, ctx):</font>
+<font color="red"> 629.         self._context = ctx</font>
+<font color="red"> 630.         self._sslobj.context = ctx</font>
+<font color="black"> 631. </font>
+<font color="red"> 632.     def dup(self):</font>
+<font color="red"> 633.         raise NotImplemented(&quot;Can't dup() %s instances&quot; %</font>
+<font color="red"> 634.                              self.__class__.__name__)</font>
+<font color="black"> 635. </font>
+<font color="red"> 636.     def _checkClosed(self, msg=None):</font>
+<font color="black"> 637.         # raise an exception here if you wish to check for spurious closes</font>
+<font color="green"> 638.         pass</font>
+<font color="black"> 639. </font>
+<font color="red"> 640.     def _check_connected(self):</font>
+<font color="green"> 641.         if not self._connected:</font>
+<font color="black"> 642.             # getpeername() will raise ENOTCONN if the socket is really</font>
+<font color="black"> 643.             # not connected; note that we can be connected even without</font>
+<font color="black"> 644.             # _connected being set, e.g. if connect() first returned</font>
+<font color="black"> 645.             # EAGAIN.</font>
+<font color="red"> 646.             self.getpeername()</font>
+<font color="black"> 647. </font>
+<font color="red"> 648.     def read(self, len=1024, buffer=None):</font>
+<font color="black"> 649.         &quot;&quot;&quot;Read up to LEN bytes and return them.</font>
+<font color="black"> 650.         Return zero-length string on EOF.&quot;&quot;&quot;</font>
+<font color="black"> 651. </font>
+<font color="green"> 652.         self._checkClosed()</font>
+<font color="green"> 653.         if not self._sslobj:</font>
+<font color="red"> 654.             raise ValueError(&quot;Read on closed or unwrapped SSL socket.&quot;)</font>
+<font color="green"> 655.         try:</font>
+<font color="green"> 656.             if buffer is not None:</font>
+<font color="red"> 657.                 v = self._sslobj.read(len, buffer)</font>
+<font color="black"> 658.             else:</font>
+<font color="green"> 659.                 v = self._sslobj.read(len)</font>
+<font color="green"> 660.             return v</font>
+<font color="red"> 661.         except SSLError as x:</font>
+<font color="red"> 662.             if x.args[0] == SSL_ERROR_EOF and self.suppress_ragged_eofs:</font>
+<font color="red"> 663.                 if buffer is not None:</font>
+<font color="red"> 664.                     return 0</font>
+<font color="black"> 665.                 else:</font>
+<font color="red"> 666.                     return b''</font>
+<font color="black"> 667.             else:</font>
+<font color="red"> 668.                 raise</font>
+<font color="black"> 669. </font>
+<font color="red"> 670.     def write(self, data):</font>
+<font color="black"> 671.         &quot;&quot;&quot;Write DATA to the underlying SSL channel.  Returns</font>
+<font color="black"> 672.         number of bytes of DATA actually transmitted.&quot;&quot;&quot;</font>
+<font color="black"> 673. </font>
+<font color="red"> 674.         self._checkClosed()</font>
+<font color="red"> 675.         if not self._sslobj:</font>
+<font color="red"> 676.             raise ValueError(&quot;Write on closed or unwrapped SSL socket.&quot;)</font>
+<font color="red"> 677.         return self._sslobj.write(data)</font>
+<font color="black"> 678. </font>
+<font color="red"> 679.     def getpeercert(self, binary_form=False):</font>
+<font color="black"> 680.         &quot;&quot;&quot;Returns a formatted version of the data in the</font>
+<font color="black"> 681.         certificate provided by the other end of the SSL channel.</font>
+<font color="black"> 682.         Return None if no certificate was provided, {} if a</font>
+<font color="black"> 683.         certificate was provided, but not validated.&quot;&quot;&quot;</font>
+<font color="black"> 684. </font>
+<font color="green"> 685.         self._checkClosed()</font>
+<font color="green"> 686.         self._check_connected()</font>
+<font color="green"> 687.         return self._sslobj.peer_certificate(binary_form)</font>
+<font color="black"> 688. </font>
+<font color="red"> 689.     def selected_npn_protocol(self):</font>
+<font color="red"> 690.         self._checkClosed()</font>
+<font color="red"> 691.         if not self._sslobj or not _ssl.HAS_NPN:</font>
+<font color="red"> 692.             return None</font>
+<font color="black"> 693.         else:</font>
+<font color="red"> 694.             return self._sslobj.selected_npn_protocol()</font>
+<font color="black"> 695. </font>
+<font color="red"> 696.     def selected_alpn_protocol(self):</font>
+<font color="red"> 697.         self._checkClosed()</font>
+<font color="red"> 698.         if not self._sslobj or not _ssl.HAS_ALPN:</font>
+<font color="red"> 699.             return None</font>
+<font color="black"> 700.         else:</font>
+<font color="red"> 701.             return self._sslobj.selected_alpn_protocol()</font>
+<font color="black"> 702. </font>
+<font color="red"> 703.     def cipher(self):</font>
+<font color="red"> 704.         self._checkClosed()</font>
+<font color="red"> 705.         if not self._sslobj:</font>
+<font color="red"> 706.             return None</font>
+<font color="black"> 707.         else:</font>
+<font color="red"> 708.             return self._sslobj.cipher()</font>
+<font color="black"> 709. </font>
+<font color="red"> 710.     def compression(self):</font>
+<font color="red"> 711.         self._checkClosed()</font>
+<font color="red"> 712.         if not self._sslobj:</font>
+<font color="red"> 713.             return None</font>
+<font color="black"> 714.         else:</font>
+<font color="red"> 715.             return self._sslobj.compression()</font>
+<font color="black"> 716. </font>
+<font color="red"> 717.     def send(self, data, flags=0):</font>
+<font color="green"> 718.         self._checkClosed()</font>
+<font color="green"> 719.         if self._sslobj:</font>
+<font color="green"> 720.             if flags != 0:</font>
+<font color="red"> 721.                 raise ValueError(</font>
+<font color="red"> 722.                     &quot;non-zero flags not allowed in calls to send() on %s&quot; %</font>
+<font color="red"> 723.                     self.__class__)</font>
+<font color="green"> 724.             try:</font>
+<font color="green"> 725.                 v = self._sslobj.write(data)</font>
+<font color="red"> 726.             except SSLError as x:</font>
+<font color="red"> 727.                 if x.args[0] == SSL_ERROR_WANT_READ:</font>
+<font color="red"> 728.                     return 0</font>
+<font color="red"> 729.                 elif x.args[0] == SSL_ERROR_WANT_WRITE:</font>
+<font color="red"> 730.                     return 0</font>
+<font color="black"> 731.                 else:</font>
+<font color="red"> 732.                     raise</font>
+<font color="black"> 733.             else:</font>
+<font color="green"> 734.                 return v</font>
+<font color="black"> 735.         else:</font>
+<font color="red"> 736.             return self._sock.send(data, flags)</font>
+<font color="black"> 737. </font>
+<font color="red"> 738.     def sendto(self, data, flags_or_addr, addr=None):</font>
+<font color="red"> 739.         self._checkClosed()</font>
+<font color="red"> 740.         if self._sslobj:</font>
+<font color="red"> 741.             raise ValueError(&quot;sendto not allowed on instances of %s&quot; %</font>
+<font color="red"> 742.                              self.__class__)</font>
+<font color="red"> 743.         elif addr is None:</font>
+<font color="red"> 744.             return self._sock.sendto(data, flags_or_addr)</font>
+<font color="black"> 745.         else:</font>
+<font color="red"> 746.             return self._sock.sendto(data, flags_or_addr, addr)</font>
+<font color="black"> 747. </font>
+<font color="black"> 748. </font>
+<font color="red"> 749.     def sendall(self, data, flags=0):</font>
+<font color="green"> 750.         self._checkClosed()</font>
+<font color="green"> 751.         if self._sslobj:</font>
+<font color="green"> 752.             if flags != 0:</font>
+<font color="red"> 753.                 raise ValueError(</font>
+<font color="red"> 754.                     &quot;non-zero flags not allowed in calls to sendall() on %s&quot; %</font>
+<font color="red"> 755.                     self.__class__)</font>
+<font color="green"> 756.             amount = len(data)</font>
+<font color="green"> 757.             count = 0</font>
+<font color="green"> 758.             while (count &lt; amount):</font>
+<font color="green"> 759.                 v = self.send(data[count:])</font>
+<font color="green"> 760.                 count += v</font>
+<font color="green"> 761.             return amount</font>
+<font color="black"> 762.         else:</font>
+<font color="red"> 763.             return socket.sendall(self, data, flags)</font>
+<font color="black"> 764. </font>
+<font color="red"> 765.     def recv(self, buflen=1024, flags=0):</font>
+<font color="green"> 766.         self._checkClosed()</font>
+<font color="green"> 767.         if self._sslobj:</font>
+<font color="green"> 768.             if flags != 0:</font>
+<font color="red"> 769.                 raise ValueError(</font>
+<font color="red"> 770.                     &quot;non-zero flags not allowed in calls to recv() on %s&quot; %</font>
+<font color="red"> 771.                     self.__class__)</font>
+<font color="green"> 772.             return self.read(buflen)</font>
+<font color="black"> 773.         else:</font>
+<font color="red"> 774.             return self._sock.recv(buflen, flags)</font>
+<font color="black"> 775. </font>
+<font color="red"> 776.     def recv_into(self, buffer, nbytes=None, flags=0):</font>
+<font color="red"> 777.         self._checkClosed()</font>
+<font color="red"> 778.         if buffer and (nbytes is None):</font>
+<font color="red"> 779.             nbytes = len(buffer)</font>
+<font color="red"> 780.         elif nbytes is None:</font>
+<font color="red"> 781.             nbytes = 1024</font>
+<font color="red"> 782.         if self._sslobj:</font>
+<font color="red"> 783.             if flags != 0:</font>
+<font color="red"> 784.                 raise ValueError(</font>
+<font color="red"> 785.                   &quot;non-zero flags not allowed in calls to recv_into() on %s&quot; %</font>
+<font color="red"> 786.                   self.__class__)</font>
+<font color="red"> 787.             return self.read(nbytes, buffer)</font>
+<font color="black"> 788.         else:</font>
+<font color="red"> 789.             return self._sock.recv_into(buffer, nbytes, flags)</font>
+<font color="black"> 790. </font>
+<font color="red"> 791.     def recvfrom(self, buflen=1024, flags=0):</font>
+<font color="red"> 792.         self._checkClosed()</font>
+<font color="red"> 793.         if self._sslobj:</font>
+<font color="red"> 794.             raise ValueError(&quot;recvfrom not allowed on instances of %s&quot; %</font>
+<font color="red"> 795.                              self.__class__)</font>
+<font color="black"> 796.         else:</font>
+<font color="red"> 797.             return self._sock.recvfrom(buflen, flags)</font>
+<font color="black"> 798. </font>
+<font color="red"> 799.     def recvfrom_into(self, buffer, nbytes=None, flags=0):</font>
+<font color="red"> 800.         self._checkClosed()</font>
+<font color="red"> 801.         if self._sslobj:</font>
+<font color="red"> 802.             raise ValueError(&quot;recvfrom_into not allowed on instances of %s&quot; %</font>
+<font color="red"> 803.                              self.__class__)</font>
+<font color="black"> 804.         else:</font>
+<font color="red"> 805.             return self._sock.recvfrom_into(buffer, nbytes, flags)</font>
+<font color="black"> 806. </font>
+<font color="black"> 807. </font>
+<font color="red"> 808.     def pending(self):</font>
+<font color="red"> 809.         self._checkClosed()</font>
+<font color="red"> 810.         if self._sslobj:</font>
+<font color="red"> 811.             return self._sslobj.pending()</font>
+<font color="black"> 812.         else:</font>
+<font color="red"> 813.             return 0</font>
+<font color="black"> 814. </font>
+<font color="red"> 815.     def shutdown(self, how):</font>
+<font color="red"> 816.         self._checkClosed()</font>
+<font color="red"> 817.         self._sslobj = None</font>
+<font color="red"> 818.         socket.shutdown(self, how)</font>
+<font color="black"> 819. </font>
+<font color="red"> 820.     def close(self):</font>
+<font color="green"> 821.         if self._makefile_refs &lt; 1:</font>
+<font color="green"> 822.             self._sslobj = None</font>
+<font color="green"> 823.             socket.close(self)</font>
+<font color="black"> 824.         else:</font>
+<font color="green"> 825.             self._makefile_refs -= 1</font>
+<font color="black"> 826. </font>
+<font color="red"> 827.     def unwrap(self):</font>
+<font color="red"> 828.         if self._sslobj:</font>
+<font color="red"> 829.             s = self._sslobj.shutdown()</font>
+<font color="red"> 830.             self._sslobj = None</font>
+<font color="red"> 831.             return s</font>
+<font color="black"> 832.         else:</font>
+<font color="red"> 833.             raise ValueError(&quot;No SSL wrapper around &quot; + str(self))</font>
+<font color="black"> 834. </font>
+<font color="red"> 835.     def _real_close(self):</font>
+<font color="red"> 836.         self._sslobj = None</font>
+<font color="red"> 837.         socket._real_close(self)</font>
+<font color="black"> 838. </font>
+<font color="red"> 839.     def do_handshake(self, block=False):</font>
+<font color="black"> 840.         &quot;&quot;&quot;Perform a TLS/SSL handshake.&quot;&quot;&quot;</font>
+<font color="green"> 841.         self._check_connected()</font>
+<font color="green"> 842.         timeout = self.gettimeout()</font>
+<font color="green"> 843.         try:</font>
+<font color="green"> 844.             if timeout == 0.0 and block:</font>
+<font color="red"> 845.                 self.settimeout(None)</font>
+<font color="green"> 846.             self._sslobj.do_handshake()</font>
+<font color="black"> 847.         finally:</font>
+<font color="green"> 848.             self.settimeout(timeout)</font>
+<font color="black"> 849. </font>
+<font color="green"> 850.         if self.context.check_hostname:</font>
+<font color="red"> 851.             if not self.server_hostname:</font>
+<font color="red"> 852.                 raise ValueError(&quot;check_hostname needs server_hostname &quot;</font>
+<font color="black"> 853.                                  &quot;argument&quot;)</font>
+<font color="red"> 854.             match_hostname(self.getpeercert(), self.server_hostname)</font>
+<font color="black"> 855. </font>
+<font color="red"> 856.     def _real_connect(self, addr, connect_ex):</font>
+<font color="red"> 857.         if self.server_side:</font>
+<font color="red"> 858.             raise ValueError(&quot;can't connect in server-side mode&quot;)</font>
+<font color="black"> 859.         # Here we assume that the socket is client-side, and not</font>
+<font color="black"> 860.         # connected at the time of the call.  We connect it, then wrap it.</font>
+<font color="red"> 861.         if self._connected:</font>
+<font color="red"> 862.             raise ValueError(&quot;attempt to connect already-connected SSLSocket!&quot;)</font>
+<font color="red"> 863.         self._sslobj = self.context._wrap_socket(self._sock, False, self.server_hostname, ssl_sock=self)</font>
+<font color="red"> 864.         try:</font>
+<font color="red"> 865.             if connect_ex:</font>
+<font color="red"> 866.                 rc = socket.connect_ex(self, addr)</font>
+<font color="black"> 867.             else:</font>
+<font color="red"> 868.                 rc = None</font>
+<font color="red"> 869.                 socket.connect(self, addr)</font>
+<font color="red"> 870.             if not rc:</font>
+<font color="red"> 871.                 self._connected = True</font>
+<font color="red"> 872.                 if self.do_handshake_on_connect:</font>
+<font color="red"> 873.                     self.do_handshake()</font>
+<font color="red"> 874.             return rc</font>
+<font color="red"> 875.         except (OSError, ValueError):</font>
+<font color="red"> 876.             self._sslobj = None</font>
+<font color="red"> 877.             raise</font>
+<font color="black"> 878. </font>
+<font color="red"> 879.     def connect(self, addr):</font>
+<font color="black"> 880.         &quot;&quot;&quot;Connects to remote ADDR, and then wraps the connection in</font>
+<font color="black"> 881.         an SSL channel.&quot;&quot;&quot;</font>
+<font color="red"> 882.         self._real_connect(addr, False)</font>
+<font color="black"> 883. </font>
+<font color="red"> 884.     def connect_ex(self, addr):</font>
+<font color="black"> 885.         &quot;&quot;&quot;Connects to remote ADDR, and then wraps the connection in</font>
+<font color="black"> 886.         an SSL channel.&quot;&quot;&quot;</font>
+<font color="red"> 887.         return self._real_connect(addr, True)</font>
+<font color="black"> 888. </font>
+<font color="red"> 889.     def accept(self):</font>
+<font color="black"> 890.         &quot;&quot;&quot;Accepts a new connection from a remote client, and returns</font>
+<font color="black"> 891.         a tuple containing that new connection wrapped with a server-side</font>
+<font color="black"> 892.         SSL channel, and the address of the remote client.&quot;&quot;&quot;</font>
+<font color="black"> 893. </font>
+<font color="red"> 894.         newsock, addr = socket.accept(self)</font>
+<font color="red"> 895.         newsock = self.context.wrap_socket(newsock,</font>
+<font color="red"> 896.                     do_handshake_on_connect=self.do_handshake_on_connect,</font>
+<font color="red"> 897.                     suppress_ragged_eofs=self.suppress_ragged_eofs,</font>
+<font color="red"> 898.                     server_side=True)</font>
+<font color="red"> 899.         return newsock, addr</font>
+<font color="black"> 900. </font>
+<font color="red"> 901.     def makefile(self, mode='r', bufsize=-1):</font>
+<font color="black"> 902. </font>
+<font color="black"> 903.         &quot;&quot;&quot;Make and return a file-like object that</font>
+<font color="black"> 904.         works with the SSL connection.  Just use the code</font>
+<font color="black"> 905.         from the socket module.&quot;&quot;&quot;</font>
+<font color="black"> 906. </font>
+<font color="green"> 907.         self._makefile_refs += 1</font>
+<font color="black"> 908.         # close=True so as to decrement the reference count when done with</font>
+<font color="black"> 909.         # the file-like object.</font>
+<font color="green"> 910.         return _fileobject(self, mode, bufsize, close=True)</font>
+<font color="black"> 911. </font>
+<font color="red"> 912.     def get_channel_binding(self, cb_type=&quot;tls-unique&quot;):</font>
+<font color="black"> 913.         &quot;&quot;&quot;Get channel binding data for current connection.  Raise ValueError</font>
+<font color="black"> 914.         if the requested `cb_type` is not supported.  Return bytes of the data</font>
+<font color="black"> 915.         or None if the data is not available (e.g. before the handshake).</font>
+<font color="black"> 916.         &quot;&quot;&quot;</font>
+<font color="red"> 917.         if cb_type not in CHANNEL_BINDING_TYPES:</font>
+<font color="red"> 918.             raise ValueError(&quot;Unsupported channel binding type&quot;)</font>
+<font color="red"> 919.         if cb_type != &quot;tls-unique&quot;:</font>
+<font color="red"> 920.             raise NotImplementedError(</font>
+<font color="red"> 921.                             &quot;{0} channel binding type not implemented&quot;</font>
+<font color="red"> 922.                             .format(cb_type))</font>
+<font color="red"> 923.         if self._sslobj is None:</font>
+<font color="red"> 924.             return None</font>
+<font color="red"> 925.         return self._sslobj.tls_unique_cb()</font>
+<font color="black"> 926. </font>
+<font color="red"> 927.     def version(self):</font>
+<font color="black"> 928.         &quot;&quot;&quot;</font>
+<font color="black"> 929.         Return a string identifying the protocol version used by the</font>
+<font color="black"> 930.         current SSL channel, or None if there is no established channel.</font>
+<font color="black"> 931.         &quot;&quot;&quot;</font>
+<font color="red"> 932.         if self._sslobj is None:</font>
+<font color="red"> 933.             return None</font>
+<font color="red"> 934.         return self._sslobj.version()</font>
+<font color="black"> 935. </font>
+<font color="black"> 936. </font>
+<font color="red"> 937. def wrap_socket(sock, keyfile=None, certfile=None,</font>
+<font color="red"> 938.                 server_side=False, cert_reqs=CERT_NONE,</font>
+<font color="red"> 939.                 ssl_version=PROTOCOL_TLS, ca_certs=None,</font>
+<font color="red"> 940.                 do_handshake_on_connect=True,</font>
+<font color="red"> 941.                 suppress_ragged_eofs=True,</font>
+<font color="red"> 942.                 ciphers=None):</font>
+<font color="black"> 943. </font>
+<font color="red"> 944.     return SSLSocket(sock=sock, keyfile=keyfile, certfile=certfile,</font>
+<font color="red"> 945.                      server_side=server_side, cert_reqs=cert_reqs,</font>
+<font color="red"> 946.                      ssl_version=ssl_version, ca_certs=ca_certs,</font>
+<font color="red"> 947.                      do_handshake_on_connect=do_handshake_on_connect,</font>
+<font color="red"> 948.                      suppress_ragged_eofs=suppress_ragged_eofs,</font>
+<font color="red"> 949.                      ciphers=ciphers)</font>
+<font color="black"> 950. </font>
+<font color="black"> 951. # some utility functions</font>
+<font color="black"> 952. </font>
+<font color="red"> 953. def cert_time_to_seconds(cert_time):</font>
+<font color="black"> 954.     &quot;&quot;&quot;Return the time in seconds since the Epoch, given the timestring</font>
+<font color="black"> 955.     representing the &quot;notBefore&quot; or &quot;notAfter&quot; date from a certificate</font>
+<font color="black"> 956.     in ``&quot;%b %d %H:%M:%S %Y %Z&quot;`` strptime format (C locale).</font>
+<font color="black"> 957. </font>
+<font color="black"> 958.     &quot;notBefore&quot; or &quot;notAfter&quot; dates must use UTC (RFC 5280).</font>
+<font color="black"> 959. </font>
+<font color="black"> 960.     Month is one of: Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec</font>
+<font color="black"> 961.     UTC should be specified as GMT (see ASN1_TIME_print())</font>
+<font color="black"> 962.     &quot;&quot;&quot;</font>
+<font color="red"> 963.     from time import strptime</font>
+<font color="red"> 964.     from calendar import timegm</font>
+<font color="black"> 965. </font>
+<font color="black"> 966.     months = (</font>
+<font color="black"> 967.         &quot;Jan&quot;,&quot;Feb&quot;,&quot;Mar&quot;,&quot;Apr&quot;,&quot;May&quot;,&quot;Jun&quot;,</font>
+<font color="red"> 968.         &quot;Jul&quot;,&quot;Aug&quot;,&quot;Sep&quot;,&quot;Oct&quot;,&quot;Nov&quot;,&quot;Dec&quot;</font>
+<font color="black"> 969.     )</font>
+<font color="red"> 970.     time_format = ' %d %H:%M:%S %Y GMT' # NOTE: no month, fixed GMT</font>
+<font color="red"> 971.     try:</font>
+<font color="red"> 972.         month_number = months.index(cert_time[:3].title()) + 1</font>
+<font color="red"> 973.     except ValueError:</font>
+<font color="red"> 974.         raise ValueError('time data %r does not match '</font>
+<font color="red"> 975.                          'format &quot;%%b%s&quot;' % (cert_time, time_format))</font>
+<font color="black"> 976.     else:</font>
+<font color="black"> 977.         # found valid month</font>
+<font color="red"> 978.         tt = strptime(cert_time[3:], time_format)</font>
+<font color="black"> 979.         # return an integer, the previous mktime()-based implementation</font>
+<font color="black"> 980.         # returned a float (fractional seconds are always zero here).</font>
+<font color="red"> 981.         return timegm((tt[0], month_number) + tt[2:6])</font>
+<font color="black"> 982. </font>
+<font color="red"> 983. PEM_HEADER = &quot;-----BEGIN CERTIFICATE-----&quot;</font>
+<font color="red"> 984. PEM_FOOTER = &quot;-----END CERTIFICATE-----&quot;</font>
+<font color="black"> 985. </font>
+<font color="red"> 986. def DER_cert_to_PEM_cert(der_cert_bytes):</font>
+<font color="black"> 987.     &quot;&quot;&quot;Takes a certificate in binary DER format and returns the</font>
+<font color="black"> 988.     PEM version of it as a string.&quot;&quot;&quot;</font>
+<font color="black"> 989. </font>
+<font color="red"> 990.     f = base64.standard_b64encode(der_cert_bytes).decode('ascii')</font>
+<font color="black"> 991.     return (PEM_HEADER + '\n' +</font>
+<font color="black"> 992.             textwrap.fill(f, 64) + '\n' +</font>
+<font color="red"> 993.             PEM_FOOTER + '\n')</font>
+<font color="black"> 994. </font>
+<font color="red"> 995. def PEM_cert_to_DER_cert(pem_cert_string):</font>
+<font color="black"> 996.     &quot;&quot;&quot;Takes a certificate in ASCII PEM format and returns the</font>
+<font color="black"> 997.     DER-encoded version of it as a byte sequence&quot;&quot;&quot;</font>
+<font color="black"> 998. </font>
+<font color="red"> 999.     if not pem_cert_string.startswith(PEM_HEADER):</font>
+<font color="red">1000.         raise ValueError(&quot;Invalid PEM encoding; must start with %s&quot;</font>
+<font color="red">1001.                          % PEM_HEADER)</font>
+<font color="red">1002.     if not pem_cert_string.strip().endswith(PEM_FOOTER):</font>
+<font color="red">1003.         raise ValueError(&quot;Invalid PEM encoding; must end with %s&quot;</font>
+<font color="red">1004.                          % PEM_FOOTER)</font>
+<font color="red">1005.     d = pem_cert_string.strip()[len(PEM_HEADER):-len(PEM_FOOTER)]</font>
+<font color="red">1006.     return base64.decodestring(d.encode('ASCII', 'strict'))</font>
+<font color="black">1007. </font>
+<font color="red">1008. def get_server_certificate(addr, ssl_version=PROTOCOL_TLS, ca_certs=None):</font>
+<font color="black">1009.     &quot;&quot;&quot;Retrieve the certificate from the server at the specified address,</font>
+<font color="black">1010.     and return it as a PEM-encoded string.</font>
+<font color="black">1011.     If 'ca_certs' is specified, validate the server cert against it.</font>
+<font color="black">1012.     If 'ssl_version' is specified, use it in the connection attempt.&quot;&quot;&quot;</font>
+<font color="black">1013. </font>
+<font color="red">1014.     host, port = addr</font>
+<font color="red">1015.     if ca_certs is not None:</font>
+<font color="red">1016.         cert_reqs = CERT_REQUIRED</font>
+<font color="black">1017.     else:</font>
+<font color="red">1018.         cert_reqs = CERT_NONE</font>
+<font color="red">1019.     context = _create_stdlib_context(ssl_version,</font>
+<font color="red">1020.                                      cert_reqs=cert_reqs,</font>
+<font color="red">1021.                                      cafile=ca_certs)</font>
+<font color="red">1022.     with closing(create_connection(addr)) as sock:</font>
+<font color="red">1023.         with closing(context.wrap_socket(sock)) as sslsock:</font>
+<font color="red">1024.             dercert = sslsock.getpeercert(True)</font>
+<font color="red">1025.     return DER_cert_to_PEM_cert(dercert)</font>
+<font color="black">1026. </font>
+<font color="red">1027. def get_protocol_name(protocol_code):</font>
+<font color="red">1028.     return _PROTOCOL_NAMES.get(protocol_code, '&lt;unknown&gt;')</font>
+<font color="black">1029. </font>
+<font color="black">1030. </font>
+<font color="black">1031. # a replacement for the old socket.ssl function</font>
+<font color="black">1032. </font>
+<font color="red">1033. def sslwrap_simple(sock, keyfile=None, certfile=None):</font>
+<font color="black">1034.     &quot;&quot;&quot;A replacement for the old socket.ssl function.  Designed</font>
+<font color="black">1035.     for compability with Python 2.5 and earlier.  Will disappear in</font>
+<font color="black">1036.     Python 3.0.&quot;&quot;&quot;</font>
+<font color="red">1037.     if hasattr(sock, &quot;_sock&quot;):</font>
+<font color="red">1038.         sock = sock._sock</font>
+<font color="black">1039. </font>
+<font color="red">1040.     ctx = SSLContext(PROTOCOL_SSLv23)</font>
+<font color="red">1041.     if keyfile or certfile:</font>
+<font color="red">1042.         ctx.load_cert_chain(certfile, keyfile)</font>
+<font color="red">1043.     ssl_sock = ctx._wrap_socket(sock, server_side=False)</font>
+<font color="red">1044.     try:</font>
+<font color="red">1045.         sock.getpeername()</font>
+<font color="red">1046.     except socket_error:</font>
+<font color="black">1047.         # no, no connection yet</font>
+<font color="red">1048.         pass</font>
+<font color="black">1049.     else:</font>
+<font color="black">1050.         # yes, do the handshake</font>
+<font color="red">1051.         ssl_sock.do_handshake()</font>
+<font color="black">1052. </font>
+<font color="red">1053.     return ssl_sock</font>
+</pre>
+

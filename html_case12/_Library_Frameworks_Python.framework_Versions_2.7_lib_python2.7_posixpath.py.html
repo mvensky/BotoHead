@@ -1,0 +1,446 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/posixpath.py</b><br>
+
+
+file stats: <b>242 lines, 50 executed: 20.7% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Common operations on Posix pathnames.</font>
+<font color="black">   2. </font>
+<font color="black">   3. Instead of importing this module directly, import os and refer to</font>
+<font color="black">   4. this module as os.path.  The &quot;os.path&quot; name is an alias for this</font>
+<font color="black">   5. module on Posix systems; on other systems (e.g. Mac, Windows),</font>
+<font color="black">   6. os.path provides the same operations in a manner specific to that</font>
+<font color="black">   7. platform, and is an alias to another module (e.g. macpath, ntpath).</font>
+<font color="black">   8. </font>
+<font color="black">   9. Some of this can actually be useful on non-Posix systems too, e.g.</font>
+<font color="black">  10. for manipulation of the pathname component of URLs.</font>
+<font color="red">  11. &quot;&quot;&quot;</font>
+<font color="black">  12. </font>
+<font color="red">  13. import os</font>
+<font color="red">  14. import sys</font>
+<font color="red">  15. import stat</font>
+<font color="red">  16. import genericpath</font>
+<font color="red">  17. import warnings</font>
+<font color="red">  18. from genericpath import *</font>
+<font color="red">  19. from genericpath import _unicode</font>
+<font color="black">  20. </font>
+<font color="red">  21. __all__ = [&quot;normcase&quot;,&quot;isabs&quot;,&quot;join&quot;,&quot;splitdrive&quot;,&quot;split&quot;,&quot;splitext&quot;,</font>
+<font color="red">  22.            &quot;basename&quot;,&quot;dirname&quot;,&quot;commonprefix&quot;,&quot;getsize&quot;,&quot;getmtime&quot;,</font>
+<font color="red">  23.            &quot;getatime&quot;,&quot;getctime&quot;,&quot;islink&quot;,&quot;exists&quot;,&quot;lexists&quot;,&quot;isdir&quot;,&quot;isfile&quot;,</font>
+<font color="red">  24.            &quot;ismount&quot;,&quot;walk&quot;,&quot;expanduser&quot;,&quot;expandvars&quot;,&quot;normpath&quot;,&quot;abspath&quot;,</font>
+<font color="red">  25.            &quot;samefile&quot;,&quot;sameopenfile&quot;,&quot;samestat&quot;,</font>
+<font color="red">  26.            &quot;curdir&quot;,&quot;pardir&quot;,&quot;sep&quot;,&quot;pathsep&quot;,&quot;defpath&quot;,&quot;altsep&quot;,&quot;extsep&quot;,</font>
+<font color="red">  27.            &quot;devnull&quot;,&quot;realpath&quot;,&quot;supports_unicode_filenames&quot;,&quot;relpath&quot;]</font>
+<font color="black">  28. </font>
+<font color="black">  29. # strings representing various path-related bits and pieces</font>
+<font color="red">  30. curdir = '.'</font>
+<font color="red">  31. pardir = '..'</font>
+<font color="red">  32. extsep = '.'</font>
+<font color="red">  33. sep = '/'</font>
+<font color="red">  34. pathsep = ':'</font>
+<font color="red">  35. defpath = ':/bin:/usr/bin'</font>
+<font color="red">  36. altsep = None</font>
+<font color="red">  37. devnull = '/dev/null'</font>
+<font color="black">  38. </font>
+<font color="black">  39. # Normalize the case of a pathname.  Trivial in Posix, string.lower on Mac.</font>
+<font color="black">  40. # On MS-DOS this may also turn slashes into backslashes; however, other</font>
+<font color="black">  41. # normalizations (such as optimizing '../' away) are not allowed</font>
+<font color="black">  42. # (another function should be defined to do that).</font>
+<font color="black">  43. </font>
+<font color="red">  44. def normcase(s):</font>
+<font color="black">  45.     &quot;&quot;&quot;Normalize case of pathname.  Has no effect under Posix&quot;&quot;&quot;</font>
+<font color="green">  46.     return s</font>
+<font color="black">  47. </font>
+<font color="black">  48. </font>
+<font color="black">  49. # Return whether a path is absolute.</font>
+<font color="black">  50. # Trivial in Posix, harder on the Mac or MS-DOS.</font>
+<font color="black">  51. </font>
+<font color="red">  52. def isabs(s):</font>
+<font color="black">  53.     &quot;&quot;&quot;Test whether a path is absolute&quot;&quot;&quot;</font>
+<font color="green">  54.     return s.startswith('/')</font>
+<font color="black">  55. </font>
+<font color="black">  56. </font>
+<font color="black">  57. # Join pathnames.</font>
+<font color="black">  58. # Ignore the previous parts if a part is absolute.</font>
+<font color="black">  59. # Insert a '/' unless the first part is empty or already ends in '/'.</font>
+<font color="black">  60. </font>
+<font color="red">  61. def join(a, *p):</font>
+<font color="black">  62.     &quot;&quot;&quot;Join two or more pathname components, inserting '/' as needed.</font>
+<font color="black">  63.     If any component is an absolute path, all previous path components</font>
+<font color="black">  64.     will be discarded.  An empty last part will result in a path that</font>
+<font color="black">  65.     ends with a separator.&quot;&quot;&quot;</font>
+<font color="green">  66.     path = a</font>
+<font color="green">  67.     for b in p:</font>
+<font color="green">  68.         if b.startswith('/'):</font>
+<font color="red">  69.             path = b</font>
+<font color="green">  70.         elif path == '' or path.endswith('/'):</font>
+<font color="red">  71.             path +=  b</font>
+<font color="black">  72.         else:</font>
+<font color="green">  73.             path += '/' + b</font>
+<font color="green">  74.     return path</font>
+<font color="black">  75. </font>
+<font color="black">  76. </font>
+<font color="black">  77. # Split a path in head (everything up to the last '/') and tail (the</font>
+<font color="black">  78. # rest).  If the path ends in '/', tail will be empty.  If there is no</font>
+<font color="black">  79. # '/' in the path, head  will be empty.</font>
+<font color="black">  80. # Trailing '/'es are stripped from head unless it is the root.</font>
+<font color="black">  81. </font>
+<font color="red">  82. def split(p):</font>
+<font color="black">  83.     &quot;&quot;&quot;Split a pathname.  Returns tuple &quot;(head, tail)&quot; where &quot;tail&quot; is</font>
+<font color="black">  84.     everything after the final slash.  Either part may be empty.&quot;&quot;&quot;</font>
+<font color="green">  85.     i = p.rfind('/') + 1</font>
+<font color="green">  86.     head, tail = p[:i], p[i:]</font>
+<font color="green">  87.     if head and head != '/'*len(head):</font>
+<font color="green">  88.         head = head.rstrip('/')</font>
+<font color="green">  89.     return head, tail</font>
+<font color="black">  90. </font>
+<font color="black">  91. </font>
+<font color="black">  92. # Split a path in root and extension.</font>
+<font color="black">  93. # The extension is everything starting at the last dot in the last</font>
+<font color="black">  94. # pathname component; the root is everything before that.</font>
+<font color="black">  95. # It is always true that root + ext == p.</font>
+<font color="black">  96. </font>
+<font color="red">  97. def splitext(p):</font>
+<font color="red">  98.     return genericpath._splitext(p, sep, altsep, extsep)</font>
+<font color="red">  99. splitext.__doc__ = genericpath._splitext.__doc__</font>
+<font color="black"> 100. </font>
+<font color="black"> 101. # Split a pathname into a drive specification and the rest of the</font>
+<font color="black"> 102. # path.  Useful on DOS/Windows/NT; on Unix, the drive is always empty.</font>
+<font color="black"> 103. </font>
+<font color="red"> 104. def splitdrive(p):</font>
+<font color="black"> 105.     &quot;&quot;&quot;Split a pathname into drive and path. On Posix, drive is always</font>
+<font color="black"> 106.     empty.&quot;&quot;&quot;</font>
+<font color="red"> 107.     return '', p</font>
+<font color="black"> 108. </font>
+<font color="black"> 109. </font>
+<font color="black"> 110. # Return the tail (basename) part of a path, same as split(path)[1].</font>
+<font color="black"> 111. </font>
+<font color="red"> 112. def basename(p):</font>
+<font color="black"> 113.     &quot;&quot;&quot;Returns the final component of a pathname&quot;&quot;&quot;</font>
+<font color="green"> 114.     i = p.rfind('/') + 1</font>
+<font color="green"> 115.     return p[i:]</font>
+<font color="black"> 116. </font>
+<font color="black"> 117. </font>
+<font color="black"> 118. # Return the head (dirname) part of a path, same as split(path)[0].</font>
+<font color="black"> 119. </font>
+<font color="red"> 120. def dirname(p):</font>
+<font color="black"> 121.     &quot;&quot;&quot;Returns the directory component of a pathname&quot;&quot;&quot;</font>
+<font color="green"> 122.     i = p.rfind('/') + 1</font>
+<font color="green"> 123.     head = p[:i]</font>
+<font color="green"> 124.     if head and head != '/'*len(head):</font>
+<font color="green"> 125.         head = head.rstrip('/')</font>
+<font color="green"> 126.     return head</font>
+<font color="black"> 127. </font>
+<font color="black"> 128. </font>
+<font color="black"> 129. # Is a path a symbolic link?</font>
+<font color="black"> 130. # This will always return false on systems where os.lstat doesn't exist.</font>
+<font color="black"> 131. </font>
+<font color="red"> 132. def islink(path):</font>
+<font color="black"> 133.     &quot;&quot;&quot;Test whether a path is a symbolic link&quot;&quot;&quot;</font>
+<font color="red"> 134.     try:</font>
+<font color="red"> 135.         st = os.lstat(path)</font>
+<font color="red"> 136.     except (os.error, AttributeError):</font>
+<font color="red"> 137.         return False</font>
+<font color="red"> 138.     return stat.S_ISLNK(st.st_mode)</font>
+<font color="black"> 139. </font>
+<font color="black"> 140. # Being true for dangling symbolic links is also useful.</font>
+<font color="black"> 141. </font>
+<font color="red"> 142. def lexists(path):</font>
+<font color="black"> 143.     &quot;&quot;&quot;Test whether a path exists.  Returns True for broken symbolic links&quot;&quot;&quot;</font>
+<font color="red"> 144.     try:</font>
+<font color="red"> 145.         os.lstat(path)</font>
+<font color="red"> 146.     except os.error:</font>
+<font color="red"> 147.         return False</font>
+<font color="red"> 148.     return True</font>
+<font color="black"> 149. </font>
+<font color="black"> 150. </font>
+<font color="black"> 151. # Are two filenames really pointing to the same file?</font>
+<font color="black"> 152. </font>
+<font color="red"> 153. def samefile(f1, f2):</font>
+<font color="black"> 154.     &quot;&quot;&quot;Test whether two pathnames reference the same actual file&quot;&quot;&quot;</font>
+<font color="red"> 155.     s1 = os.stat(f1)</font>
+<font color="red"> 156.     s2 = os.stat(f2)</font>
+<font color="red"> 157.     return samestat(s1, s2)</font>
+<font color="black"> 158. </font>
+<font color="black"> 159. </font>
+<font color="black"> 160. # Are two open files really referencing the same file?</font>
+<font color="black"> 161. # (Not necessarily the same file descriptor!)</font>
+<font color="black"> 162. </font>
+<font color="red"> 163. def sameopenfile(fp1, fp2):</font>
+<font color="black"> 164.     &quot;&quot;&quot;Test whether two open file objects reference the same file&quot;&quot;&quot;</font>
+<font color="red"> 165.     s1 = os.fstat(fp1)</font>
+<font color="red"> 166.     s2 = os.fstat(fp2)</font>
+<font color="red"> 167.     return samestat(s1, s2)</font>
+<font color="black"> 168. </font>
+<font color="black"> 169. </font>
+<font color="black"> 170. # Are two stat buffers (obtained from stat, fstat or lstat)</font>
+<font color="black"> 171. # describing the same file?</font>
+<font color="black"> 172. </font>
+<font color="red"> 173. def samestat(s1, s2):</font>
+<font color="black"> 174.     &quot;&quot;&quot;Test whether two stat buffers reference the same file&quot;&quot;&quot;</font>
+<font color="red"> 175.     return s1.st_ino == s2.st_ino and \</font>
+<font color="red"> 176.            s1.st_dev == s2.st_dev</font>
+<font color="black"> 177. </font>
+<font color="black"> 178. </font>
+<font color="black"> 179. # Is a path a mount point?</font>
+<font color="black"> 180. # (Does this work for all UNIXes?  Is it even guaranteed to work by Posix?)</font>
+<font color="black"> 181. </font>
+<font color="red"> 182. def ismount(path):</font>
+<font color="black"> 183.     &quot;&quot;&quot;Test whether a path is a mount point&quot;&quot;&quot;</font>
+<font color="red"> 184.     if islink(path):</font>
+<font color="black"> 185.         # A symlink can never be a mount point</font>
+<font color="red"> 186.         return False</font>
+<font color="red"> 187.     try:</font>
+<font color="red"> 188.         s1 = os.lstat(path)</font>
+<font color="red"> 189.         s2 = os.lstat(realpath(join(path, '..')))</font>
+<font color="red"> 190.     except os.error:</font>
+<font color="red"> 191.         return False # It doesn't exist -- so not a mount point :-)</font>
+<font color="red"> 192.     dev1 = s1.st_dev</font>
+<font color="red"> 193.     dev2 = s2.st_dev</font>
+<font color="red"> 194.     if dev1 != dev2:</font>
+<font color="red"> 195.         return True     # path/.. on a different device as path</font>
+<font color="red"> 196.     ino1 = s1.st_ino</font>
+<font color="red"> 197.     ino2 = s2.st_ino</font>
+<font color="red"> 198.     if ino1 == ino2:</font>
+<font color="red"> 199.         return True     # path/.. is the same i-node as path</font>
+<font color="red"> 200.     return False</font>
+<font color="black"> 201. </font>
+<font color="black"> 202. </font>
+<font color="black"> 203. # Directory tree walk.</font>
+<font color="black"> 204. # For each directory under top (including top itself, but excluding</font>
+<font color="black"> 205. # '.' and '..'), func(arg, dirname, filenames) is called, where</font>
+<font color="black"> 206. # dirname is the name of the directory and filenames is the list</font>
+<font color="black"> 207. # of files (and subdirectories etc.) in the directory.</font>
+<font color="black"> 208. # The func may modify the filenames list, to implement a filter,</font>
+<font color="black"> 209. # or to impose a different order of visiting.</font>
+<font color="black"> 210. </font>
+<font color="red"> 211. def walk(top, func, arg):</font>
+<font color="black"> 212.     &quot;&quot;&quot;Directory tree walk with callback function.</font>
+<font color="black"> 213. </font>
+<font color="black"> 214.     For each directory in the directory tree rooted at top (including top</font>
+<font color="black"> 215.     itself, but excluding '.' and '..'), call func(arg, dirname, fnames).</font>
+<font color="black"> 216.     dirname is the name of the directory, and fnames a list of the names of</font>
+<font color="black"> 217.     the files and subdirectories in dirname (excluding '.' and '..').  func</font>
+<font color="black"> 218.     may modify the fnames list in-place (e.g. via del or slice assignment),</font>
+<font color="black"> 219.     and walk will only recurse into the subdirectories whose names remain in</font>
+<font color="black"> 220.     fnames; this can be used to implement a filter, or to impose a specific</font>
+<font color="black"> 221.     order of visiting.  No semantics are defined for, or required of, arg,</font>
+<font color="black"> 222.     beyond that arg is always passed to func.  It can be used, e.g., to pass</font>
+<font color="black"> 223.     a filename pattern, or a mutable object designed to accumulate</font>
+<font color="black"> 224.     statistics.  Passing None for arg is common.&quot;&quot;&quot;</font>
+<font color="red"> 225.     warnings.warnpy3k(&quot;In 3.x, os.path.walk is removed in favor of os.walk.&quot;,</font>
+<font color="red"> 226.                       stacklevel=2)</font>
+<font color="red"> 227.     try:</font>
+<font color="red"> 228.         names = os.listdir(top)</font>
+<font color="red"> 229.     except os.error:</font>
+<font color="red"> 230.         return</font>
+<font color="red"> 231.     func(arg, top, names)</font>
+<font color="red"> 232.     for name in names:</font>
+<font color="red"> 233.         name = join(top, name)</font>
+<font color="red"> 234.         try:</font>
+<font color="red"> 235.             st = os.lstat(name)</font>
+<font color="red"> 236.         except os.error:</font>
+<font color="red"> 237.             continue</font>
+<font color="red"> 238.         if stat.S_ISDIR(st.st_mode):</font>
+<font color="red"> 239.             walk(name, func, arg)</font>
+<font color="black"> 240. </font>
+<font color="black"> 241. </font>
+<font color="black"> 242. # Expand paths beginning with '~' or '~user'.</font>
+<font color="black"> 243. # '~' means $HOME; '~user' means that user's home directory.</font>
+<font color="black"> 244. # If the path doesn't begin with '~', or if the user or $HOME is unknown,</font>
+<font color="black"> 245. # the path is returned unchanged (leaving error reporting to whatever</font>
+<font color="black"> 246. # function is called with the expanded path as argument).</font>
+<font color="black"> 247. # See also module 'glob' for expansion of *, ? and [...] in pathnames.</font>
+<font color="black"> 248. # (A function should also be defined to do full *sh-style environment</font>
+<font color="black"> 249. # variable expansion.)</font>
+<font color="black"> 250. </font>
+<font color="red"> 251. def expanduser(path):</font>
+<font color="black"> 252.     &quot;&quot;&quot;Expand ~ and ~user constructions.  If user or $HOME is unknown,</font>
+<font color="black"> 253.     do nothing.&quot;&quot;&quot;</font>
+<font color="green"> 254.     if not path.startswith('~'):</font>
+<font color="red"> 255.         return path</font>
+<font color="green"> 256.     i = path.find('/', 1)</font>
+<font color="green"> 257.     if i &lt; 0:</font>
+<font color="green"> 258.         i = len(path)</font>
+<font color="green"> 259.     if i == 1:</font>
+<font color="green"> 260.         if 'HOME' not in os.environ:</font>
+<font color="red"> 261.             import pwd</font>
+<font color="red"> 262.             userhome = pwd.getpwuid(os.getuid()).pw_dir</font>
+<font color="black"> 263.         else:</font>
+<font color="green"> 264.             userhome = os.environ['HOME']</font>
+<font color="black"> 265.     else:</font>
+<font color="red"> 266.         import pwd</font>
+<font color="red"> 267.         try:</font>
+<font color="red"> 268.             pwent = pwd.getpwnam(path[1:i])</font>
+<font color="red"> 269.         except KeyError:</font>
+<font color="red"> 270.             return path</font>
+<font color="red"> 271.         userhome = pwent.pw_dir</font>
+<font color="green"> 272.     userhome = userhome.rstrip('/')</font>
+<font color="green"> 273.     return (userhome + path[i:]) or '/'</font>
+<font color="black"> 274. </font>
+<font color="black"> 275. </font>
+<font color="black"> 276. # Expand paths containing shell variable substitutions.</font>
+<font color="black"> 277. # This expands the forms $variable and ${variable} only.</font>
+<font color="black"> 278. # Non-existent variables are left unchanged.</font>
+<font color="black"> 279. </font>
+<font color="red"> 280. _varprog = None</font>
+<font color="red"> 281. _uvarprog = None</font>
+<font color="black"> 282. </font>
+<font color="red"> 283. def expandvars(path):</font>
+<font color="black"> 284.     &quot;&quot;&quot;Expand shell variables of form $var and ${var}.  Unknown variables</font>
+<font color="black"> 285.     are left unchanged.&quot;&quot;&quot;</font>
+<font color="black"> 286.     global _varprog, _uvarprog</font>
+<font color="green"> 287.     if '$' not in path:</font>
+<font color="green"> 288.         return path</font>
+<font color="red"> 289.     if isinstance(path, _unicode):</font>
+<font color="red"> 290.         if not _uvarprog:</font>
+<font color="red"> 291.             import re</font>
+<font color="red"> 292.             _uvarprog = re.compile(ur'\$(\w+|\{[^}]*\})', re.UNICODE)</font>
+<font color="red"> 293.         varprog = _uvarprog</font>
+<font color="red"> 294.         encoding = sys.getfilesystemencoding()</font>
+<font color="black"> 295.     else:</font>
+<font color="red"> 296.         if not _varprog:</font>
+<font color="red"> 297.             import re</font>
+<font color="red"> 298.             _varprog = re.compile(r'\$(\w+|\{[^}]*\})')</font>
+<font color="red"> 299.         varprog = _varprog</font>
+<font color="red"> 300.         encoding = None</font>
+<font color="red"> 301.     i = 0</font>
+<font color="red"> 302.     while True:</font>
+<font color="red"> 303.         m = varprog.search(path, i)</font>
+<font color="red"> 304.         if not m:</font>
+<font color="red"> 305.             break</font>
+<font color="red"> 306.         i, j = m.span(0)</font>
+<font color="red"> 307.         name = m.group(1)</font>
+<font color="red"> 308.         if name.startswith('{') and name.endswith('}'):</font>
+<font color="red"> 309.             name = name[1:-1]</font>
+<font color="red"> 310.         if encoding:</font>
+<font color="red"> 311.             name = name.encode(encoding)</font>
+<font color="red"> 312.         if name in os.environ:</font>
+<font color="red"> 313.             tail = path[j:]</font>
+<font color="red"> 314.             value = os.environ[name]</font>
+<font color="red"> 315.             if encoding:</font>
+<font color="red"> 316.                 value = value.decode(encoding)</font>
+<font color="red"> 317.             path = path[:i] + value</font>
+<font color="red"> 318.             i = len(path)</font>
+<font color="red"> 319.             path += tail</font>
+<font color="black"> 320.         else:</font>
+<font color="red"> 321.             i = j</font>
+<font color="red"> 322.     return path</font>
+<font color="black"> 323. </font>
+<font color="black"> 324. </font>
+<font color="black"> 325. # Normalize a path, e.g. A//B, A/./B and A/foo/../B all become A/B.</font>
+<font color="black"> 326. # It should be understood that this may change the meaning of the path</font>
+<font color="black"> 327. # if it contains symbolic links!</font>
+<font color="black"> 328. </font>
+<font color="red"> 329. def normpath(path):</font>
+<font color="black"> 330.     &quot;&quot;&quot;Normalize path, eliminating double slashes, etc.&quot;&quot;&quot;</font>
+<font color="black"> 331.     # Preserve unicode (if path is unicode)</font>
+<font color="green"> 332.     slash, dot = (u'/', u'.') if isinstance(path, _unicode) else ('/', '.')</font>
+<font color="green"> 333.     if path == '':</font>
+<font color="red"> 334.         return dot</font>
+<font color="green"> 335.     initial_slashes = path.startswith('/')</font>
+<font color="black"> 336.     # POSIX allows one or two initial slashes, but treats three or more</font>
+<font color="black"> 337.     # as single slash.</font>
+<font color="green"> 338.     if (initial_slashes and</font>
+<font color="green"> 339.         path.startswith('//') and not path.startswith('///')):</font>
+<font color="red"> 340.         initial_slashes = 2</font>
+<font color="green"> 341.     comps = path.split('/')</font>
+<font color="green"> 342.     new_comps = []</font>
+<font color="green"> 343.     for comp in comps:</font>
+<font color="green"> 344.         if comp in ('', '.'):</font>
+<font color="green"> 345.             continue</font>
+<font color="green"> 346.         if (comp != '..' or (not initial_slashes and not new_comps) or</font>
+<font color="red"> 347.              (new_comps and new_comps[-1] == '..')):</font>
+<font color="green"> 348.             new_comps.append(comp)</font>
+<font color="red"> 349.         elif new_comps:</font>
+<font color="red"> 350.             new_comps.pop()</font>
+<font color="green"> 351.     comps = new_comps</font>
+<font color="green"> 352.     path = slash.join(comps)</font>
+<font color="green"> 353.     if initial_slashes:</font>
+<font color="green"> 354.         path = slash*initial_slashes + path</font>
+<font color="green"> 355.     return path or dot</font>
+<font color="black"> 356. </font>
+<font color="black"> 357. </font>
+<font color="red"> 358. def abspath(path):</font>
+<font color="black"> 359.     &quot;&quot;&quot;Return an absolute path.&quot;&quot;&quot;</font>
+<font color="green"> 360.     if not isabs(path):</font>
+<font color="red"> 361.         if isinstance(path, _unicode):</font>
+<font color="red"> 362.             cwd = os.getcwdu()</font>
+<font color="black"> 363.         else:</font>
+<font color="red"> 364.             cwd = os.getcwd()</font>
+<font color="red"> 365.         path = join(cwd, path)</font>
+<font color="green"> 366.     return normpath(path)</font>
+<font color="black"> 367. </font>
+<font color="black"> 368. </font>
+<font color="black"> 369. # Return a canonical path (i.e. the absolute location of a file on the</font>
+<font color="black"> 370. # filesystem).</font>
+<font color="black"> 371. </font>
+<font color="red"> 372. def realpath(filename):</font>
+<font color="black"> 373.     &quot;&quot;&quot;Return the canonical path of the specified filename, eliminating any</font>
+<font color="black"> 374. symbolic links encountered in the path.&quot;&quot;&quot;</font>
+<font color="red"> 375.     path, ok = _joinrealpath('', filename, {})</font>
+<font color="red"> 376.     return abspath(path)</font>
+<font color="black"> 377. </font>
+<font color="black"> 378. # Join two paths, normalizing and eliminating any symbolic links</font>
+<font color="black"> 379. # encountered in the second path.</font>
+<font color="red"> 380. def _joinrealpath(path, rest, seen):</font>
+<font color="red"> 381.     if isabs(rest):</font>
+<font color="red"> 382.         rest = rest[1:]</font>
+<font color="red"> 383.         path = sep</font>
+<font color="black"> 384. </font>
+<font color="red"> 385.     while rest:</font>
+<font color="red"> 386.         name, _, rest = rest.partition(sep)</font>
+<font color="red"> 387.         if not name or name == curdir:</font>
+<font color="black"> 388.             # current dir</font>
+<font color="red"> 389.             continue</font>
+<font color="red"> 390.         if name == pardir:</font>
+<font color="black"> 391.             # parent dir</font>
+<font color="red"> 392.             if path:</font>
+<font color="red"> 393.                 path, name = split(path)</font>
+<font color="red"> 394.                 if name == pardir:</font>
+<font color="red"> 395.                     path = join(path, pardir, pardir)</font>
+<font color="black"> 396.             else:</font>
+<font color="red"> 397.                 path = pardir</font>
+<font color="red"> 398.             continue</font>
+<font color="red"> 399.         newpath = join(path, name)</font>
+<font color="red"> 400.         if not islink(newpath):</font>
+<font color="red"> 401.             path = newpath</font>
+<font color="red"> 402.             continue</font>
+<font color="black"> 403.         # Resolve the symbolic link</font>
+<font color="red"> 404.         if newpath in seen:</font>
+<font color="black"> 405.             # Already seen this path</font>
+<font color="red"> 406.             path = seen[newpath]</font>
+<font color="red"> 407.             if path is not None:</font>
+<font color="black"> 408.                 # use cached value</font>
+<font color="red"> 409.                 continue</font>
+<font color="black"> 410.             # The symlink is not resolved, so we must have a symlink loop.</font>
+<font color="black"> 411.             # Return already resolved part + rest of the path unchanged.</font>
+<font color="red"> 412.             return join(newpath, rest), False</font>
+<font color="red"> 413.         seen[newpath] = None # not resolved symlink</font>
+<font color="red"> 414.         path, ok = _joinrealpath(path, os.readlink(newpath), seen)</font>
+<font color="red"> 415.         if not ok:</font>
+<font color="red"> 416.             return join(path, rest), False</font>
+<font color="red"> 417.         seen[newpath] = path # resolved symlink</font>
+<font color="black"> 418. </font>
+<font color="red"> 419.     return path, True</font>
+<font color="black"> 420. </font>
+<font color="black"> 421. </font>
+<font color="red"> 422. supports_unicode_filenames = (sys.platform == 'darwin')</font>
+<font color="black"> 423. </font>
+<font color="red"> 424. def relpath(path, start=curdir):</font>
+<font color="black"> 425.     &quot;&quot;&quot;Return a relative version of a path&quot;&quot;&quot;</font>
+<font color="black"> 426. </font>
+<font color="red"> 427.     if not path:</font>
+<font color="red"> 428.         raise ValueError(&quot;no path specified&quot;)</font>
+<font color="black"> 429. </font>
+<font color="red"> 430.     start_list = [x for x in abspath(start).split(sep) if x]</font>
+<font color="red"> 431.     path_list = [x for x in abspath(path).split(sep) if x]</font>
+<font color="black"> 432. </font>
+<font color="black"> 433.     # Work out how much of the filepath is shared by start and path.</font>
+<font color="red"> 434.     i = len(commonprefix([start_list, path_list]))</font>
+<font color="black"> 435. </font>
+<font color="red"> 436.     rel_list = [pardir] * (len(start_list)-i) + path_list[i:]</font>
+<font color="red"> 437.     if not rel_list:</font>
+<font color="red"> 438.         return curdir</font>
+<font color="red"> 439.     return join(*rel_list)</font>
+</pre>
+

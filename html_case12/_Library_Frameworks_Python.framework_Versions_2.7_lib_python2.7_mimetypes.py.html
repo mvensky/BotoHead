@@ -1,0 +1,606 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/mimetypes.py</b><br>
+
+
+file stats: <b>357 lines, 190 executed: 53.2% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Guess the MIME type of a file.</font>
+<font color="black">   2. </font>
+<font color="black">   3. This module defines two useful functions:</font>
+<font color="black">   4. </font>
+<font color="black">   5. guess_type(url, strict=1) -- guess the MIME type and encoding of a URL.</font>
+<font color="black">   6. </font>
+<font color="black">   7. guess_extension(type, strict=1) -- guess the extension for a given MIME type.</font>
+<font color="black">   8. </font>
+<font color="black">   9. It also contains the following, for tuning the behavior:</font>
+<font color="black">  10. </font>
+<font color="black">  11. Data:</font>
+<font color="black">  12. </font>
+<font color="black">  13. knownfiles -- list of files to parse</font>
+<font color="black">  14. inited -- flag set when init() has been called</font>
+<font color="black">  15. suffix_map -- dictionary mapping suffixes to suffixes</font>
+<font color="black">  16. encodings_map -- dictionary mapping suffixes to encodings</font>
+<font color="black">  17. types_map -- dictionary mapping suffixes to types</font>
+<font color="black">  18. </font>
+<font color="black">  19. Functions:</font>
+<font color="black">  20. </font>
+<font color="black">  21. init([files]) -- parse a list of files, default knownfiles (on Windows, the</font>
+<font color="black">  22.   default values are taken from the registry)</font>
+<font color="black">  23. read_mime_types(file) -- parse one file, return a dictionary or None</font>
+<font color="green">  24. &quot;&quot;&quot;</font>
+<font color="black">  25. </font>
+<font color="green">  26. import os</font>
+<font color="green">  27. import sys</font>
+<font color="green">  28. import posixpath</font>
+<font color="green">  29. import urllib</font>
+<font color="green">  30. try:</font>
+<font color="green">  31.     import _winreg</font>
+<font color="green">  32. except ImportError:</font>
+<font color="green">  33.     _winreg = None</font>
+<font color="black">  34. </font>
+<font color="black">  35. __all__ = [</font>
+<font color="green">  36.     &quot;guess_type&quot;,&quot;guess_extension&quot;,&quot;guess_all_extensions&quot;,</font>
+<font color="green">  37.     &quot;add_type&quot;,&quot;read_mime_types&quot;,&quot;init&quot;</font>
+<font color="black">  38. ]</font>
+<font color="black">  39. </font>
+<font color="black">  40. knownfiles = [</font>
+<font color="green">  41.     &quot;/etc/mime.types&quot;,</font>
+<font color="green">  42.     &quot;/etc/httpd/mime.types&quot;,                    # Mac OS X</font>
+<font color="green">  43.     &quot;/etc/httpd/conf/mime.types&quot;,               # Apache</font>
+<font color="green">  44.     &quot;/etc/apache/mime.types&quot;,                   # Apache 1</font>
+<font color="green">  45.     &quot;/etc/apache2/mime.types&quot;,                  # Apache 2</font>
+<font color="green">  46.     &quot;/usr/local/etc/httpd/conf/mime.types&quot;,</font>
+<font color="green">  47.     &quot;/usr/local/lib/netscape/mime.types&quot;,</font>
+<font color="green">  48.     &quot;/usr/local/etc/httpd/conf/mime.types&quot;,     # Apache 1.2</font>
+<font color="green">  49.     &quot;/usr/local/etc/mime.types&quot;,                # Apache 1.3</font>
+<font color="black">  50.     ]</font>
+<font color="black">  51. </font>
+<font color="green">  52. inited = False</font>
+<font color="green">  53. _db = None</font>
+<font color="black">  54. </font>
+<font color="black">  55. </font>
+<font color="green">  56. class MimeTypes:</font>
+<font color="black">  57.     &quot;&quot;&quot;MIME-types datastore.</font>
+<font color="black">  58. </font>
+<font color="black">  59.     This datastore can handle information from mime.types-style files</font>
+<font color="black">  60.     and supports basic determination of MIME type from a filename or</font>
+<font color="black">  61.     URL, and can guess a reasonable extension given a MIME type.</font>
+<font color="green">  62.     &quot;&quot;&quot;</font>
+<font color="black">  63. </font>
+<font color="green">  64.     def __init__(self, filenames=(), strict=True):</font>
+<font color="red">  65.         if not inited:</font>
+<font color="red">  66.             init()</font>
+<font color="red">  67.         self.encodings_map = encodings_map.copy()</font>
+<font color="red">  68.         self.suffix_map = suffix_map.copy()</font>
+<font color="red">  69.         self.types_map = ({}, {}) # dict for (non-strict, strict)</font>
+<font color="red">  70.         self.types_map_inv = ({}, {})</font>
+<font color="red">  71.         for (ext, type) in types_map.items():</font>
+<font color="red">  72.             self.add_type(type, ext, True)</font>
+<font color="red">  73.         for (ext, type) in common_types.items():</font>
+<font color="red">  74.             self.add_type(type, ext, False)</font>
+<font color="red">  75.         for name in filenames:</font>
+<font color="red">  76.             self.read(name, strict)</font>
+<font color="black">  77. </font>
+<font color="green">  78.     def add_type(self, type, ext, strict=True):</font>
+<font color="black">  79.         &quot;&quot;&quot;Add a mapping between a type and an extension.</font>
+<font color="black">  80. </font>
+<font color="black">  81.         When the extension is already known, the new</font>
+<font color="black">  82.         type will replace the old one. When the type</font>
+<font color="black">  83.         is already known the extension will be added</font>
+<font color="black">  84.         to the list of known extensions.</font>
+<font color="black">  85. </font>
+<font color="black">  86.         If strict is true, information will be added to</font>
+<font color="black">  87.         list of standard types, else to the list of non-standard</font>
+<font color="black">  88.         types.</font>
+<font color="black">  89.         &quot;&quot;&quot;</font>
+<font color="red">  90.         self.types_map[strict][ext] = type</font>
+<font color="red">  91.         exts = self.types_map_inv[strict].setdefault(type, [])</font>
+<font color="red">  92.         if ext not in exts:</font>
+<font color="red">  93.             exts.append(ext)</font>
+<font color="black">  94. </font>
+<font color="green">  95.     def guess_type(self, url, strict=True):</font>
+<font color="black">  96.         &quot;&quot;&quot;Guess the type of a file based on its URL.</font>
+<font color="black">  97. </font>
+<font color="black">  98.         Return value is a tuple (type, encoding) where type is None if</font>
+<font color="black">  99.         the type can't be guessed (no or unknown suffix) or a string</font>
+<font color="black"> 100.         of the form type/subtype, usable for a MIME Content-type</font>
+<font color="black"> 101.         header; and encoding is None for no encoding or the name of</font>
+<font color="black"> 102.         the program used to encode (e.g. compress or gzip).  The</font>
+<font color="black"> 103.         mappings are table driven.  Encoding suffixes are case</font>
+<font color="black"> 104.         sensitive; type suffixes are first tried case sensitive, then</font>
+<font color="black"> 105.         case insensitive.</font>
+<font color="black"> 106. </font>
+<font color="black"> 107.         The suffixes .tgz, .taz and .tz (case sensitive!) are all</font>
+<font color="black"> 108.         mapped to '.tar.gz'.  (This is table-driven too, using the</font>
+<font color="black"> 109.         dictionary suffix_map.)</font>
+<font color="black"> 110. </font>
+<font color="black"> 111.         Optional `strict' argument when False adds a bunch of commonly found,</font>
+<font color="black"> 112.         but non-standard types.</font>
+<font color="black"> 113.         &quot;&quot;&quot;</font>
+<font color="red"> 114.         scheme, url = urllib.splittype(url)</font>
+<font color="red"> 115.         if scheme == 'data':</font>
+<font color="black"> 116.             # syntax of data URLs:</font>
+<font color="black"> 117.             # dataurl   := &quot;data:&quot; [ mediatype ] [ &quot;;base64&quot; ] &quot;,&quot; data</font>
+<font color="black"> 118.             # mediatype := [ type &quot;/&quot; subtype ] *( &quot;;&quot; parameter )</font>
+<font color="black"> 119.             # data      := *urlchar</font>
+<font color="black"> 120.             # parameter := attribute &quot;=&quot; value</font>
+<font color="black"> 121.             # type/subtype defaults to &quot;text/plain&quot;</font>
+<font color="red"> 122.             comma = url.find(',')</font>
+<font color="red"> 123.             if comma &lt; 0:</font>
+<font color="black"> 124.                 # bad data URL</font>
+<font color="red"> 125.                 return None, None</font>
+<font color="red"> 126.             semi = url.find(';', 0, comma)</font>
+<font color="red"> 127.             if semi &gt;= 0:</font>
+<font color="red"> 128.                 type = url[:semi]</font>
+<font color="black"> 129.             else:</font>
+<font color="red"> 130.                 type = url[:comma]</font>
+<font color="red"> 131.             if '=' in type or '/' not in type:</font>
+<font color="red"> 132.                 type = 'text/plain'</font>
+<font color="red"> 133.             return type, None           # never compressed, so encoding is None</font>
+<font color="red"> 134.         base, ext = posixpath.splitext(url)</font>
+<font color="red"> 135.         while ext in self.suffix_map:</font>
+<font color="red"> 136.             base, ext = posixpath.splitext(base + self.suffix_map[ext])</font>
+<font color="red"> 137.         if ext in self.encodings_map:</font>
+<font color="red"> 138.             encoding = self.encodings_map[ext]</font>
+<font color="red"> 139.             base, ext = posixpath.splitext(base)</font>
+<font color="black"> 140.         else:</font>
+<font color="red"> 141.             encoding = None</font>
+<font color="red"> 142.         types_map = self.types_map[True]</font>
+<font color="red"> 143.         if ext in types_map:</font>
+<font color="red"> 144.             return types_map[ext], encoding</font>
+<font color="red"> 145.         elif ext.lower() in types_map:</font>
+<font color="red"> 146.             return types_map[ext.lower()], encoding</font>
+<font color="red"> 147.         elif strict:</font>
+<font color="red"> 148.             return None, encoding</font>
+<font color="red"> 149.         types_map = self.types_map[False]</font>
+<font color="red"> 150.         if ext in types_map:</font>
+<font color="red"> 151.             return types_map[ext], encoding</font>
+<font color="red"> 152.         elif ext.lower() in types_map:</font>
+<font color="red"> 153.             return types_map[ext.lower()], encoding</font>
+<font color="black"> 154.         else:</font>
+<font color="red"> 155.             return None, encoding</font>
+<font color="black"> 156. </font>
+<font color="green"> 157.     def guess_all_extensions(self, type, strict=True):</font>
+<font color="black"> 158.         &quot;&quot;&quot;Guess the extensions for a file based on its MIME type.</font>
+<font color="black"> 159. </font>
+<font color="black"> 160.         Return value is a list of strings giving the possible filename</font>
+<font color="black"> 161.         extensions, including the leading dot ('.').  The extension is not</font>
+<font color="black"> 162.         guaranteed to have been associated with any particular data stream,</font>
+<font color="black"> 163.         but would be mapped to the MIME type `type' by guess_type().</font>
+<font color="black"> 164. </font>
+<font color="black"> 165.         Optional `strict' argument when false adds a bunch of commonly found,</font>
+<font color="black"> 166.         but non-standard types.</font>
+<font color="black"> 167.         &quot;&quot;&quot;</font>
+<font color="red"> 168.         type = type.lower()</font>
+<font color="red"> 169.         extensions = self.types_map_inv[True].get(type, [])</font>
+<font color="red"> 170.         if not strict:</font>
+<font color="red"> 171.             for ext in self.types_map_inv[False].get(type, []):</font>
+<font color="red"> 172.                 if ext not in extensions:</font>
+<font color="red"> 173.                     extensions.append(ext)</font>
+<font color="red"> 174.         return extensions</font>
+<font color="black"> 175. </font>
+<font color="green"> 176.     def guess_extension(self, type, strict=True):</font>
+<font color="black"> 177.         &quot;&quot;&quot;Guess the extension for a file based on its MIME type.</font>
+<font color="black"> 178. </font>
+<font color="black"> 179.         Return value is a string giving a filename extension,</font>
+<font color="black"> 180.         including the leading dot ('.').  The extension is not</font>
+<font color="black"> 181.         guaranteed to have been associated with any particular data</font>
+<font color="black"> 182.         stream, but would be mapped to the MIME type `type' by</font>
+<font color="black"> 183.         guess_type().  If no extension can be guessed for `type', None</font>
+<font color="black"> 184.         is returned.</font>
+<font color="black"> 185. </font>
+<font color="black"> 186.         Optional `strict' argument when false adds a bunch of commonly found,</font>
+<font color="black"> 187.         but non-standard types.</font>
+<font color="black"> 188.         &quot;&quot;&quot;</font>
+<font color="red"> 189.         extensions = self.guess_all_extensions(type, strict)</font>
+<font color="red"> 190.         if not extensions:</font>
+<font color="red"> 191.             return None</font>
+<font color="red"> 192.         return extensions[0]</font>
+<font color="black"> 193. </font>
+<font color="green"> 194.     def read(self, filename, strict=True):</font>
+<font color="black"> 195.         &quot;&quot;&quot;</font>
+<font color="black"> 196.         Read a single mime.types-format file, specified by pathname.</font>
+<font color="black"> 197. </font>
+<font color="black"> 198.         If strict is true, information will be added to</font>
+<font color="black"> 199.         list of standard types, else to the list of non-standard</font>
+<font color="black"> 200.         types.</font>
+<font color="black"> 201.         &quot;&quot;&quot;</font>
+<font color="red"> 202.         with open(filename) as fp:</font>
+<font color="red"> 203.             self.readfp(fp, strict)</font>
+<font color="black"> 204. </font>
+<font color="green"> 205.     def readfp(self, fp, strict=True):</font>
+<font color="black"> 206.         &quot;&quot;&quot;</font>
+<font color="black"> 207.         Read a single mime.types-format file.</font>
+<font color="black"> 208. </font>
+<font color="black"> 209.         If strict is true, information will be added to</font>
+<font color="black"> 210.         list of standard types, else to the list of non-standard</font>
+<font color="black"> 211.         types.</font>
+<font color="black"> 212.         &quot;&quot;&quot;</font>
+<font color="red"> 213.         while 1:</font>
+<font color="red"> 214.             line = fp.readline()</font>
+<font color="red"> 215.             if not line:</font>
+<font color="red"> 216.                 break</font>
+<font color="red"> 217.             words = line.split()</font>
+<font color="red"> 218.             for i in range(len(words)):</font>
+<font color="red"> 219.                 if words[i][0] == '#':</font>
+<font color="red"> 220.                     del words[i:]</font>
+<font color="red"> 221.                     break</font>
+<font color="red"> 222.             if not words:</font>
+<font color="red"> 223.                 continue</font>
+<font color="red"> 224.             type, suffixes = words[0], words[1:]</font>
+<font color="red"> 225.             for suff in suffixes:</font>
+<font color="red"> 226.                 self.add_type(type, '.' + suff, strict)</font>
+<font color="black"> 227. </font>
+<font color="green"> 228.     def read_windows_registry(self, strict=True):</font>
+<font color="black"> 229.         &quot;&quot;&quot;</font>
+<font color="black"> 230.         Load the MIME types database from Windows registry.</font>
+<font color="black"> 231. </font>
+<font color="black"> 232.         If strict is true, information will be added to</font>
+<font color="black"> 233.         list of standard types, else to the list of non-standard</font>
+<font color="black"> 234.         types.</font>
+<font color="black"> 235.         &quot;&quot;&quot;</font>
+<font color="black"> 236. </font>
+<font color="black"> 237.         # Windows only</font>
+<font color="red"> 238.         if not _winreg:</font>
+<font color="red"> 239.             return</font>
+<font color="black"> 240. </font>
+<font color="red"> 241.         def enum_types(mimedb):</font>
+<font color="red"> 242.             i = 0</font>
+<font color="red"> 243.             while True:</font>
+<font color="red"> 244.                 try:</font>
+<font color="red"> 245.                     ctype = _winreg.EnumKey(mimedb, i)</font>
+<font color="red"> 246.                 except EnvironmentError:</font>
+<font color="red"> 247.                     break</font>
+<font color="black"> 248.                 else:</font>
+<font color="red"> 249.                     if '\0' not in ctype:</font>
+<font color="red"> 250.                         yield ctype</font>
+<font color="red"> 251.                 i += 1</font>
+<font color="black"> 252. </font>
+<font color="red"> 253.         default_encoding = sys.getdefaultencoding()</font>
+<font color="red"> 254.         with _winreg.OpenKey(_winreg.HKEY_CLASSES_ROOT, '') as hkcr:</font>
+<font color="red"> 255.             for subkeyname in enum_types(hkcr):</font>
+<font color="red"> 256.                 try:</font>
+<font color="red"> 257.                     with _winreg.OpenKey(hkcr, subkeyname) as subkey:</font>
+<font color="black"> 258.                         # Only check file extensions</font>
+<font color="red"> 259.                         if not subkeyname.startswith(&quot;.&quot;):</font>
+<font color="red"> 260.                             continue</font>
+<font color="black"> 261.                         # raises EnvironmentError if no 'Content Type' value</font>
+<font color="red"> 262.                         mimetype, datatype = _winreg.QueryValueEx(</font>
+<font color="red"> 263.                             subkey, 'Content Type')</font>
+<font color="red"> 264.                         if datatype != _winreg.REG_SZ:</font>
+<font color="red"> 265.                             continue</font>
+<font color="red"> 266.                         try:</font>
+<font color="red"> 267.                             mimetype = mimetype.encode(default_encoding)</font>
+<font color="red"> 268.                         except UnicodeEncodeError:</font>
+<font color="red"> 269.                             continue</font>
+<font color="red"> 270.                         self.add_type(mimetype, subkeyname, strict)</font>
+<font color="red"> 271.                 except EnvironmentError:</font>
+<font color="red"> 272.                     continue</font>
+<font color="black"> 273. </font>
+<font color="green"> 274. def guess_type(url, strict=True):</font>
+<font color="black"> 275.     &quot;&quot;&quot;Guess the type of a file based on its URL.</font>
+<font color="black"> 276. </font>
+<font color="black"> 277.     Return value is a tuple (type, encoding) where type is None if the</font>
+<font color="black"> 278.     type can't be guessed (no or unknown suffix) or a string of the</font>
+<font color="black"> 279.     form type/subtype, usable for a MIME Content-type header; and</font>
+<font color="black"> 280.     encoding is None for no encoding or the name of the program used</font>
+<font color="black"> 281.     to encode (e.g. compress or gzip).  The mappings are table</font>
+<font color="black"> 282.     driven.  Encoding suffixes are case sensitive; type suffixes are</font>
+<font color="black"> 283.     first tried case sensitive, then case insensitive.</font>
+<font color="black"> 284. </font>
+<font color="black"> 285.     The suffixes .tgz, .taz and .tz (case sensitive!) are all mapped</font>
+<font color="black"> 286.     to &quot;.tar.gz&quot;.  (This is table-driven too, using the dictionary</font>
+<font color="black"> 287.     suffix_map).</font>
+<font color="black"> 288. </font>
+<font color="black"> 289.     Optional `strict' argument when false adds a bunch of commonly found, but</font>
+<font color="black"> 290.     non-standard types.</font>
+<font color="black"> 291.     &quot;&quot;&quot;</font>
+<font color="red"> 292.     if _db is None:</font>
+<font color="red"> 293.         init()</font>
+<font color="red"> 294.     return _db.guess_type(url, strict)</font>
+<font color="black"> 295. </font>
+<font color="black"> 296. </font>
+<font color="green"> 297. def guess_all_extensions(type, strict=True):</font>
+<font color="black"> 298.     &quot;&quot;&quot;Guess the extensions for a file based on its MIME type.</font>
+<font color="black"> 299. </font>
+<font color="black"> 300.     Return value is a list of strings giving the possible filename</font>
+<font color="black"> 301.     extensions, including the leading dot ('.').  The extension is not</font>
+<font color="black"> 302.     guaranteed to have been associated with any particular data</font>
+<font color="black"> 303.     stream, but would be mapped to the MIME type `type' by</font>
+<font color="black"> 304.     guess_type().  If no extension can be guessed for `type', None</font>
+<font color="black"> 305.     is returned.</font>
+<font color="black"> 306. </font>
+<font color="black"> 307.     Optional `strict' argument when false adds a bunch of commonly found,</font>
+<font color="black"> 308.     but non-standard types.</font>
+<font color="black"> 309.     &quot;&quot;&quot;</font>
+<font color="red"> 310.     if _db is None:</font>
+<font color="red"> 311.         init()</font>
+<font color="red"> 312.     return _db.guess_all_extensions(type, strict)</font>
+<font color="black"> 313. </font>
+<font color="green"> 314. def guess_extension(type, strict=True):</font>
+<font color="black"> 315.     &quot;&quot;&quot;Guess the extension for a file based on its MIME type.</font>
+<font color="black"> 316. </font>
+<font color="black"> 317.     Return value is a string giving a filename extension, including the</font>
+<font color="black"> 318.     leading dot ('.').  The extension is not guaranteed to have been</font>
+<font color="black"> 319.     associated with any particular data stream, but would be mapped to the</font>
+<font color="black"> 320.     MIME type `type' by guess_type().  If no extension can be guessed for</font>
+<font color="black"> 321.     `type', None is returned.</font>
+<font color="black"> 322. </font>
+<font color="black"> 323.     Optional `strict' argument when false adds a bunch of commonly found,</font>
+<font color="black"> 324.     but non-standard types.</font>
+<font color="black"> 325.     &quot;&quot;&quot;</font>
+<font color="red"> 326.     if _db is None:</font>
+<font color="red"> 327.         init()</font>
+<font color="red"> 328.     return _db.guess_extension(type, strict)</font>
+<font color="black"> 329. </font>
+<font color="green"> 330. def add_type(type, ext, strict=True):</font>
+<font color="black"> 331.     &quot;&quot;&quot;Add a mapping between a type and an extension.</font>
+<font color="black"> 332. </font>
+<font color="black"> 333.     When the extension is already known, the new</font>
+<font color="black"> 334.     type will replace the old one. When the type</font>
+<font color="black"> 335.     is already known the extension will be added</font>
+<font color="black"> 336.     to the list of known extensions.</font>
+<font color="black"> 337. </font>
+<font color="black"> 338.     If strict is true, information will be added to</font>
+<font color="black"> 339.     list of standard types, else to the list of non-standard</font>
+<font color="black"> 340.     types.</font>
+<font color="black"> 341.     &quot;&quot;&quot;</font>
+<font color="red"> 342.     if _db is None:</font>
+<font color="red"> 343.         init()</font>
+<font color="red"> 344.     return _db.add_type(type, ext, strict)</font>
+<font color="black"> 345. </font>
+<font color="black"> 346. </font>
+<font color="green"> 347. def init(files=None):</font>
+<font color="black"> 348.     global suffix_map, types_map, encodings_map, common_types</font>
+<font color="black"> 349.     global inited, _db</font>
+<font color="red"> 350.     inited = True    # so that MimeTypes.__init__() doesn't call us again</font>
+<font color="red"> 351.     db = MimeTypes()</font>
+<font color="red"> 352.     if files is None:</font>
+<font color="red"> 353.         if _winreg:</font>
+<font color="red"> 354.             db.read_windows_registry()</font>
+<font color="red"> 355.         files = knownfiles</font>
+<font color="red"> 356.     for file in files:</font>
+<font color="red"> 357.         if os.path.isfile(file):</font>
+<font color="red"> 358.             db.read(file)</font>
+<font color="red"> 359.     encodings_map = db.encodings_map</font>
+<font color="red"> 360.     suffix_map = db.suffix_map</font>
+<font color="red"> 361.     types_map = db.types_map[True]</font>
+<font color="red"> 362.     common_types = db.types_map[False]</font>
+<font color="black"> 363.     # Make the DB a global variable now that it is fully initialized</font>
+<font color="red"> 364.     _db = db</font>
+<font color="black"> 365. </font>
+<font color="black"> 366. </font>
+<font color="green"> 367. def read_mime_types(file):</font>
+<font color="red"> 368.     try:</font>
+<font color="red"> 369.         f = open(file)</font>
+<font color="red"> 370.     except IOError:</font>
+<font color="red"> 371.         return None</font>
+<font color="red"> 372.     with f:</font>
+<font color="red"> 373.         db = MimeTypes()</font>
+<font color="red"> 374.         db.readfp(f, True)</font>
+<font color="red"> 375.         return db.types_map[True]</font>
+<font color="black"> 376. </font>
+<font color="black"> 377. </font>
+<font color="green"> 378. def _default_mime_types():</font>
+<font color="black"> 379.     global suffix_map</font>
+<font color="black"> 380.     global encodings_map</font>
+<font color="black"> 381.     global types_map</font>
+<font color="black"> 382.     global common_types</font>
+<font color="black"> 383. </font>
+<font color="green"> 384.     suffix_map = {</font>
+<font color="green"> 385.         '.svgz': '.svg.gz',</font>
+<font color="green"> 386.         '.tgz': '.tar.gz',</font>
+<font color="green"> 387.         '.taz': '.tar.gz',</font>
+<font color="green"> 388.         '.tz': '.tar.gz',</font>
+<font color="green"> 389.         '.tbz2': '.tar.bz2',</font>
+<font color="green"> 390.         '.txz': '.tar.xz',</font>
+<font color="black"> 391.         }</font>
+<font color="black"> 392. </font>
+<font color="green"> 393.     encodings_map = {</font>
+<font color="green"> 394.         '.gz': 'gzip',</font>
+<font color="green"> 395.         '.Z': 'compress',</font>
+<font color="green"> 396.         '.bz2': 'bzip2',</font>
+<font color="green"> 397.         '.xz': 'xz',</font>
+<font color="black"> 398.         }</font>
+<font color="black"> 399. </font>
+<font color="black"> 400.     # Before adding new types, make sure they are either registered with IANA,</font>
+<font color="black"> 401.     # at http://www.isi.edu/in-notes/iana/assignments/media-types</font>
+<font color="black"> 402.     # or extensions, i.e. using the x- prefix</font>
+<font color="black"> 403. </font>
+<font color="black"> 404.     # If you add to these, please keep them sorted!</font>
+<font color="green"> 405.     types_map = {</font>
+<font color="green"> 406.         '.a'      : 'application/octet-stream',</font>
+<font color="green"> 407.         '.ai'     : 'application/postscript',</font>
+<font color="green"> 408.         '.aif'    : 'audio/x-aiff',</font>
+<font color="green"> 409.         '.aifc'   : 'audio/x-aiff',</font>
+<font color="green"> 410.         '.aiff'   : 'audio/x-aiff',</font>
+<font color="green"> 411.         '.au'     : 'audio/basic',</font>
+<font color="green"> 412.         '.avi'    : 'video/x-msvideo',</font>
+<font color="green"> 413.         '.bat'    : 'text/plain',</font>
+<font color="green"> 414.         '.bcpio'  : 'application/x-bcpio',</font>
+<font color="green"> 415.         '.bin'    : 'application/octet-stream',</font>
+<font color="green"> 416.         '.bmp'    : 'image/x-ms-bmp',</font>
+<font color="green"> 417.         '.c'      : 'text/plain',</font>
+<font color="black"> 418.         # Duplicates :(</font>
+<font color="green"> 419.         '.cdf'    : 'application/x-cdf',</font>
+<font color="green"> 420.         '.cdf'    : 'application/x-netcdf',</font>
+<font color="green"> 421.         '.cpio'   : 'application/x-cpio',</font>
+<font color="green"> 422.         '.csh'    : 'application/x-csh',</font>
+<font color="green"> 423.         '.css'    : 'text/css',</font>
+<font color="green"> 424.         '.csv'    : 'text/csv',</font>
+<font color="green"> 425.         '.dll'    : 'application/octet-stream',</font>
+<font color="green"> 426.         '.doc'    : 'application/msword',</font>
+<font color="green"> 427.         '.dot'    : 'application/msword',</font>
+<font color="green"> 428.         '.dvi'    : 'application/x-dvi',</font>
+<font color="green"> 429.         '.eml'    : 'message/rfc822',</font>
+<font color="green"> 430.         '.eps'    : 'application/postscript',</font>
+<font color="green"> 431.         '.etx'    : 'text/x-setext',</font>
+<font color="green"> 432.         '.exe'    : 'application/octet-stream',</font>
+<font color="green"> 433.         '.gif'    : 'image/gif',</font>
+<font color="green"> 434.         '.gtar'   : 'application/x-gtar',</font>
+<font color="green"> 435.         '.h'      : 'text/plain',</font>
+<font color="green"> 436.         '.hdf'    : 'application/x-hdf',</font>
+<font color="green"> 437.         '.htm'    : 'text/html',</font>
+<font color="green"> 438.         '.html'   : 'text/html',</font>
+<font color="green"> 439.         '.ico'    : 'image/vnd.microsoft.icon',</font>
+<font color="green"> 440.         '.ief'    : 'image/ief',</font>
+<font color="green"> 441.         '.jpe'    : 'image/jpeg',</font>
+<font color="green"> 442.         '.jpeg'   : 'image/jpeg',</font>
+<font color="green"> 443.         '.jpg'    : 'image/jpeg',</font>
+<font color="green"> 444.         '.js'     : 'application/javascript',</font>
+<font color="green"> 445.         '.json'   : 'application/json',</font>
+<font color="green"> 446.         '.ksh'    : 'text/plain',</font>
+<font color="green"> 447.         '.latex'  : 'application/x-latex',</font>
+<font color="green"> 448.         '.m1v'    : 'video/mpeg',</font>
+<font color="green"> 449.         '.man'    : 'application/x-troff-man',</font>
+<font color="green"> 450.         '.me'     : 'application/x-troff-me',</font>
+<font color="green"> 451.         '.mht'    : 'message/rfc822',</font>
+<font color="green"> 452.         '.mhtml'  : 'message/rfc822',</font>
+<font color="green"> 453.         '.mif'    : 'application/x-mif',</font>
+<font color="green"> 454.         '.mov'    : 'video/quicktime',</font>
+<font color="green"> 455.         '.movie'  : 'video/x-sgi-movie',</font>
+<font color="green"> 456.         '.mp2'    : 'audio/mpeg',</font>
+<font color="green"> 457.         '.mp3'    : 'audio/mpeg',</font>
+<font color="green"> 458.         '.mp4'    : 'video/mp4',</font>
+<font color="green"> 459.         '.mpa'    : 'video/mpeg',</font>
+<font color="green"> 460.         '.mpe'    : 'video/mpeg',</font>
+<font color="green"> 461.         '.mpeg'   : 'video/mpeg',</font>
+<font color="green"> 462.         '.mpg'    : 'video/mpeg',</font>
+<font color="green"> 463.         '.ms'     : 'application/x-troff-ms',</font>
+<font color="green"> 464.         '.nc'     : 'application/x-netcdf',</font>
+<font color="green"> 465.         '.nws'    : 'message/rfc822',</font>
+<font color="green"> 466.         '.o'      : 'application/octet-stream',</font>
+<font color="green"> 467.         '.obj'    : 'application/octet-stream',</font>
+<font color="green"> 468.         '.oda'    : 'application/oda',</font>
+<font color="green"> 469.         '.p12'    : 'application/x-pkcs12',</font>
+<font color="green"> 470.         '.p7c'    : 'application/pkcs7-mime',</font>
+<font color="green"> 471.         '.pbm'    : 'image/x-portable-bitmap',</font>
+<font color="green"> 472.         '.pdf'    : 'application/pdf',</font>
+<font color="green"> 473.         '.pfx'    : 'application/x-pkcs12',</font>
+<font color="green"> 474.         '.pgm'    : 'image/x-portable-graymap',</font>
+<font color="green"> 475.         '.pl'     : 'text/plain',</font>
+<font color="green"> 476.         '.png'    : 'image/png',</font>
+<font color="green"> 477.         '.pnm'    : 'image/x-portable-anymap',</font>
+<font color="green"> 478.         '.pot'    : 'application/vnd.ms-powerpoint',</font>
+<font color="green"> 479.         '.ppa'    : 'application/vnd.ms-powerpoint',</font>
+<font color="green"> 480.         '.ppm'    : 'image/x-portable-pixmap',</font>
+<font color="green"> 481.         '.pps'    : 'application/vnd.ms-powerpoint',</font>
+<font color="green"> 482.         '.ppt'    : 'application/vnd.ms-powerpoint',</font>
+<font color="green"> 483.         '.ps'     : 'application/postscript',</font>
+<font color="green"> 484.         '.pwz'    : 'application/vnd.ms-powerpoint',</font>
+<font color="green"> 485.         '.py'     : 'text/x-python',</font>
+<font color="green"> 486.         '.pyc'    : 'application/x-python-code',</font>
+<font color="green"> 487.         '.pyo'    : 'application/x-python-code',</font>
+<font color="green"> 488.         '.qt'     : 'video/quicktime',</font>
+<font color="green"> 489.         '.ra'     : 'audio/x-pn-realaudio',</font>
+<font color="green"> 490.         '.ram'    : 'application/x-pn-realaudio',</font>
+<font color="green"> 491.         '.ras'    : 'image/x-cmu-raster',</font>
+<font color="green"> 492.         '.rdf'    : 'application/xml',</font>
+<font color="green"> 493.         '.rgb'    : 'image/x-rgb',</font>
+<font color="green"> 494.         '.roff'   : 'application/x-troff',</font>
+<font color="green"> 495.         '.rtx'    : 'text/richtext',</font>
+<font color="green"> 496.         '.sgm'    : 'text/x-sgml',</font>
+<font color="green"> 497.         '.sgml'   : 'text/x-sgml',</font>
+<font color="green"> 498.         '.sh'     : 'application/x-sh',</font>
+<font color="green"> 499.         '.shar'   : 'application/x-shar',</font>
+<font color="green"> 500.         '.snd'    : 'audio/basic',</font>
+<font color="green"> 501.         '.so'     : 'application/octet-stream',</font>
+<font color="green"> 502.         '.src'    : 'application/x-wais-source',</font>
+<font color="green"> 503.         '.sv4cpio': 'application/x-sv4cpio',</font>
+<font color="green"> 504.         '.sv4crc' : 'application/x-sv4crc',</font>
+<font color="green"> 505.         '.svg'    : 'image/svg+xml',</font>
+<font color="green"> 506.         '.swf'    : 'application/x-shockwave-flash',</font>
+<font color="green"> 507.         '.t'      : 'application/x-troff',</font>
+<font color="green"> 508.         '.tar'    : 'application/x-tar',</font>
+<font color="green"> 509.         '.tcl'    : 'application/x-tcl',</font>
+<font color="green"> 510.         '.tex'    : 'application/x-tex',</font>
+<font color="green"> 511.         '.texi'   : 'application/x-texinfo',</font>
+<font color="green"> 512.         '.texinfo': 'application/x-texinfo',</font>
+<font color="green"> 513.         '.tif'    : 'image/tiff',</font>
+<font color="green"> 514.         '.tiff'   : 'image/tiff',</font>
+<font color="green"> 515.         '.tr'     : 'application/x-troff',</font>
+<font color="green"> 516.         '.tsv'    : 'text/tab-separated-values',</font>
+<font color="green"> 517.         '.txt'    : 'text/plain',</font>
+<font color="green"> 518.         '.ustar'  : 'application/x-ustar',</font>
+<font color="green"> 519.         '.vcf'    : 'text/x-vcard',</font>
+<font color="green"> 520.         '.wav'    : 'audio/x-wav',</font>
+<font color="green"> 521.         '.webm'   : 'video/webm',</font>
+<font color="green"> 522.         '.wiz'    : 'application/msword',</font>
+<font color="green"> 523.         '.wsdl'   : 'application/xml',</font>
+<font color="green"> 524.         '.xbm'    : 'image/x-xbitmap',</font>
+<font color="green"> 525.         '.xlb'    : 'application/vnd.ms-excel',</font>
+<font color="black"> 526.         # Duplicates :(</font>
+<font color="green"> 527.         '.xls'    : 'application/excel',</font>
+<font color="green"> 528.         '.xls'    : 'application/vnd.ms-excel',</font>
+<font color="green"> 529.         '.xml'    : 'text/xml',</font>
+<font color="green"> 530.         '.xpdl'   : 'application/xml',</font>
+<font color="green"> 531.         '.xpm'    : 'image/x-xpixmap',</font>
+<font color="green"> 532.         '.xsl'    : 'application/xml',</font>
+<font color="green"> 533.         '.xwd'    : 'image/x-xwindowdump',</font>
+<font color="green"> 534.         '.zip'    : 'application/zip',</font>
+<font color="black"> 535.         }</font>
+<font color="black"> 536. </font>
+<font color="black"> 537.     # These are non-standard types, commonly found in the wild.  They will</font>
+<font color="black"> 538.     # only match if strict=0 flag is given to the API methods.</font>
+<font color="black"> 539. </font>
+<font color="black"> 540.     # Please sort these too</font>
+<font color="green"> 541.     common_types = {</font>
+<font color="green"> 542.         '.jpg' : 'image/jpg',</font>
+<font color="green"> 543.         '.mid' : 'audio/midi',</font>
+<font color="green"> 544.         '.midi': 'audio/midi',</font>
+<font color="green"> 545.         '.pct' : 'image/pict',</font>
+<font color="green"> 546.         '.pic' : 'image/pict',</font>
+<font color="green"> 547.         '.pict': 'image/pict',</font>
+<font color="green"> 548.         '.rtf' : 'application/rtf',</font>
+<font color="green"> 549.         '.xul' : 'text/xul'</font>
+<font color="black"> 550.         }</font>
+<font color="black"> 551. </font>
+<font color="black"> 552. </font>
+<font color="green"> 553. _default_mime_types()</font>
+<font color="black"> 554. </font>
+<font color="black"> 555. </font>
+<font color="green"> 556. if __name__ == '__main__':</font>
+<font color="red"> 557.     import getopt</font>
+<font color="black"> 558. </font>
+<font color="black"> 559.     USAGE = &quot;&quot;&quot;\</font>
+<font color="black"> 560. Usage: mimetypes.py [options] type</font>
+<font color="black"> 561. </font>
+<font color="black"> 562. Options:</font>
+<font color="black"> 563.     --help / -h       -- print this message and exit</font>
+<font color="black"> 564.     --lenient / -l    -- additionally search of some common, but non-standard</font>
+<font color="black"> 565.                          types.</font>
+<font color="black"> 566.     --extension / -e  -- guess extension instead of type</font>
+<font color="black"> 567. </font>
+<font color="black"> 568. More than one type argument may be given.</font>
+<font color="red"> 569. &quot;&quot;&quot;</font>
+<font color="black"> 570. </font>
+<font color="red"> 571.     def usage(code, msg=''):</font>
+<font color="red"> 572.         print USAGE</font>
+<font color="red"> 573.         if msg: print msg</font>
+<font color="red"> 574.         sys.exit(code)</font>
+<font color="black"> 575. </font>
+<font color="red"> 576.     try:</font>
+<font color="red"> 577.         opts, args = getopt.getopt(sys.argv[1:], 'hle',</font>
+<font color="red"> 578.                                    ['help', 'lenient', 'extension'])</font>
+<font color="red"> 579.     except getopt.error, msg:</font>
+<font color="red"> 580.         usage(1, msg)</font>
+<font color="black"> 581. </font>
+<font color="red"> 582.     strict = 1</font>
+<font color="red"> 583.     extension = 0</font>
+<font color="red"> 584.     for opt, arg in opts:</font>
+<font color="red"> 585.         if opt in ('-h', '--help'):</font>
+<font color="red"> 586.             usage(0)</font>
+<font color="red"> 587.         elif opt in ('-l', '--lenient'):</font>
+<font color="red"> 588.             strict = 0</font>
+<font color="red"> 589.         elif opt in ('-e', '--extension'):</font>
+<font color="red"> 590.             extension = 1</font>
+<font color="red"> 591.     for gtype in args:</font>
+<font color="red"> 592.         if extension:</font>
+<font color="red"> 593.             guess = guess_extension(gtype, strict)</font>
+<font color="red"> 594.             if not guess: print &quot;I don't know anything about type&quot;, gtype</font>
+<font color="red"> 595.             else: print guess</font>
+<font color="black"> 596.         else:</font>
+<font color="red"> 597.             guess, encoding = guess_type(gtype, strict)</font>
+<font color="red"> 598.             if not guess: print &quot;I don't know anything about type&quot;, gtype</font>
+<font color="red"> 599.             else: print 'type:', guess, 'encoding:', encoding</font>
+</pre>
+

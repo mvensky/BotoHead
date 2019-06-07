@@ -1,0 +1,440 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/copy.py</b><br>
+
+
+file stats: <b>305 lines, 90 executed: 29.5% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Generic (shallow and deep) copying operations.</font>
+<font color="black">   2. </font>
+<font color="black">   3. Interface summary:</font>
+<font color="black">   4. </font>
+<font color="black">   5.         import copy</font>
+<font color="black">   6. </font>
+<font color="black">   7.         x = copy.copy(y)        # make a shallow copy of y</font>
+<font color="black">   8.         x = copy.deepcopy(y)    # make a deep copy of y</font>
+<font color="black">   9. </font>
+<font color="black">  10. For module specific errors, copy.Error is raised.</font>
+<font color="black">  11. </font>
+<font color="black">  12. The difference between shallow and deep copying is only relevant for</font>
+<font color="black">  13. compound objects (objects that contain other objects, like lists or</font>
+<font color="black">  14. class instances).</font>
+<font color="black">  15. </font>
+<font color="black">  16. - A shallow copy constructs a new compound object and then (to the</font>
+<font color="black">  17.   extent possible) inserts *the same objects* into it that the</font>
+<font color="black">  18.   original contains.</font>
+<font color="black">  19. </font>
+<font color="black">  20. - A deep copy constructs a new compound object and then, recursively,</font>
+<font color="black">  21.   inserts *copies* into it of the objects found in the original.</font>
+<font color="black">  22. </font>
+<font color="black">  23. Two problems often exist with deep copy operations that don't exist</font>
+<font color="black">  24. with shallow copy operations:</font>
+<font color="black">  25. </font>
+<font color="black">  26.  a) recursive objects (compound objects that, directly or indirectly,</font>
+<font color="black">  27.     contain a reference to themselves) may cause a recursive loop</font>
+<font color="black">  28. </font>
+<font color="black">  29.  b) because deep copy copies *everything* it may copy too much, e.g.</font>
+<font color="black">  30.     administrative data structures that should be shared even between</font>
+<font color="black">  31.     copies</font>
+<font color="black">  32. </font>
+<font color="black">  33. Python's deep copy operation avoids these problems by:</font>
+<font color="black">  34. </font>
+<font color="black">  35.  a) keeping a table of objects already copied during the current</font>
+<font color="black">  36.     copying pass</font>
+<font color="black">  37. </font>
+<font color="black">  38.  b) letting user-defined classes override the copying operation or the</font>
+<font color="black">  39.     set of components copied</font>
+<font color="black">  40. </font>
+<font color="black">  41. This version does not copy types like module, class, function, method,</font>
+<font color="black">  42. nor stack trace, stack frame, nor file, socket, window, nor array, nor</font>
+<font color="black">  43. any similar types.</font>
+<font color="black">  44. </font>
+<font color="black">  45. Classes can use the same interfaces to control copying that they use</font>
+<font color="black">  46. to control pickling: they can define methods called __getinitargs__(),</font>
+<font color="black">  47. __getstate__() and __setstate__().  See the documentation for module</font>
+<font color="black">  48. &quot;pickle&quot; for information on these methods.</font>
+<font color="red">  49. &quot;&quot;&quot;</font>
+<font color="black">  50. </font>
+<font color="red">  51. import types</font>
+<font color="red">  52. import weakref</font>
+<font color="red">  53. from copy_reg import dispatch_table</font>
+<font color="black">  54. </font>
+<font color="red">  55. class Error(Exception):</font>
+<font color="red">  56.     pass</font>
+<font color="red">  57. error = Error   # backward compatibility</font>
+<font color="black">  58. </font>
+<font color="red">  59. try:</font>
+<font color="red">  60.     from org.python.core import PyStringMap</font>
+<font color="red">  61. except ImportError:</font>
+<font color="red">  62.     PyStringMap = None</font>
+<font color="black">  63. </font>
+<font color="red">  64. __all__ = [&quot;Error&quot;, &quot;copy&quot;, &quot;deepcopy&quot;]</font>
+<font color="black">  65. </font>
+<font color="red">  66. def copy(x):</font>
+<font color="black">  67.     &quot;&quot;&quot;Shallow copy operation on arbitrary Python objects.</font>
+<font color="black">  68. </font>
+<font color="black">  69.     See the module's __doc__ string for more info.</font>
+<font color="black">  70.     &quot;&quot;&quot;</font>
+<font color="black">  71. </font>
+<font color="green">  72.     cls = type(x)</font>
+<font color="black">  73. </font>
+<font color="green">  74.     copier = _copy_dispatch.get(cls)</font>
+<font color="green">  75.     if copier:</font>
+<font color="green">  76.         return copier(x)</font>
+<font color="black">  77. </font>
+<font color="green">  78.     copier = getattr(cls, &quot;__copy__&quot;, None)</font>
+<font color="green">  79.     if copier:</font>
+<font color="green">  80.         return copier(x)</font>
+<font color="black">  81. </font>
+<font color="green">  82.     reductor = dispatch_table.get(cls)</font>
+<font color="green">  83.     if reductor:</font>
+<font color="red">  84.         rv = reductor(x)</font>
+<font color="black">  85.     else:</font>
+<font color="green">  86.         reductor = getattr(x, &quot;__reduce_ex__&quot;, None)</font>
+<font color="green">  87.         if reductor:</font>
+<font color="green">  88.             rv = reductor(2)</font>
+<font color="black">  89.         else:</font>
+<font color="green">  90.             reductor = getattr(x, &quot;__reduce__&quot;, None)</font>
+<font color="green">  91.             if reductor:</font>
+<font color="red">  92.                 rv = reductor()</font>
+<font color="black">  93.             else:</font>
+<font color="green">  94.                 raise Error(&quot;un(shallow)copyable object of type %s&quot; % cls)</font>
+<font color="black">  95. </font>
+<font color="green">  96.     return _reconstruct(x, rv, 0)</font>
+<font color="black">  97. </font>
+<font color="black">  98. </font>
+<font color="red">  99. _copy_dispatch = d = {}</font>
+<font color="black"> 100. </font>
+<font color="red"> 101. def _copy_immutable(x):</font>
+<font color="red"> 102.     return x</font>
+<font color="red"> 103. for t in (type(None), int, long, float, bool, str, tuple,</font>
+<font color="red"> 104.           frozenset, type, xrange, types.ClassType,</font>
+<font color="red"> 105.           types.BuiltinFunctionType, type(Ellipsis),</font>
+<font color="red"> 106.           types.FunctionType, weakref.ref):</font>
+<font color="red"> 107.     d[t] = _copy_immutable</font>
+<font color="red"> 108. for name in (&quot;ComplexType&quot;, &quot;UnicodeType&quot;, &quot;CodeType&quot;):</font>
+<font color="red"> 109.     t = getattr(types, name, None)</font>
+<font color="red"> 110.     if t is not None:</font>
+<font color="red"> 111.         d[t] = _copy_immutable</font>
+<font color="black"> 112. </font>
+<font color="red"> 113. def _copy_with_constructor(x):</font>
+<font color="green"> 114.     return type(x)(x)</font>
+<font color="red"> 115. for t in (list, dict, set):</font>
+<font color="red"> 116.     d[t] = _copy_with_constructor</font>
+<font color="black"> 117. </font>
+<font color="red"> 118. def _copy_with_copy_method(x):</font>
+<font color="red"> 119.     return x.copy()</font>
+<font color="red"> 120. if PyStringMap is not None:</font>
+<font color="red"> 121.     d[PyStringMap] = _copy_with_copy_method</font>
+<font color="black"> 122. </font>
+<font color="red"> 123. def _copy_inst(x):</font>
+<font color="red"> 124.     if hasattr(x, '__copy__'):</font>
+<font color="red"> 125.         return x.__copy__()</font>
+<font color="red"> 126.     if hasattr(x, '__getinitargs__'):</font>
+<font color="red"> 127.         args = x.__getinitargs__()</font>
+<font color="red"> 128.         y = x.__class__(*args)</font>
+<font color="black"> 129.     else:</font>
+<font color="red"> 130.         y = _EmptyClass()</font>
+<font color="red"> 131.         y.__class__ = x.__class__</font>
+<font color="red"> 132.     if hasattr(x, '__getstate__'):</font>
+<font color="red"> 133.         state = x.__getstate__()</font>
+<font color="black"> 134.     else:</font>
+<font color="red"> 135.         state = x.__dict__</font>
+<font color="red"> 136.     if hasattr(y, '__setstate__'):</font>
+<font color="red"> 137.         y.__setstate__(state)</font>
+<font color="black"> 138.     else:</font>
+<font color="red"> 139.         y.__dict__.update(state)</font>
+<font color="red"> 140.     return y</font>
+<font color="red"> 141. d[types.InstanceType] = _copy_inst</font>
+<font color="black"> 142. </font>
+<font color="red"> 143. del d</font>
+<font color="black"> 144. </font>
+<font color="red"> 145. def deepcopy(x, memo=None, _nil=[]):</font>
+<font color="black"> 146.     &quot;&quot;&quot;Deep copy operation on arbitrary Python objects.</font>
+<font color="black"> 147. </font>
+<font color="black"> 148.     See the module's __doc__ string for more info.</font>
+<font color="black"> 149.     &quot;&quot;&quot;</font>
+<font color="black"> 150. </font>
+<font color="green"> 151.     if memo is None:</font>
+<font color="green"> 152.         memo = {}</font>
+<font color="black"> 153. </font>
+<font color="green"> 154.     d = id(x)</font>
+<font color="green"> 155.     y = memo.get(d, _nil)</font>
+<font color="green"> 156.     if y is not _nil:</font>
+<font color="red"> 157.         return y</font>
+<font color="black"> 158. </font>
+<font color="green"> 159.     cls = type(x)</font>
+<font color="black"> 160. </font>
+<font color="green"> 161.     copier = _deepcopy_dispatch.get(cls)</font>
+<font color="green"> 162.     if copier:</font>
+<font color="green"> 163.         y = copier(x, memo)</font>
+<font color="black"> 164.     else:</font>
+<font color="green"> 165.         try:</font>
+<font color="green"> 166.             issc = issubclass(cls, type)</font>
+<font color="red"> 167.         except TypeError: # cls is not a class (old Boost; see SF #502085)</font>
+<font color="red"> 168.             issc = 0</font>
+<font color="green"> 169.         if issc:</font>
+<font color="red"> 170.             y = _deepcopy_atomic(x, memo)</font>
+<font color="black"> 171.         else:</font>
+<font color="green"> 172.             copier = getattr(x, &quot;__deepcopy__&quot;, None)</font>
+<font color="green"> 173.             if copier:</font>
+<font color="red"> 174.                 y = copier(memo)</font>
+<font color="black"> 175.             else:</font>
+<font color="green"> 176.                 reductor = dispatch_table.get(cls)</font>
+<font color="green"> 177.                 if reductor:</font>
+<font color="red"> 178.                     rv = reductor(x)</font>
+<font color="black"> 179.                 else:</font>
+<font color="green"> 180.                     reductor = getattr(x, &quot;__reduce_ex__&quot;, None)</font>
+<font color="green"> 181.                     if reductor:</font>
+<font color="green"> 182.                         rv = reductor(2)</font>
+<font color="black"> 183.                     else:</font>
+<font color="red"> 184.                         reductor = getattr(x, &quot;__reduce__&quot;, None)</font>
+<font color="red"> 185.                         if reductor:</font>
+<font color="red"> 186.                             rv = reductor()</font>
+<font color="black"> 187.                         else:</font>
+<font color="red"> 188.                             raise Error(</font>
+<font color="red"> 189.                                 &quot;un(deep)copyable object of type %s&quot; % cls)</font>
+<font color="green"> 190.                 y = _reconstruct(x, rv, 1, memo)</font>
+<font color="black"> 191. </font>
+<font color="green"> 192.     memo[d] = y</font>
+<font color="green"> 193.     _keep_alive(x, memo) # Make sure x lives at least as long as d</font>
+<font color="green"> 194.     return y</font>
+<font color="black"> 195. </font>
+<font color="red"> 196. _deepcopy_dispatch = d = {}</font>
+<font color="black"> 197. </font>
+<font color="red"> 198. def _deepcopy_atomic(x, memo):</font>
+<font color="green"> 199.     return x</font>
+<font color="red"> 200. d[type(None)] = _deepcopy_atomic</font>
+<font color="red"> 201. d[type(Ellipsis)] = _deepcopy_atomic</font>
+<font color="red"> 202. d[int] = _deepcopy_atomic</font>
+<font color="red"> 203. d[long] = _deepcopy_atomic</font>
+<font color="red"> 204. d[float] = _deepcopy_atomic</font>
+<font color="red"> 205. d[bool] = _deepcopy_atomic</font>
+<font color="red"> 206. try:</font>
+<font color="red"> 207.     d[complex] = _deepcopy_atomic</font>
+<font color="red"> 208. except NameError:</font>
+<font color="red"> 209.     pass</font>
+<font color="red"> 210. d[str] = _deepcopy_atomic</font>
+<font color="red"> 211. try:</font>
+<font color="red"> 212.     d[unicode] = _deepcopy_atomic</font>
+<font color="red"> 213. except NameError:</font>
+<font color="red"> 214.     pass</font>
+<font color="red"> 215. try:</font>
+<font color="red"> 216.     d[types.CodeType] = _deepcopy_atomic</font>
+<font color="red"> 217. except AttributeError:</font>
+<font color="red"> 218.     pass</font>
+<font color="red"> 219. d[type] = _deepcopy_atomic</font>
+<font color="red"> 220. d[xrange] = _deepcopy_atomic</font>
+<font color="red"> 221. d[types.ClassType] = _deepcopy_atomic</font>
+<font color="red"> 222. d[types.BuiltinFunctionType] = _deepcopy_atomic</font>
+<font color="red"> 223. d[types.FunctionType] = _deepcopy_atomic</font>
+<font color="red"> 224. d[weakref.ref] = _deepcopy_atomic</font>
+<font color="black"> 225. </font>
+<font color="red"> 226. def _deepcopy_list(x, memo):</font>
+<font color="green"> 227.     y = []</font>
+<font color="green"> 228.     memo[id(x)] = y</font>
+<font color="green"> 229.     for a in x:</font>
+<font color="green"> 230.         y.append(deepcopy(a, memo))</font>
+<font color="green"> 231.     return y</font>
+<font color="red"> 232. d[list] = _deepcopy_list</font>
+<font color="black"> 233. </font>
+<font color="red"> 234. def _deepcopy_tuple(x, memo):</font>
+<font color="green"> 235.     y = []</font>
+<font color="green"> 236.     for a in x:</font>
+<font color="green"> 237.         y.append(deepcopy(a, memo))</font>
+<font color="green"> 238.     d = id(x)</font>
+<font color="green"> 239.     try:</font>
+<font color="green"> 240.         return memo[d]</font>
+<font color="green"> 241.     except KeyError:</font>
+<font color="green"> 242.         pass</font>
+<font color="green"> 243.     for i in range(len(x)):</font>
+<font color="green"> 244.         if x[i] is not y[i]:</font>
+<font color="green"> 245.             y = tuple(y)</font>
+<font color="green"> 246.             break</font>
+<font color="black"> 247.     else:</font>
+<font color="red"> 248.         y = x</font>
+<font color="green"> 249.     memo[d] = y</font>
+<font color="green"> 250.     return y</font>
+<font color="red"> 251. d[tuple] = _deepcopy_tuple</font>
+<font color="black"> 252. </font>
+<font color="red"> 253. def _deepcopy_dict(x, memo):</font>
+<font color="green"> 254.     y = {}</font>
+<font color="green"> 255.     memo[id(x)] = y</font>
+<font color="green"> 256.     for key, value in x.iteritems():</font>
+<font color="green"> 257.         y[deepcopy(key, memo)] = deepcopy(value, memo)</font>
+<font color="green"> 258.     return y</font>
+<font color="red"> 259. d[dict] = _deepcopy_dict</font>
+<font color="red"> 260. if PyStringMap is not None:</font>
+<font color="red"> 261.     d[PyStringMap] = _deepcopy_dict</font>
+<font color="black"> 262. </font>
+<font color="red"> 263. def _deepcopy_method(x, memo): # Copy instance methods</font>
+<font color="red"> 264.     return type(x)(x.im_func, deepcopy(x.im_self, memo), x.im_class)</font>
+<font color="red"> 265. _deepcopy_dispatch[types.MethodType] = _deepcopy_method</font>
+<font color="black"> 266. </font>
+<font color="red"> 267. def _keep_alive(x, memo):</font>
+<font color="black"> 268.     &quot;&quot;&quot;Keeps a reference to the object x in the memo.</font>
+<font color="black"> 269. </font>
+<font color="black"> 270.     Because we remember objects by their id, we have</font>
+<font color="black"> 271.     to assure that possibly temporary objects are kept</font>
+<font color="black"> 272.     alive by referencing them.</font>
+<font color="black"> 273.     We store a reference at the id of the memo, which should</font>
+<font color="black"> 274.     normally not be used unless someone tries to deepcopy</font>
+<font color="black"> 275.     the memo itself...</font>
+<font color="black"> 276.     &quot;&quot;&quot;</font>
+<font color="green"> 277.     try:</font>
+<font color="green"> 278.         memo[id(memo)].append(x)</font>
+<font color="green"> 279.     except KeyError:</font>
+<font color="black"> 280.         # aha, this is the first one :-)</font>
+<font color="green"> 281.         memo[id(memo)]=[x]</font>
+<font color="black"> 282. </font>
+<font color="red"> 283. def _deepcopy_inst(x, memo):</font>
+<font color="red"> 284.     if hasattr(x, '__deepcopy__'):</font>
+<font color="red"> 285.         return x.__deepcopy__(memo)</font>
+<font color="red"> 286.     if hasattr(x, '__getinitargs__'):</font>
+<font color="red"> 287.         args = x.__getinitargs__()</font>
+<font color="red"> 288.         args = deepcopy(args, memo)</font>
+<font color="red"> 289.         y = x.__class__(*args)</font>
+<font color="black"> 290.     else:</font>
+<font color="red"> 291.         y = _EmptyClass()</font>
+<font color="red"> 292.         y.__class__ = x.__class__</font>
+<font color="red"> 293.     memo[id(x)] = y</font>
+<font color="red"> 294.     if hasattr(x, '__getstate__'):</font>
+<font color="red"> 295.         state = x.__getstate__()</font>
+<font color="black"> 296.     else:</font>
+<font color="red"> 297.         state = x.__dict__</font>
+<font color="red"> 298.     state = deepcopy(state, memo)</font>
+<font color="red"> 299.     if hasattr(y, '__setstate__'):</font>
+<font color="red"> 300.         y.__setstate__(state)</font>
+<font color="black"> 301.     else:</font>
+<font color="red"> 302.         y.__dict__.update(state)</font>
+<font color="red"> 303.     return y</font>
+<font color="red"> 304. d[types.InstanceType] = _deepcopy_inst</font>
+<font color="black"> 305. </font>
+<font color="red"> 306. def _reconstruct(x, info, deep, memo=None):</font>
+<font color="green"> 307.     if isinstance(info, str):</font>
+<font color="red"> 308.         return x</font>
+<font color="green"> 309.     assert isinstance(info, tuple)</font>
+<font color="green"> 310.     if memo is None:</font>
+<font color="green"> 311.         memo = {}</font>
+<font color="green"> 312.     n = len(info)</font>
+<font color="green"> 313.     assert n in (2, 3, 4, 5)</font>
+<font color="green"> 314.     callable, args = info[:2]</font>
+<font color="green"> 315.     if n &gt; 2:</font>
+<font color="red"> 316.         state = info[2]</font>
+<font color="black"> 317.     else:</font>
+<font color="green"> 318.         state = None</font>
+<font color="green"> 319.     if n &gt; 3:</font>
+<font color="red"> 320.         listiter = info[3]</font>
+<font color="black"> 321.     else:</font>
+<font color="green"> 322.         listiter = None</font>
+<font color="green"> 323.     if n &gt; 4:</font>
+<font color="red"> 324.         dictiter = info[4]</font>
+<font color="black"> 325.     else:</font>
+<font color="green"> 326.         dictiter = None</font>
+<font color="green"> 327.     if deep:</font>
+<font color="green"> 328.         args = deepcopy(args, memo)</font>
+<font color="green"> 329.     y = callable(*args)</font>
+<font color="green"> 330.     memo[id(x)] = y</font>
+<font color="black"> 331. </font>
+<font color="green"> 332.     if state is not None:</font>
+<font color="red"> 333.         if deep:</font>
+<font color="red"> 334.             state = deepcopy(state, memo)</font>
+<font color="red"> 335.         if hasattr(y, '__setstate__'):</font>
+<font color="red"> 336.             y.__setstate__(state)</font>
+<font color="black"> 337.         else:</font>
+<font color="red"> 338.             if isinstance(state, tuple) and len(state) == 2:</font>
+<font color="red"> 339.                 state, slotstate = state</font>
+<font color="black"> 340.             else:</font>
+<font color="red"> 341.                 slotstate = None</font>
+<font color="red"> 342.             if state is not None:</font>
+<font color="red"> 343.                 y.__dict__.update(state)</font>
+<font color="red"> 344.             if slotstate is not None:</font>
+<font color="red"> 345.                 for key, value in slotstate.iteritems():</font>
+<font color="red"> 346.                     setattr(y, key, value)</font>
+<font color="black"> 347. </font>
+<font color="green"> 348.     if listiter is not None:</font>
+<font color="red"> 349.         for item in listiter:</font>
+<font color="red"> 350.             if deep:</font>
+<font color="red"> 351.                 item = deepcopy(item, memo)</font>
+<font color="red"> 352.             y.append(item)</font>
+<font color="green"> 353.     if dictiter is not None:</font>
+<font color="red"> 354.         for key, value in dictiter:</font>
+<font color="red"> 355.             if deep:</font>
+<font color="red"> 356.                 key = deepcopy(key, memo)</font>
+<font color="red"> 357.                 value = deepcopy(value, memo)</font>
+<font color="red"> 358.             y[key] = value</font>
+<font color="green"> 359.     return y</font>
+<font color="black"> 360. </font>
+<font color="red"> 361. del d</font>
+<font color="black"> 362. </font>
+<font color="red"> 363. del types</font>
+<font color="black"> 364. </font>
+<font color="black"> 365. # Helper for instance creation without calling __init__</font>
+<font color="red"> 366. class _EmptyClass:</font>
+<font color="red"> 367.     pass</font>
+<font color="black"> 368. </font>
+<font color="red"> 369. def _test():</font>
+<font color="red"> 370.     l = [None, 1, 2L, 3.14, 'xyzzy', (1, 2L), [3.14, 'abc'],</font>
+<font color="red"> 371.          {'abc': 'ABC'}, (), [], {}]</font>
+<font color="red"> 372.     l1 = copy(l)</font>
+<font color="red"> 373.     print l1==l</font>
+<font color="red"> 374.     l1 = map(copy, l)</font>
+<font color="red"> 375.     print l1==l</font>
+<font color="red"> 376.     l1 = deepcopy(l)</font>
+<font color="red"> 377.     print l1==l</font>
+<font color="red"> 378.     class C:</font>
+<font color="red"> 379.         def __init__(self, arg=None):</font>
+<font color="red"> 380.             self.a = 1</font>
+<font color="red"> 381.             self.arg = arg</font>
+<font color="red"> 382.             if __name__ == '__main__':</font>
+<font color="red"> 383.                 import sys</font>
+<font color="red"> 384.                 file = sys.argv[0]</font>
+<font color="black"> 385.             else:</font>
+<font color="red"> 386.                 file = __file__</font>
+<font color="red"> 387.             self.fp = open(file)</font>
+<font color="red"> 388.             self.fp.close()</font>
+<font color="red"> 389.         def __getstate__(self):</font>
+<font color="red"> 390.             return {'a': self.a, 'arg': self.arg}</font>
+<font color="red"> 391.         def __setstate__(self, state):</font>
+<font color="red"> 392.             for key, value in state.iteritems():</font>
+<font color="red"> 393.                 setattr(self, key, value)</font>
+<font color="red"> 394.         def __deepcopy__(self, memo=None):</font>
+<font color="red"> 395.             new = self.__class__(deepcopy(self.arg, memo))</font>
+<font color="red"> 396.             new.a = self.a</font>
+<font color="red"> 397.             return new</font>
+<font color="red"> 398.     c = C('argument sketch')</font>
+<font color="red"> 399.     l.append(c)</font>
+<font color="red"> 400.     l2 = copy(l)</font>
+<font color="red"> 401.     print l == l2</font>
+<font color="red"> 402.     print l</font>
+<font color="red"> 403.     print l2</font>
+<font color="red"> 404.     l2 = deepcopy(l)</font>
+<font color="red"> 405.     print l == l2</font>
+<font color="red"> 406.     print l</font>
+<font color="red"> 407.     print l2</font>
+<font color="red"> 408.     l.append({l[1]: l, 'xyz': l[2]})</font>
+<font color="red"> 409.     l3 = copy(l)</font>
+<font color="red"> 410.     import repr</font>
+<font color="red"> 411.     print map(repr.repr, l)</font>
+<font color="red"> 412.     print map(repr.repr, l1)</font>
+<font color="red"> 413.     print map(repr.repr, l2)</font>
+<font color="red"> 414.     print map(repr.repr, l3)</font>
+<font color="red"> 415.     l3 = deepcopy(l)</font>
+<font color="red"> 416.     import repr</font>
+<font color="red"> 417.     print map(repr.repr, l)</font>
+<font color="red"> 418.     print map(repr.repr, l1)</font>
+<font color="red"> 419.     print map(repr.repr, l2)</font>
+<font color="red"> 420.     print map(repr.repr, l3)</font>
+<font color="red"> 421.     class odict(dict):</font>
+<font color="red"> 422.         def __init__(self, d = {}):</font>
+<font color="red"> 423.             self.a = 99</font>
+<font color="red"> 424.             dict.__init__(self, d)</font>
+<font color="red"> 425.         def __setitem__(self, k, i):</font>
+<font color="red"> 426.             dict.__setitem__(self, k, i)</font>
+<font color="red"> 427.             self.a</font>
+<font color="red"> 428.     o = odict({&quot;A&quot; : &quot;B&quot;})</font>
+<font color="red"> 429.     x = deepcopy(o)</font>
+<font color="red"> 430.     print(o, x)</font>
+<font color="black"> 431. </font>
+<font color="red"> 432. if __name__ == '__main__':</font>
+<font color="red"> 433.     _test()</font>
+</pre>
+

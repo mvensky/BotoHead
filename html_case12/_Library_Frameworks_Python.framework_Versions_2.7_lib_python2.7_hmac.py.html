@@ -1,0 +1,143 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/hmac.py</b><br>
+
+
+file stats: <b>61 lines, 42 executed: 68.9% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;HMAC (Keyed-Hashing for Message Authentication) Python module.</font>
+<font color="black">   2. </font>
+<font color="black">   3. Implements the HMAC algorithm as described by RFC 2104.</font>
+<font color="green">   4. &quot;&quot;&quot;</font>
+<font color="black">   5. </font>
+<font color="green">   6. import warnings as _warnings</font>
+<font color="black">   7. </font>
+<font color="green">   8. from operator import _compare_digest as compare_digest</font>
+<font color="black">   9. </font>
+<font color="black">  10. </font>
+<font color="green">  11. trans_5C = &quot;&quot;.join ([chr (x ^ 0x5C) for x in xrange(256)])</font>
+<font color="green">  12. trans_36 = &quot;&quot;.join ([chr (x ^ 0x36) for x in xrange(256)])</font>
+<font color="black">  13. </font>
+<font color="black">  14. # The size of the digests returned by HMAC depends on the underlying</font>
+<font color="black">  15. # hashing module used.  Use digest_size from the instance of HMAC instead.</font>
+<font color="green">  16. digest_size = None</font>
+<font color="black">  17. </font>
+<font color="black">  18. # A unique object passed by HMAC.copy() to the HMAC constructor, in order</font>
+<font color="black">  19. # that the latter return very quickly.  HMAC(&quot;&quot;) in contrast is quite</font>
+<font color="black">  20. # expensive.</font>
+<font color="green">  21. _secret_backdoor_key = []</font>
+<font color="black">  22. </font>
+<font color="green">  23. class HMAC:</font>
+<font color="black">  24.     &quot;&quot;&quot;RFC 2104 HMAC class.  Also complies with RFC 4231.</font>
+<font color="black">  25. </font>
+<font color="black">  26.     This supports the API for Cryptographic Hash Functions (PEP 247).</font>
+<font color="green">  27.     &quot;&quot;&quot;</font>
+<font color="green">  28.     blocksize = 64  # 512-bit HMAC; can be changed in subclasses.</font>
+<font color="black">  29. </font>
+<font color="green">  30.     def __init__(self, key, msg = None, digestmod = None):</font>
+<font color="black">  31.         &quot;&quot;&quot;Create a new HMAC object.</font>
+<font color="black">  32. </font>
+<font color="black">  33.         key:       key for the keyed hash object.</font>
+<font color="black">  34.         msg:       Initial input for the hash, if provided.</font>
+<font color="black">  35.         digestmod: A module supporting PEP 247.  *OR*</font>
+<font color="black">  36.                    A hashlib constructor returning a new hash object.</font>
+<font color="black">  37.                    Defaults to hashlib.md5.</font>
+<font color="black">  38.         &quot;&quot;&quot;</font>
+<font color="black">  39. </font>
+<font color="green">  40.         if key is _secret_backdoor_key: # cheap</font>
+<font color="red">  41.             return</font>
+<font color="black">  42. </font>
+<font color="green">  43.         if digestmod is None:</font>
+<font color="red">  44.             import hashlib</font>
+<font color="red">  45.             digestmod = hashlib.md5</font>
+<font color="black">  46. </font>
+<font color="green">  47.         if hasattr(digestmod, '__call__'):</font>
+<font color="green">  48.             self.digest_cons = digestmod</font>
+<font color="black">  49.         else:</font>
+<font color="red">  50.             self.digest_cons = lambda d='': digestmod.new(d)</font>
+<font color="black">  51. </font>
+<font color="green">  52.         self.outer = self.digest_cons()</font>
+<font color="green">  53.         self.inner = self.digest_cons()</font>
+<font color="green">  54.         self.digest_size = self.inner.digest_size</font>
+<font color="black">  55. </font>
+<font color="green">  56.         if hasattr(self.inner, 'block_size'):</font>
+<font color="green">  57.             blocksize = self.inner.block_size</font>
+<font color="green">  58.             if blocksize &lt; 16:</font>
+<font color="black">  59.                 # Very low blocksize, most likely a legacy value like</font>
+<font color="black">  60.                 # Lib/sha.py and Lib/md5.py have.</font>
+<font color="red">  61.                 _warnings.warn('block_size of %d seems too small; using our '</font>
+<font color="red">  62.                                'default of %d.' % (blocksize, self.blocksize),</font>
+<font color="red">  63.                                RuntimeWarning, 2)</font>
+<font color="red">  64.                 blocksize = self.blocksize</font>
+<font color="black">  65.         else:</font>
+<font color="red">  66.             _warnings.warn('No block_size attribute on given digest object; '</font>
+<font color="red">  67.                            'Assuming %d.' % (self.blocksize),</font>
+<font color="red">  68.                            RuntimeWarning, 2)</font>
+<font color="red">  69.             blocksize = self.blocksize</font>
+<font color="black">  70. </font>
+<font color="green">  71.         if len(key) &gt; blocksize:</font>
+<font color="red">  72.             key = self.digest_cons(key).digest()</font>
+<font color="black">  73. </font>
+<font color="green">  74.         key = key + chr(0) * (blocksize - len(key))</font>
+<font color="green">  75.         self.outer.update(key.translate(trans_5C))</font>
+<font color="green">  76.         self.inner.update(key.translate(trans_36))</font>
+<font color="green">  77.         if msg is not None:</font>
+<font color="green">  78.             self.update(msg)</font>
+<font color="black">  79. </font>
+<font color="black">  80. ##    def clear(self):</font>
+<font color="black">  81. ##        raise NotImplementedError, &quot;clear() method not available in HMAC.&quot;</font>
+<font color="black">  82. </font>
+<font color="green">  83.     def update(self, msg):</font>
+<font color="black">  84.         &quot;&quot;&quot;Update this hashing object with the string msg.</font>
+<font color="black">  85.         &quot;&quot;&quot;</font>
+<font color="green">  86.         self.inner.update(msg)</font>
+<font color="black">  87. </font>
+<font color="green">  88.     def copy(self):</font>
+<font color="black">  89.         &quot;&quot;&quot;Return a separate copy of this hashing object.</font>
+<font color="black">  90. </font>
+<font color="black">  91.         An update to this copy won't affect the original object.</font>
+<font color="black">  92.         &quot;&quot;&quot;</font>
+<font color="red">  93.         other = self.__class__(_secret_backdoor_key)</font>
+<font color="red">  94.         other.digest_cons = self.digest_cons</font>
+<font color="red">  95.         other.digest_size = self.digest_size</font>
+<font color="red">  96.         other.inner = self.inner.copy()</font>
+<font color="red">  97.         other.outer = self.outer.copy()</font>
+<font color="red">  98.         return other</font>
+<font color="black">  99. </font>
+<font color="green"> 100.     def _current(self):</font>
+<font color="black"> 101.         &quot;&quot;&quot;Return a hash object for the current state.</font>
+<font color="black"> 102. </font>
+<font color="black"> 103.         To be used only internally with digest() and hexdigest().</font>
+<font color="black"> 104.         &quot;&quot;&quot;</font>
+<font color="green"> 105.         h = self.outer.copy()</font>
+<font color="green"> 106.         h.update(self.inner.digest())</font>
+<font color="green"> 107.         return h</font>
+<font color="black"> 108. </font>
+<font color="green"> 109.     def digest(self):</font>
+<font color="black"> 110.         &quot;&quot;&quot;Return the hash value of this hashing object.</font>
+<font color="black"> 111. </font>
+<font color="black"> 112.         This returns a string containing 8-bit data.  The object is</font>
+<font color="black"> 113.         not altered in any way by this function; you can continue</font>
+<font color="black"> 114.         updating the object after calling this function.</font>
+<font color="black"> 115.         &quot;&quot;&quot;</font>
+<font color="green"> 116.         h = self._current()</font>
+<font color="green"> 117.         return h.digest()</font>
+<font color="black"> 118. </font>
+<font color="green"> 119.     def hexdigest(self):</font>
+<font color="black"> 120.         &quot;&quot;&quot;Like digest(), but returns a string of hexadecimal digits instead.</font>
+<font color="black"> 121.         &quot;&quot;&quot;</font>
+<font color="green"> 122.         h = self._current()</font>
+<font color="green"> 123.         return h.hexdigest()</font>
+<font color="black"> 124. </font>
+<font color="green"> 125. def new(key, msg = None, digestmod = None):</font>
+<font color="black"> 126.     &quot;&quot;&quot;Create a new hashing object and return it.</font>
+<font color="black"> 127. </font>
+<font color="black"> 128.     key: The starting key for the hash.</font>
+<font color="black"> 129.     msg: if available, will immediately be hashed into the object's starting</font>
+<font color="black"> 130.     state.</font>
+<font color="black"> 131. </font>
+<font color="black"> 132.     You can now feed arbitrary strings into the object using its update()</font>
+<font color="black"> 133.     method, and can ask for the hash value at any time by calling its digest()</font>
+<font color="black"> 134.     method.</font>
+<font color="black"> 135.     &quot;&quot;&quot;</font>
+<font color="green"> 136.     return HMAC(key, msg, digestmod)</font>
+</pre>
+

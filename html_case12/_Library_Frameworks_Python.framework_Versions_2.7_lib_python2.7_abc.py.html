@@ -1,0 +1,192 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/abc.py</b><br>
+
+
+file stats: <b>89 lines, 52 executed: 58.4% covered</b>
+<pre>
+<font color="black">   1. # Copyright 2007 Google, Inc. All Rights Reserved.</font>
+<font color="black">   2. # Licensed to PSF under a Contributor Agreement.</font>
+<font color="black">   3. </font>
+<font color="red">   4. &quot;&quot;&quot;Abstract Base Classes (ABCs) according to PEP 3119.&quot;&quot;&quot;</font>
+<font color="black">   5. </font>
+<font color="red">   6. import types</font>
+<font color="black">   7. </font>
+<font color="red">   8. from _weakrefset import WeakSet</font>
+<font color="black">   9. </font>
+<font color="black">  10. # Instance of old-style class</font>
+<font color="red">  11. class _C: pass</font>
+<font color="red">  12. _InstanceType = type(_C())</font>
+<font color="black">  13. </font>
+<font color="black">  14. </font>
+<font color="red">  15. def abstractmethod(funcobj):</font>
+<font color="black">  16.     &quot;&quot;&quot;A decorator indicating abstract methods.</font>
+<font color="black">  17. </font>
+<font color="black">  18.     Requires that the metaclass is ABCMeta or derived from it.  A</font>
+<font color="black">  19.     class that has a metaclass derived from ABCMeta cannot be</font>
+<font color="black">  20.     instantiated unless all of its abstract methods are overridden.</font>
+<font color="black">  21.     The abstract methods can be called using any of the normal</font>
+<font color="black">  22.     'super' call mechanisms.</font>
+<font color="black">  23. </font>
+<font color="black">  24.     Usage:</font>
+<font color="black">  25. </font>
+<font color="black">  26.         class C:</font>
+<font color="black">  27.             __metaclass__ = ABCMeta</font>
+<font color="black">  28.             @abstractmethod</font>
+<font color="black">  29.             def my_abstract_method(self, ...):</font>
+<font color="black">  30.                 ...</font>
+<font color="black">  31.     &quot;&quot;&quot;</font>
+<font color="green">  32.     funcobj.__isabstractmethod__ = True</font>
+<font color="green">  33.     return funcobj</font>
+<font color="black">  34. </font>
+<font color="black">  35. </font>
+<font color="red">  36. class abstractproperty(property):</font>
+<font color="black">  37.     &quot;&quot;&quot;A decorator indicating abstract properties.</font>
+<font color="black">  38. </font>
+<font color="black">  39.     Requires that the metaclass is ABCMeta or derived from it.  A</font>
+<font color="black">  40.     class that has a metaclass derived from ABCMeta cannot be</font>
+<font color="black">  41.     instantiated unless all of its abstract properties are overridden.</font>
+<font color="black">  42.     The abstract properties can be called using any of the normal</font>
+<font color="black">  43.     'super' call mechanisms.</font>
+<font color="black">  44. </font>
+<font color="black">  45.     Usage:</font>
+<font color="black">  46. </font>
+<font color="black">  47.         class C:</font>
+<font color="black">  48.             __metaclass__ = ABCMeta</font>
+<font color="black">  49.             @abstractproperty</font>
+<font color="black">  50.             def my_abstract_property(self):</font>
+<font color="black">  51.                 ...</font>
+<font color="black">  52. </font>
+<font color="black">  53.     This defines a read-only property; you can also define a read-write</font>
+<font color="black">  54.     abstract property using the 'long' form of property declaration:</font>
+<font color="black">  55. </font>
+<font color="black">  56.         class C:</font>
+<font color="black">  57.             __metaclass__ = ABCMeta</font>
+<font color="black">  58.             def getx(self): ...</font>
+<font color="black">  59.             def setx(self, value): ...</font>
+<font color="black">  60.             x = abstractproperty(getx, setx)</font>
+<font color="red">  61.     &quot;&quot;&quot;</font>
+<font color="red">  62.     __isabstractmethod__ = True</font>
+<font color="black">  63. </font>
+<font color="black">  64. </font>
+<font color="red">  65. class ABCMeta(type):</font>
+<font color="black">  66. </font>
+<font color="black">  67.     &quot;&quot;&quot;Metaclass for defining Abstract Base Classes (ABCs).</font>
+<font color="black">  68. </font>
+<font color="black">  69.     Use this metaclass to create an ABC.  An ABC can be subclassed</font>
+<font color="black">  70.     directly, and then acts as a mix-in class.  You can also register</font>
+<font color="black">  71.     unrelated concrete classes (even built-in classes) and unrelated</font>
+<font color="black">  72.     ABCs as 'virtual subclasses' -- these and their descendants will</font>
+<font color="black">  73.     be considered subclasses of the registering ABC by the built-in</font>
+<font color="black">  74.     issubclass() function, but the registering ABC won't show up in</font>
+<font color="black">  75.     their MRO (Method Resolution Order) nor will method</font>
+<font color="black">  76.     implementations defined by the registering ABC be callable (not</font>
+<font color="black">  77.     even via super()).</font>
+<font color="black">  78. </font>
+<font color="red">  79.     &quot;&quot;&quot;</font>
+<font color="black">  80. </font>
+<font color="black">  81.     # A global counter that is incremented each time a class is</font>
+<font color="black">  82.     # registered as a virtual subclass of anything.  It forces the</font>
+<font color="black">  83.     # negative cache to be cleared before its next use.</font>
+<font color="red">  84.     _abc_invalidation_counter = 0</font>
+<font color="black">  85. </font>
+<font color="red">  86.     def __new__(mcls, name, bases, namespace):</font>
+<font color="green">  87.         cls = super(ABCMeta, mcls).__new__(mcls, name, bases, namespace)</font>
+<font color="black">  88.         # Compute set of abstract method names</font>
+<font color="green">  89.         abstracts = set(name</font>
+<font color="green">  90.                      for name, value in namespace.items()</font>
+<font color="green">  91.                      if getattr(value, &quot;__isabstractmethod__&quot;, False))</font>
+<font color="green">  92.         for base in bases:</font>
+<font color="green">  93.             for name in getattr(base, &quot;__abstractmethods__&quot;, set()):</font>
+<font color="green">  94.                 value = getattr(cls, name, None)</font>
+<font color="green">  95.                 if getattr(value, &quot;__isabstractmethod__&quot;, False):</font>
+<font color="green">  96.                     abstracts.add(name)</font>
+<font color="green">  97.         cls.__abstractmethods__ = frozenset(abstracts)</font>
+<font color="black">  98.         # Set up inheritance registry</font>
+<font color="green">  99.         cls._abc_registry = WeakSet()</font>
+<font color="green"> 100.         cls._abc_cache = WeakSet()</font>
+<font color="green"> 101.         cls._abc_negative_cache = WeakSet()</font>
+<font color="green"> 102.         cls._abc_negative_cache_version = ABCMeta._abc_invalidation_counter</font>
+<font color="green"> 103.         return cls</font>
+<font color="black"> 104. </font>
+<font color="red"> 105.     def register(cls, subclass):</font>
+<font color="black"> 106.         &quot;&quot;&quot;Register a virtual subclass of an ABC.&quot;&quot;&quot;</font>
+<font color="green"> 107.         if not isinstance(subclass, (type, types.ClassType)):</font>
+<font color="red"> 108.             raise TypeError(&quot;Can only register classes&quot;)</font>
+<font color="green"> 109.         if issubclass(subclass, cls):</font>
+<font color="red"> 110.             return  # Already a subclass</font>
+<font color="black"> 111.         # Subtle: test for cycles *after* testing for &quot;already a subclass&quot;;</font>
+<font color="black"> 112.         # this means we allow X.register(X) and interpret it as a no-op.</font>
+<font color="green"> 113.         if issubclass(cls, subclass):</font>
+<font color="black"> 114.             # This would create a cycle, which is bad for the algorithm below</font>
+<font color="red"> 115.             raise RuntimeError(&quot;Refusing to create an inheritance cycle&quot;)</font>
+<font color="green"> 116.         cls._abc_registry.add(subclass)</font>
+<font color="green"> 117.         ABCMeta._abc_invalidation_counter += 1  # Invalidate negative cache</font>
+<font color="black"> 118. </font>
+<font color="red"> 119.     def _dump_registry(cls, file=None):</font>
+<font color="black"> 120.         &quot;&quot;&quot;Debug helper to print the ABC registry.&quot;&quot;&quot;</font>
+<font color="red"> 121.         print &gt;&gt; file, &quot;Class: %s.%s&quot; % (cls.__module__, cls.__name__)</font>
+<font color="red"> 122.         print &gt;&gt; file, &quot;Inv.counter: %s&quot; % ABCMeta._abc_invalidation_counter</font>
+<font color="red"> 123.         for name in sorted(cls.__dict__.keys()):</font>
+<font color="red"> 124.             if name.startswith(&quot;_abc_&quot;):</font>
+<font color="red"> 125.                 value = getattr(cls, name)</font>
+<font color="red"> 126.                 print &gt;&gt; file, &quot;%s: %r&quot; % (name, value)</font>
+<font color="black"> 127. </font>
+<font color="red"> 128.     def __instancecheck__(cls, instance):</font>
+<font color="black"> 129.         &quot;&quot;&quot;Override for isinstance(instance, cls).&quot;&quot;&quot;</font>
+<font color="black"> 130.         # Inline the cache checking when it's simple.</font>
+<font color="green"> 131.         subclass = getattr(instance, '__class__', None)</font>
+<font color="green"> 132.         if subclass is not None and subclass in cls._abc_cache:</font>
+<font color="green"> 133.             return True</font>
+<font color="green"> 134.         subtype = type(instance)</font>
+<font color="black"> 135.         # Old-style instances</font>
+<font color="green"> 136.         if subtype is _InstanceType:</font>
+<font color="red"> 137.             subtype = subclass</font>
+<font color="green"> 138.         if subtype is subclass or subclass is None:</font>
+<font color="green"> 139.             if (cls._abc_negative_cache_version ==</font>
+<font color="green"> 140.                 ABCMeta._abc_invalidation_counter and</font>
+<font color="green"> 141.                 subtype in cls._abc_negative_cache):</font>
+<font color="green"> 142.                 return False</font>
+<font color="black"> 143.             # Fall back to the subclass check.</font>
+<font color="green"> 144.             return cls.__subclasscheck__(subtype)</font>
+<font color="red"> 145.         return (cls.__subclasscheck__(subclass) or</font>
+<font color="red"> 146.                 cls.__subclasscheck__(subtype))</font>
+<font color="black"> 147. </font>
+<font color="red"> 148.     def __subclasscheck__(cls, subclass):</font>
+<font color="black"> 149.         &quot;&quot;&quot;Override for issubclass(subclass, cls).&quot;&quot;&quot;</font>
+<font color="black"> 150.         # Check cache</font>
+<font color="green"> 151.         if subclass in cls._abc_cache:</font>
+<font color="green"> 152.             return True</font>
+<font color="black"> 153.         # Check negative cache; may have to invalidate</font>
+<font color="green"> 154.         if cls._abc_negative_cache_version &lt; ABCMeta._abc_invalidation_counter:</font>
+<font color="black"> 155.             # Invalidate the negative cache</font>
+<font color="green"> 156.             cls._abc_negative_cache = WeakSet()</font>
+<font color="green"> 157.             cls._abc_negative_cache_version = ABCMeta._abc_invalidation_counter</font>
+<font color="green"> 158.         elif subclass in cls._abc_negative_cache:</font>
+<font color="red"> 159.             return False</font>
+<font color="black"> 160.         # Check the subclass hook</font>
+<font color="green"> 161.         ok = cls.__subclasshook__(subclass)</font>
+<font color="green"> 162.         if ok is not NotImplemented:</font>
+<font color="red"> 163.             assert isinstance(ok, bool)</font>
+<font color="red"> 164.             if ok:</font>
+<font color="red"> 165.                 cls._abc_cache.add(subclass)</font>
+<font color="black"> 166.             else:</font>
+<font color="red"> 167.                 cls._abc_negative_cache.add(subclass)</font>
+<font color="red"> 168.             return ok</font>
+<font color="black"> 169.         # Check if it's a direct subclass</font>
+<font color="green"> 170.         if cls in getattr(subclass, '__mro__', ()):</font>
+<font color="red"> 171.             cls._abc_cache.add(subclass)</font>
+<font color="red"> 172.             return True</font>
+<font color="black"> 173.         # Check if it's a subclass of a registered class (recursive)</font>
+<font color="green"> 174.         for rcls in cls._abc_registry:</font>
+<font color="green"> 175.             if issubclass(subclass, rcls):</font>
+<font color="green"> 176.                 cls._abc_cache.add(subclass)</font>
+<font color="green"> 177.                 return True</font>
+<font color="black"> 178.         # Check if it's a subclass of a subclass (recursive)</font>
+<font color="green"> 179.         for scls in cls.__subclasses__():</font>
+<font color="green"> 180.             if issubclass(subclass, scls):</font>
+<font color="green"> 181.                 cls._abc_cache.add(subclass)</font>
+<font color="green"> 182.                 return True</font>
+<font color="black"> 183.         # No dice; update negative cache</font>
+<font color="green"> 184.         cls._abc_negative_cache.add(subclass)</font>
+<font color="green"> 185.         return False</font>
+</pre>
+

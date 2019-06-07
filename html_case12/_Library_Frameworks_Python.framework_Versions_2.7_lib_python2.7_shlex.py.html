@@ -1,0 +1,299 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/shlex.py</b><br>
+
+
+file stats: <b>236 lines, 104 executed: 44.1% covered</b>
+<pre>
+<font color="black">   1. # -*- coding: iso-8859-1 -*-</font>
+<font color="green">   2. &quot;&quot;&quot;A lexical analyzer class for simple shell-like syntaxes.&quot;&quot;&quot;</font>
+<font color="black">   3. </font>
+<font color="black">   4. # Module and documentation by Eric S. Raymond, 21 Dec 1998</font>
+<font color="black">   5. # Input stacking and error message cleanup added by ESR, March 2000</font>
+<font color="black">   6. # push_source() and pop_source() made explicit by ESR, January 2001.</font>
+<font color="black">   7. # Posix compliance, split(), string arguments, and</font>
+<font color="black">   8. # iterator interface by Gustavo Niemeyer, April 2003.</font>
+<font color="black">   9. </font>
+<font color="green">  10. import os.path</font>
+<font color="green">  11. import sys</font>
+<font color="green">  12. from collections import deque</font>
+<font color="black">  13. </font>
+<font color="green">  14. try:</font>
+<font color="green">  15.     from cStringIO import StringIO</font>
+<font color="red">  16. except ImportError:</font>
+<font color="red">  17.     from StringIO import StringIO</font>
+<font color="black">  18. </font>
+<font color="green">  19. __all__ = [&quot;shlex&quot;, &quot;split&quot;]</font>
+<font color="black">  20. </font>
+<font color="green">  21. class shlex:</font>
+<font color="green">  22.     &quot;A lexical analyzer class for simple shell-like syntaxes.&quot;</font>
+<font color="green">  23.     def __init__(self, instream=None, infile=None, posix=False):</font>
+<font color="green">  24.         if isinstance(instream, basestring):</font>
+<font color="green">  25.             instream = StringIO(instream)</font>
+<font color="green">  26.         if instream is not None:</font>
+<font color="green">  27.             self.instream = instream</font>
+<font color="green">  28.             self.infile = infile</font>
+<font color="black">  29.         else:</font>
+<font color="red">  30.             self.instream = sys.stdin</font>
+<font color="red">  31.             self.infile = None</font>
+<font color="green">  32.         self.posix = posix</font>
+<font color="green">  33.         if posix:</font>
+<font color="green">  34.             self.eof = None</font>
+<font color="black">  35.         else:</font>
+<font color="red">  36.             self.eof = ''</font>
+<font color="green">  37.         self.commenters = '#'</font>
+<font color="green">  38.         self.wordchars = ('abcdfeghijklmnopqrstuvwxyz'</font>
+<font color="black">  39.                           'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_')</font>
+<font color="green">  40.         if self.posix:</font>
+<font color="green">  41.             self.wordchars += ('ﬂ‡·‚„‰ÂÊÁËÈÍÎÏÌÓÔÒÚÛÙıˆ¯˘˙˚¸˝˛ˇ'</font>
+<font color="black">  42.                                '¿¡¬√ƒ≈∆«»… ÀÃÕŒœ–—“”‘’÷ÿŸ⁄€‹›ﬁ')</font>
+<font color="green">  43.         self.whitespace = ' \t\r\n'</font>
+<font color="green">  44.         self.whitespace_split = False</font>
+<font color="green">  45.         self.quotes = '\'&quot;'</font>
+<font color="green">  46.         self.escape = '\\'</font>
+<font color="green">  47.         self.escapedquotes = '&quot;'</font>
+<font color="green">  48.         self.state = ' '</font>
+<font color="green">  49.         self.pushback = deque()</font>
+<font color="green">  50.         self.lineno = 1</font>
+<font color="green">  51.         self.debug = 0</font>
+<font color="green">  52.         self.token = ''</font>
+<font color="green">  53.         self.filestack = deque()</font>
+<font color="green">  54.         self.source = None</font>
+<font color="green">  55.         if self.debug:</font>
+<font color="red">  56.             print 'shlex: reading from %s, line %d' \</font>
+<font color="red">  57.                   % (self.instream, self.lineno)</font>
+<font color="black">  58. </font>
+<font color="green">  59.     def push_token(self, tok):</font>
+<font color="black">  60.         &quot;Push a token onto the stack popped by the get_token method&quot;</font>
+<font color="red">  61.         if self.debug &gt;= 1:</font>
+<font color="red">  62.             print &quot;shlex: pushing token &quot; + repr(tok)</font>
+<font color="red">  63.         self.pushback.appendleft(tok)</font>
+<font color="black">  64. </font>
+<font color="green">  65.     def push_source(self, newstream, newfile=None):</font>
+<font color="black">  66.         &quot;Push an input source onto the lexer's input source stack.&quot;</font>
+<font color="red">  67.         if isinstance(newstream, basestring):</font>
+<font color="red">  68.             newstream = StringIO(newstream)</font>
+<font color="red">  69.         self.filestack.appendleft((self.infile, self.instream, self.lineno))</font>
+<font color="red">  70.         self.infile = newfile</font>
+<font color="red">  71.         self.instream = newstream</font>
+<font color="red">  72.         self.lineno = 1</font>
+<font color="red">  73.         if self.debug:</font>
+<font color="red">  74.             if newfile is not None:</font>
+<font color="red">  75.                 print 'shlex: pushing to file %s' % (self.infile,)</font>
+<font color="black">  76.             else:</font>
+<font color="red">  77.                 print 'shlex: pushing to stream %s' % (self.instream,)</font>
+<font color="black">  78. </font>
+<font color="green">  79.     def pop_source(self):</font>
+<font color="black">  80.         &quot;Pop the input source stack.&quot;</font>
+<font color="red">  81.         self.instream.close()</font>
+<font color="red">  82.         (self.infile, self.instream, self.lineno) = self.filestack.popleft()</font>
+<font color="red">  83.         if self.debug:</font>
+<font color="red">  84.             print 'shlex: popping to %s, line %d' \</font>
+<font color="red">  85.                   % (self.instream, self.lineno)</font>
+<font color="red">  86.         self.state = ' '</font>
+<font color="black">  87. </font>
+<font color="green">  88.     def get_token(self):</font>
+<font color="black">  89.         &quot;Get a token from the input stream (or from stack if it's nonempty)&quot;</font>
+<font color="green">  90.         if self.pushback:</font>
+<font color="red">  91.             tok = self.pushback.popleft()</font>
+<font color="red">  92.             if self.debug &gt;= 1:</font>
+<font color="red">  93.                 print &quot;shlex: popping token &quot; + repr(tok)</font>
+<font color="red">  94.             return tok</font>
+<font color="black">  95.         # No pushback.  Get a token.</font>
+<font color="green">  96.         raw = self.read_token()</font>
+<font color="black">  97.         # Handle inclusions</font>
+<font color="green">  98.         if self.source is not None:</font>
+<font color="red">  99.             while raw == self.source:</font>
+<font color="red"> 100.                 spec = self.sourcehook(self.read_token())</font>
+<font color="red"> 101.                 if spec:</font>
+<font color="red"> 102.                     (newfile, newstream) = spec</font>
+<font color="red"> 103.                     self.push_source(newstream, newfile)</font>
+<font color="red"> 104.                 raw = self.get_token()</font>
+<font color="black"> 105.         # Maybe we got EOF instead?</font>
+<font color="green"> 106.         while raw == self.eof:</font>
+<font color="green"> 107.             if not self.filestack:</font>
+<font color="green"> 108.                 return self.eof</font>
+<font color="black"> 109.             else:</font>
+<font color="red"> 110.                 self.pop_source()</font>
+<font color="red"> 111.                 raw = self.get_token()</font>
+<font color="black"> 112.         # Neither inclusion nor EOF</font>
+<font color="green"> 113.         if self.debug &gt;= 1:</font>
+<font color="red"> 114.             if raw != self.eof:</font>
+<font color="red"> 115.                 print &quot;shlex: token=&quot; + repr(raw)</font>
+<font color="black"> 116.             else:</font>
+<font color="red"> 117.                 print &quot;shlex: token=EOF&quot;</font>
+<font color="green"> 118.         return raw</font>
+<font color="black"> 119. </font>
+<font color="green"> 120.     def read_token(self):</font>
+<font color="green"> 121.         quoted = False</font>
+<font color="green"> 122.         escapedstate = ' '</font>
+<font color="green"> 123.         while True:</font>
+<font color="green"> 124.             nextchar = self.instream.read(1)</font>
+<font color="green"> 125.             if nextchar == '\n':</font>
+<font color="red"> 126.                 self.lineno = self.lineno + 1</font>
+<font color="green"> 127.             if self.debug &gt;= 3:</font>
+<font color="red"> 128.                 print &quot;shlex: in state&quot;, repr(self.state), \</font>
+<font color="red"> 129.                       &quot;I see character:&quot;, repr(nextchar)</font>
+<font color="green"> 130.             if self.state is None:</font>
+<font color="green"> 131.                 self.token = ''        # past end of file</font>
+<font color="green"> 132.                 break</font>
+<font color="green"> 133.             elif self.state == ' ':</font>
+<font color="green"> 134.                 if not nextchar:</font>
+<font color="red"> 135.                     self.state = None  # end of file</font>
+<font color="red"> 136.                     break</font>
+<font color="green"> 137.                 elif nextchar in self.whitespace:</font>
+<font color="red"> 138.                     if self.debug &gt;= 2:</font>
+<font color="red"> 139.                         print &quot;shlex: I see whitespace in whitespace state&quot;</font>
+<font color="red"> 140.                     if self.token or (self.posix and quoted):</font>
+<font color="red"> 141.                         break   # emit current token</font>
+<font color="black"> 142.                     else:</font>
+<font color="red"> 143.                         continue</font>
+<font color="green"> 144.                 elif nextchar in self.commenters:</font>
+<font color="red"> 145.                     self.instream.readline()</font>
+<font color="red"> 146.                     self.lineno = self.lineno + 1</font>
+<font color="green"> 147.                 elif self.posix and nextchar in self.escape:</font>
+<font color="red"> 148.                     escapedstate = 'a'</font>
+<font color="red"> 149.                     self.state = nextchar</font>
+<font color="green"> 150.                 elif nextchar in self.wordchars:</font>
+<font color="green"> 151.                     self.token = nextchar</font>
+<font color="green"> 152.                     self.state = 'a'</font>
+<font color="red"> 153.                 elif nextchar in self.quotes:</font>
+<font color="red"> 154.                     if not self.posix:</font>
+<font color="red"> 155.                         self.token = nextchar</font>
+<font color="red"> 156.                     self.state = nextchar</font>
+<font color="red"> 157.                 elif self.whitespace_split:</font>
+<font color="red"> 158.                     self.token = nextchar</font>
+<font color="red"> 159.                     self.state = 'a'</font>
+<font color="black"> 160.                 else:</font>
+<font color="red"> 161.                     self.token = nextchar</font>
+<font color="red"> 162.                     if self.token or (self.posix and quoted):</font>
+<font color="red"> 163.                         break   # emit current token</font>
+<font color="black"> 164.                     else:</font>
+<font color="red"> 165.                         continue</font>
+<font color="green"> 166.             elif self.state in self.quotes:</font>
+<font color="red"> 167.                 quoted = True</font>
+<font color="red"> 168.                 if not nextchar:      # end of file</font>
+<font color="red"> 169.                     if self.debug &gt;= 2:</font>
+<font color="red"> 170.                         print &quot;shlex: I see EOF in quotes state&quot;</font>
+<font color="black"> 171.                     # XXX what error should be raised here?</font>
+<font color="red"> 172.                     raise ValueError, &quot;No closing quotation&quot;</font>
+<font color="red"> 173.                 if nextchar == self.state:</font>
+<font color="red"> 174.                     if not self.posix:</font>
+<font color="red"> 175.                         self.token = self.token + nextchar</font>
+<font color="red"> 176.                         self.state = ' '</font>
+<font color="red"> 177.                         break</font>
+<font color="black"> 178.                     else:</font>
+<font color="red"> 179.                         self.state = 'a'</font>
+<font color="red"> 180.                 elif self.posix and nextchar in self.escape and \</font>
+<font color="red"> 181.                      self.state in self.escapedquotes:</font>
+<font color="red"> 182.                     escapedstate = self.state</font>
+<font color="red"> 183.                     self.state = nextchar</font>
+<font color="black"> 184.                 else:</font>
+<font color="red"> 185.                     self.token = self.token + nextchar</font>
+<font color="green"> 186.             elif self.state in self.escape:</font>
+<font color="red"> 187.                 if not nextchar:      # end of file</font>
+<font color="red"> 188.                     if self.debug &gt;= 2:</font>
+<font color="red"> 189.                         print &quot;shlex: I see EOF in escape state&quot;</font>
+<font color="black"> 190.                     # XXX what error should be raised here?</font>
+<font color="red"> 191.                     raise ValueError, &quot;No escaped character&quot;</font>
+<font color="black"> 192.                 # In posix shells, only the quote itself or the escape</font>
+<font color="black"> 193.                 # character may be escaped within quotes.</font>
+<font color="red"> 194.                 if escapedstate in self.quotes and \</font>
+<font color="red"> 195.                    nextchar != self.state and nextchar != escapedstate:</font>
+<font color="red"> 196.                     self.token = self.token + self.state</font>
+<font color="red"> 197.                 self.token = self.token + nextchar</font>
+<font color="red"> 198.                 self.state = escapedstate</font>
+<font color="green"> 199.             elif self.state == 'a':</font>
+<font color="green"> 200.                 if not nextchar:</font>
+<font color="green"> 201.                     self.state = None   # end of file</font>
+<font color="green"> 202.                     break</font>
+<font color="green"> 203.                 elif nextchar in self.whitespace:</font>
+<font color="green"> 204.                     if self.debug &gt;= 2:</font>
+<font color="red"> 205.                         print &quot;shlex: I see whitespace in word state&quot;</font>
+<font color="green"> 206.                     self.state = ' '</font>
+<font color="green"> 207.                     if self.token or (self.posix and quoted):</font>
+<font color="green"> 208.                         break   # emit current token</font>
+<font color="black"> 209.                     else:</font>
+<font color="red"> 210.                         continue</font>
+<font color="green"> 211.                 elif nextchar in self.commenters:</font>
+<font color="red"> 212.                     self.instream.readline()</font>
+<font color="red"> 213.                     self.lineno = self.lineno + 1</font>
+<font color="red"> 214.                     if self.posix:</font>
+<font color="red"> 215.                         self.state = ' '</font>
+<font color="red"> 216.                         if self.token or (self.posix and quoted):</font>
+<font color="red"> 217.                             break   # emit current token</font>
+<font color="black"> 218.                         else:</font>
+<font color="red"> 219.                             continue</font>
+<font color="green"> 220.                 elif self.posix and nextchar in self.quotes:</font>
+<font color="red"> 221.                     self.state = nextchar</font>
+<font color="green"> 222.                 elif self.posix and nextchar in self.escape:</font>
+<font color="red"> 223.                     escapedstate = 'a'</font>
+<font color="red"> 224.                     self.state = nextchar</font>
+<font color="green"> 225.                 elif nextchar in self.wordchars or nextchar in self.quotes \</font>
+<font color="green"> 226.                     or self.whitespace_split:</font>
+<font color="green"> 227.                     self.token = self.token + nextchar</font>
+<font color="black"> 228.                 else:</font>
+<font color="red"> 229.                     self.pushback.appendleft(nextchar)</font>
+<font color="red"> 230.                     if self.debug &gt;= 2:</font>
+<font color="red"> 231.                         print &quot;shlex: I see punctuation in word state&quot;</font>
+<font color="red"> 232.                     self.state = ' '</font>
+<font color="red"> 233.                     if self.token or (self.posix and quoted):</font>
+<font color="red"> 234.                         break   # emit current token</font>
+<font color="black"> 235.                     else:</font>
+<font color="red"> 236.                         continue</font>
+<font color="green"> 237.         result = self.token</font>
+<font color="green"> 238.         self.token = ''</font>
+<font color="green"> 239.         if self.posix and not quoted and result == '':</font>
+<font color="green"> 240.             result = None</font>
+<font color="green"> 241.         if self.debug &gt; 1:</font>
+<font color="red"> 242.             if result:</font>
+<font color="red"> 243.                 print &quot;shlex: raw token=&quot; + repr(result)</font>
+<font color="black"> 244.             else:</font>
+<font color="red"> 245.                 print &quot;shlex: raw token=EOF&quot;</font>
+<font color="green"> 246.         return result</font>
+<font color="black"> 247. </font>
+<font color="green"> 248.     def sourcehook(self, newfile):</font>
+<font color="black"> 249.         &quot;Hook called on a filename to be sourced.&quot;</font>
+<font color="red"> 250.         if newfile[0] == '&quot;':</font>
+<font color="red"> 251.             newfile = newfile[1:-1]</font>
+<font color="black"> 252.         # This implements cpp-like semantics for relative-path inclusion.</font>
+<font color="red"> 253.         if isinstance(self.infile, basestring) and not os.path.isabs(newfile):</font>
+<font color="red"> 254.             newfile = os.path.join(os.path.dirname(self.infile), newfile)</font>
+<font color="red"> 255.         return (newfile, open(newfile, &quot;r&quot;))</font>
+<font color="black"> 256. </font>
+<font color="green"> 257.     def error_leader(self, infile=None, lineno=None):</font>
+<font color="black"> 258.         &quot;Emit a C-compiler-like, Emacs-friendly error-message leader.&quot;</font>
+<font color="red"> 259.         if infile is None:</font>
+<font color="red"> 260.             infile = self.infile</font>
+<font color="red"> 261.         if lineno is None:</font>
+<font color="red"> 262.             lineno = self.lineno</font>
+<font color="red"> 263.         return &quot;\&quot;%s\&quot;, line %d: &quot; % (infile, lineno)</font>
+<font color="black"> 264. </font>
+<font color="green"> 265.     def __iter__(self):</font>
+<font color="green"> 266.         return self</font>
+<font color="black"> 267. </font>
+<font color="green"> 268.     def next(self):</font>
+<font color="green"> 269.         token = self.get_token()</font>
+<font color="green"> 270.         if token == self.eof:</font>
+<font color="green"> 271.             raise StopIteration</font>
+<font color="green"> 272.         return token</font>
+<font color="black"> 273. </font>
+<font color="green"> 274. def split(s, comments=False, posix=True):</font>
+<font color="green"> 275.     lex = shlex(s, posix=posix)</font>
+<font color="green"> 276.     lex.whitespace_split = True</font>
+<font color="green"> 277.     if not comments:</font>
+<font color="green"> 278.         lex.commenters = ''</font>
+<font color="green"> 279.     return list(lex)</font>
+<font color="black"> 280. </font>
+<font color="green"> 281. if __name__ == '__main__':</font>
+<font color="red"> 282.     if len(sys.argv) == 1:</font>
+<font color="red"> 283.         lexer = shlex()</font>
+<font color="black"> 284.     else:</font>
+<font color="red"> 285.         file = sys.argv[1]</font>
+<font color="red"> 286.         lexer = shlex(open(file), file)</font>
+<font color="red"> 287.     while 1:</font>
+<font color="red"> 288.         tt = lexer.get_token()</font>
+<font color="red"> 289.         if tt:</font>
+<font color="red"> 290.             print &quot;Token: &quot; + repr(tt)</font>
+<font color="black"> 291.         else:</font>
+<font color="red"> 292.             break</font>
+</pre>
+

@@ -1,0 +1,1758 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/logging/__init__.py</b><br>
+
+
+file stats: <b>738 lines, 299 executed: 40.5% covered</b>
+<pre>
+<font color="black">   1. # Copyright 2001-2014 by Vinay Sajip. All Rights Reserved.</font>
+<font color="black">   2. #</font>
+<font color="black">   3. # Permission to use, copy, modify, and distribute this software and its</font>
+<font color="black">   4. # documentation for any purpose and without fee is hereby granted,</font>
+<font color="black">   5. # provided that the above copyright notice appear in all copies and that</font>
+<font color="black">   6. # both that copyright notice and this permission notice appear in</font>
+<font color="black">   7. # supporting documentation, and that the name of Vinay Sajip</font>
+<font color="black">   8. # not be used in advertising or publicity pertaining to distribution</font>
+<font color="black">   9. # of the software without specific, written prior permission.</font>
+<font color="black">  10. # VINAY SAJIP DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING</font>
+<font color="black">  11. # ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL</font>
+<font color="black">  12. # VINAY SAJIP BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR</font>
+<font color="black">  13. # ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER</font>
+<font color="black">  14. # IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT</font>
+<font color="black">  15. # OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.</font>
+<font color="black">  16. </font>
+<font color="black">  17. &quot;&quot;&quot;</font>
+<font color="black">  18. Logging package for Python. Based on PEP 282 and comments thereto in</font>
+<font color="black">  19. comp.lang.python.</font>
+<font color="black">  20. </font>
+<font color="black">  21. Copyright (C) 2001-2014 Vinay Sajip. All Rights Reserved.</font>
+<font color="black">  22. </font>
+<font color="black">  23. To use, simply 'import logging' and log away!</font>
+<font color="green">  24. &quot;&quot;&quot;</font>
+<font color="black">  25. </font>
+<font color="green">  26. import sys, os, time, cStringIO, traceback, warnings, weakref, collections</font>
+<font color="black">  27. </font>
+<font color="green">  28. __all__ = ['BASIC_FORMAT', 'BufferingFormatter', 'CRITICAL', 'DEBUG', 'ERROR',</font>
+<font color="green">  29.            'FATAL', 'FileHandler', 'Filter', 'Formatter', 'Handler', 'INFO',</font>
+<font color="green">  30.            'LogRecord', 'Logger', 'LoggerAdapter', 'NOTSET', 'NullHandler',</font>
+<font color="green">  31.            'StreamHandler', 'WARN', 'WARNING', 'addLevelName', 'basicConfig',</font>
+<font color="green">  32.            'captureWarnings', 'critical', 'debug', 'disable', 'error',</font>
+<font color="green">  33.            'exception', 'fatal', 'getLevelName', 'getLogger', 'getLoggerClass',</font>
+<font color="green">  34.            'info', 'log', 'makeLogRecord', 'setLoggerClass', 'warn', 'warning']</font>
+<font color="black">  35. </font>
+<font color="green">  36. try:</font>
+<font color="green">  37.     import codecs</font>
+<font color="red">  38. except ImportError:</font>
+<font color="red">  39.     codecs = None</font>
+<font color="black">  40. </font>
+<font color="green">  41. try:</font>
+<font color="green">  42.     import thread</font>
+<font color="green">  43.     import threading</font>
+<font color="red">  44. except ImportError:</font>
+<font color="red">  45.     thread = None</font>
+<font color="black">  46. </font>
+<font color="green">  47. __author__  = &quot;Vinay Sajip &lt;vinay_sajip@red-dove.com&gt;&quot;</font>
+<font color="green">  48. __status__  = &quot;production&quot;</font>
+<font color="black">  49. # Note: the attributes below are no longer maintained.</font>
+<font color="green">  50. __version__ = &quot;0.5.1.2&quot;</font>
+<font color="green">  51. __date__    = &quot;07 February 2010&quot;</font>
+<font color="black">  52. </font>
+<font color="black">  53. #---------------------------------------------------------------------------</font>
+<font color="black">  54. #   Miscellaneous module data</font>
+<font color="black">  55. #---------------------------------------------------------------------------</font>
+<font color="green">  56. try:</font>
+<font color="green">  57.     unicode</font>
+<font color="green">  58.     _unicode = True</font>
+<font color="red">  59. except NameError:</font>
+<font color="red">  60.     _unicode = False</font>
+<font color="black">  61. </font>
+<font color="black">  62. # next bit filched from 1.5.2's inspect.py</font>
+<font color="green">  63. def currentframe():</font>
+<font color="black">  64.     &quot;&quot;&quot;Return the frame object for the caller's stack frame.&quot;&quot;&quot;</font>
+<font color="red">  65.     try:</font>
+<font color="red">  66.         raise Exception</font>
+<font color="red">  67.     except:</font>
+<font color="red">  68.         return sys.exc_info()[2].tb_frame.f_back</font>
+<font color="black">  69. </font>
+<font color="green">  70. if hasattr(sys, '_getframe'): currentframe = lambda: sys._getframe(3)</font>
+<font color="black">  71. # done filching</font>
+<font color="black">  72. </font>
+<font color="black">  73. #</font>
+<font color="black">  74. # _srcfile is used when walking the stack to check when we've got the first</font>
+<font color="black">  75. # caller stack frame.</font>
+<font color="black">  76. #</font>
+<font color="green">  77. _srcfile = os.path.normcase(currentframe.__code__.co_filename)</font>
+<font color="black">  78. </font>
+<font color="black">  79. # _srcfile is only used in conjunction with sys._getframe().</font>
+<font color="black">  80. # To provide compatibility with older versions of Python, set _srcfile</font>
+<font color="black">  81. # to None if _getframe() is not available; this value will prevent</font>
+<font color="black">  82. # findCaller() from being called.</font>
+<font color="black">  83. #if not hasattr(sys, &quot;_getframe&quot;):</font>
+<font color="black">  84. #    _srcfile = None</font>
+<font color="black">  85. </font>
+<font color="black">  86. #</font>
+<font color="black">  87. #_startTime is used as the base when calculating the relative time of events</font>
+<font color="black">  88. #</font>
+<font color="green">  89. _startTime = time.time()</font>
+<font color="black">  90. </font>
+<font color="black">  91. #</font>
+<font color="black">  92. #raiseExceptions is used to see if exceptions during handling should be</font>
+<font color="black">  93. #propagated</font>
+<font color="black">  94. #</font>
+<font color="green">  95. raiseExceptions = 1</font>
+<font color="black">  96. </font>
+<font color="black">  97. #</font>
+<font color="black">  98. # If you don't want threading information in the log, set this to zero</font>
+<font color="black">  99. #</font>
+<font color="green"> 100. logThreads = 1</font>
+<font color="black"> 101. </font>
+<font color="black"> 102. #</font>
+<font color="black"> 103. # If you don't want multiprocessing information in the log, set this to zero</font>
+<font color="black"> 104. #</font>
+<font color="green"> 105. logMultiprocessing = 1</font>
+<font color="black"> 106. </font>
+<font color="black"> 107. #</font>
+<font color="black"> 108. # If you don't want process information in the log, set this to zero</font>
+<font color="black"> 109. #</font>
+<font color="green"> 110. logProcesses = 1</font>
+<font color="black"> 111. </font>
+<font color="black"> 112. #---------------------------------------------------------------------------</font>
+<font color="black"> 113. #   Level related stuff</font>
+<font color="black"> 114. #---------------------------------------------------------------------------</font>
+<font color="black"> 115. #</font>
+<font color="black"> 116. # Default levels and level names, these can be replaced with any positive set</font>
+<font color="black"> 117. # of values having corresponding names. There is a pseudo-level, NOTSET, which</font>
+<font color="black"> 118. # is only really there as a lower limit for user-defined levels. Handlers and</font>
+<font color="black"> 119. # loggers are initialized with NOTSET so that they will log all messages, even</font>
+<font color="black"> 120. # at user-defined levels.</font>
+<font color="black"> 121. #</font>
+<font color="black"> 122. </font>
+<font color="green"> 123. CRITICAL = 50</font>
+<font color="green"> 124. FATAL = CRITICAL</font>
+<font color="green"> 125. ERROR = 40</font>
+<font color="green"> 126. WARNING = 30</font>
+<font color="green"> 127. WARN = WARNING</font>
+<font color="green"> 128. INFO = 20</font>
+<font color="green"> 129. DEBUG = 10</font>
+<font color="green"> 130. NOTSET = 0</font>
+<font color="black"> 131. </font>
+<font color="green"> 132. _levelNames = {</font>
+<font color="green"> 133.     CRITICAL : 'CRITICAL',</font>
+<font color="green"> 134.     ERROR : 'ERROR',</font>
+<font color="green"> 135.     WARNING : 'WARNING',</font>
+<font color="green"> 136.     INFO : 'INFO',</font>
+<font color="green"> 137.     DEBUG : 'DEBUG',</font>
+<font color="green"> 138.     NOTSET : 'NOTSET',</font>
+<font color="green"> 139.     'CRITICAL' : CRITICAL,</font>
+<font color="green"> 140.     'ERROR' : ERROR,</font>
+<font color="green"> 141.     'WARN' : WARNING,</font>
+<font color="green"> 142.     'WARNING' : WARNING,</font>
+<font color="green"> 143.     'INFO' : INFO,</font>
+<font color="green"> 144.     'DEBUG' : DEBUG,</font>
+<font color="green"> 145.     'NOTSET' : NOTSET,</font>
+<font color="black"> 146. }</font>
+<font color="black"> 147. </font>
+<font color="green"> 148. def getLevelName(level):</font>
+<font color="black"> 149.     &quot;&quot;&quot;</font>
+<font color="black"> 150.     Return the textual representation of logging level 'level'.</font>
+<font color="black"> 151. </font>
+<font color="black"> 152.     If the level is one of the predefined levels (CRITICAL, ERROR, WARNING,</font>
+<font color="black"> 153.     INFO, DEBUG) then you get the corresponding string. If you have</font>
+<font color="black"> 154.     associated levels with names using addLevelName then the name you have</font>
+<font color="black"> 155.     associated with 'level' is returned.</font>
+<font color="black"> 156. </font>
+<font color="black"> 157.     If a numeric value corresponding to one of the defined levels is passed</font>
+<font color="black"> 158.     in, the corresponding string representation is returned.</font>
+<font color="black"> 159. </font>
+<font color="black"> 160.     Otherwise, the string &quot;Level %s&quot; % level is returned.</font>
+<font color="black"> 161.     &quot;&quot;&quot;</font>
+<font color="red"> 162.     return _levelNames.get(level, (&quot;Level %s&quot; % level))</font>
+<font color="black"> 163. </font>
+<font color="green"> 164. def addLevelName(level, levelName):</font>
+<font color="black"> 165.     &quot;&quot;&quot;</font>
+<font color="black"> 166.     Associate 'levelName' with 'level'.</font>
+<font color="black"> 167. </font>
+<font color="black"> 168.     This is used when converting levels to text during message formatting.</font>
+<font color="black"> 169.     &quot;&quot;&quot;</font>
+<font color="red"> 170.     _acquireLock()</font>
+<font color="red"> 171.     try:    #unlikely to cause an exception, but you never know...</font>
+<font color="red"> 172.         _levelNames[level] = levelName</font>
+<font color="red"> 173.         _levelNames[levelName] = level</font>
+<font color="black"> 174.     finally:</font>
+<font color="red"> 175.         _releaseLock()</font>
+<font color="black"> 176. </font>
+<font color="green"> 177. def _checkLevel(level):</font>
+<font color="green"> 178.     if isinstance(level, (int, long)):</font>
+<font color="green"> 179.         rv = level</font>
+<font color="red"> 180.     elif str(level) == level:</font>
+<font color="red"> 181.         if level not in _levelNames:</font>
+<font color="red"> 182.             raise ValueError(&quot;Unknown level: %r&quot; % level)</font>
+<font color="red"> 183.         rv = _levelNames[level]</font>
+<font color="black"> 184.     else:</font>
+<font color="red"> 185.         raise TypeError(&quot;Level not an integer or a valid string: %r&quot; % level)</font>
+<font color="green"> 186.     return rv</font>
+<font color="black"> 187. </font>
+<font color="black"> 188. #---------------------------------------------------------------------------</font>
+<font color="black"> 189. #   Thread-related stuff</font>
+<font color="black"> 190. #---------------------------------------------------------------------------</font>
+<font color="black"> 191. </font>
+<font color="black"> 192. #</font>
+<font color="black"> 193. #_lock is used to serialize access to shared data structures in this module.</font>
+<font color="black"> 194. #This needs to be an RLock because fileConfig() creates and configures</font>
+<font color="black"> 195. #Handlers, and so might arbitrary user threads. Since Handler code updates the</font>
+<font color="black"> 196. #shared dictionary _handlers, it needs to acquire the lock. But if configuring,</font>
+<font color="black"> 197. #the lock would already have been acquired - so we need an RLock.</font>
+<font color="black"> 198. #The same argument applies to Loggers and Manager.loggerDict.</font>
+<font color="black"> 199. #</font>
+<font color="green"> 200. if thread:</font>
+<font color="green"> 201.     _lock = threading.RLock()</font>
+<font color="black"> 202. else:</font>
+<font color="red"> 203.     _lock = None</font>
+<font color="black"> 204. </font>
+<font color="green"> 205. def _acquireLock():</font>
+<font color="black"> 206.     &quot;&quot;&quot;</font>
+<font color="black"> 207.     Acquire the module-level lock for serializing access to shared data.</font>
+<font color="black"> 208. </font>
+<font color="black"> 209.     This should be released with _releaseLock().</font>
+<font color="black"> 210.     &quot;&quot;&quot;</font>
+<font color="green"> 211.     if _lock:</font>
+<font color="green"> 212.         _lock.acquire()</font>
+<font color="black"> 213. </font>
+<font color="green"> 214. def _releaseLock():</font>
+<font color="black"> 215.     &quot;&quot;&quot;</font>
+<font color="black"> 216.     Release the module-level lock acquired by calling _acquireLock().</font>
+<font color="black"> 217.     &quot;&quot;&quot;</font>
+<font color="green"> 218.     if _lock:</font>
+<font color="green"> 219.         _lock.release()</font>
+<font color="black"> 220. </font>
+<font color="black"> 221. #---------------------------------------------------------------------------</font>
+<font color="black"> 222. #   The logging record</font>
+<font color="black"> 223. #---------------------------------------------------------------------------</font>
+<font color="black"> 224. </font>
+<font color="green"> 225. class LogRecord(object):</font>
+<font color="black"> 226.     &quot;&quot;&quot;</font>
+<font color="black"> 227.     A LogRecord instance represents an event being logged.</font>
+<font color="black"> 228. </font>
+<font color="black"> 229.     LogRecord instances are created every time something is logged. They</font>
+<font color="black"> 230.     contain all the information pertinent to the event being logged. The</font>
+<font color="black"> 231.     main information passed in is in msg and args, which are combined</font>
+<font color="black"> 232.     using str(msg) % args to create the message field of the record. The</font>
+<font color="black"> 233.     record also includes information such as when the record was created,</font>
+<font color="black"> 234.     the source line where the logging call was made, and any exception</font>
+<font color="black"> 235.     information to be logged.</font>
+<font color="green"> 236.     &quot;&quot;&quot;</font>
+<font color="black"> 237.     def __init__(self, name, level, pathname, lineno,</font>
+<font color="green"> 238.                  msg, args, exc_info, func=None):</font>
+<font color="black"> 239.         &quot;&quot;&quot;</font>
+<font color="black"> 240.         Initialize a logging record with interesting information.</font>
+<font color="black"> 241.         &quot;&quot;&quot;</font>
+<font color="red"> 242.         ct = time.time()</font>
+<font color="red"> 243.         self.name = name</font>
+<font color="red"> 244.         self.msg = msg</font>
+<font color="black"> 245.         #</font>
+<font color="black"> 246.         # The following statement allows passing of a dictionary as a sole</font>
+<font color="black"> 247.         # argument, so that you can do something like</font>
+<font color="black"> 248.         #  logging.debug(&quot;a %(a)d b %(b)s&quot;, {'a':1, 'b':2})</font>
+<font color="black"> 249.         # Suggested by Stefan Behnel.</font>
+<font color="black"> 250.         # Note that without the test for args[0], we get a problem because</font>
+<font color="black"> 251.         # during formatting, we test to see if the arg is present using</font>
+<font color="black"> 252.         # 'if self.args:'. If the event being logged is e.g. 'Value is %d'</font>
+<font color="black"> 253.         # and if the passed arg fails 'if self.args:' then no formatting</font>
+<font color="black"> 254.         # is done. For example, logger.warn('Value is %d', 0) would log</font>
+<font color="black"> 255.         # 'Value is %d' instead of 'Value is 0'.</font>
+<font color="black"> 256.         # For the use case of passing a dictionary, this should not be a</font>
+<font color="black"> 257.         # problem.</font>
+<font color="black"> 258.         # Issue #21172: a request was made to relax the isinstance check</font>
+<font color="black"> 259.         # to hasattr(args[0], '__getitem__'). However, the docs on string</font>
+<font color="black"> 260.         # formatting still seem to suggest a mapping object is required.</font>
+<font color="black"> 261.         # Thus, while not removing the isinstance check, it does now look</font>
+<font color="black"> 262.         # for collections.Mapping rather than, as before, dict.</font>
+<font color="red"> 263.         if (args and len(args) == 1 and isinstance(args[0], collections.Mapping)</font>
+<font color="red"> 264.             and args[0]):</font>
+<font color="red"> 265.             args = args[0]</font>
+<font color="red"> 266.         self.args = args</font>
+<font color="red"> 267.         self.levelname = getLevelName(level)</font>
+<font color="red"> 268.         self.levelno = level</font>
+<font color="red"> 269.         self.pathname = pathname</font>
+<font color="red"> 270.         try:</font>
+<font color="red"> 271.             self.filename = os.path.basename(pathname)</font>
+<font color="red"> 272.             self.module = os.path.splitext(self.filename)[0]</font>
+<font color="red"> 273.         except (TypeError, ValueError, AttributeError):</font>
+<font color="red"> 274.             self.filename = pathname</font>
+<font color="red"> 275.             self.module = &quot;Unknown module&quot;</font>
+<font color="red"> 276.         self.exc_info = exc_info</font>
+<font color="red"> 277.         self.exc_text = None      # used to cache the traceback text</font>
+<font color="red"> 278.         self.lineno = lineno</font>
+<font color="red"> 279.         self.funcName = func</font>
+<font color="red"> 280.         self.created = ct</font>
+<font color="red"> 281.         self.msecs = (ct - long(ct)) * 1000</font>
+<font color="red"> 282.         self.relativeCreated = (self.created - _startTime) * 1000</font>
+<font color="red"> 283.         if logThreads and thread:</font>
+<font color="red"> 284.             self.thread = thread.get_ident()</font>
+<font color="red"> 285.             self.threadName = threading.current_thread().name</font>
+<font color="black"> 286.         else:</font>
+<font color="red"> 287.             self.thread = None</font>
+<font color="red"> 288.             self.threadName = None</font>
+<font color="red"> 289.         if not logMultiprocessing:</font>
+<font color="red"> 290.             self.processName = None</font>
+<font color="black"> 291.         else:</font>
+<font color="red"> 292.             self.processName = 'MainProcess'</font>
+<font color="red"> 293.             mp = sys.modules.get('multiprocessing')</font>
+<font color="red"> 294.             if mp is not None:</font>
+<font color="black"> 295.                 # Errors may occur if multiprocessing has not finished loading</font>
+<font color="black"> 296.                 # yet - e.g. if a custom import hook causes third-party code</font>
+<font color="black"> 297.                 # to run when multiprocessing calls import. See issue 8200</font>
+<font color="black"> 298.                 # for an example</font>
+<font color="red"> 299.                 try:</font>
+<font color="red"> 300.                     self.processName = mp.current_process().name</font>
+<font color="red"> 301.                 except StandardError:</font>
+<font color="red"> 302.                     pass</font>
+<font color="red"> 303.         if logProcesses and hasattr(os, 'getpid'):</font>
+<font color="red"> 304.             self.process = os.getpid()</font>
+<font color="black"> 305.         else:</font>
+<font color="red"> 306.             self.process = None</font>
+<font color="black"> 307. </font>
+<font color="green"> 308.     def __str__(self):</font>
+<font color="red"> 309.         return '&lt;LogRecord: %s, %s, %s, %s, &quot;%s&quot;&gt;'%(self.name, self.levelno,</font>
+<font color="red"> 310.             self.pathname, self.lineno, self.msg)</font>
+<font color="black"> 311. </font>
+<font color="green"> 312.     def getMessage(self):</font>
+<font color="black"> 313.         &quot;&quot;&quot;</font>
+<font color="black"> 314.         Return the message for this LogRecord.</font>
+<font color="black"> 315. </font>
+<font color="black"> 316.         Return the message for this LogRecord after merging any user-supplied</font>
+<font color="black"> 317.         arguments with the message.</font>
+<font color="black"> 318.         &quot;&quot;&quot;</font>
+<font color="red"> 319.         if not _unicode: #if no unicode support...</font>
+<font color="red"> 320.             msg = str(self.msg)</font>
+<font color="black"> 321.         else:</font>
+<font color="red"> 322.             msg = self.msg</font>
+<font color="red"> 323.             if not isinstance(msg, basestring):</font>
+<font color="red"> 324.                 try:</font>
+<font color="red"> 325.                     msg = str(self.msg)</font>
+<font color="red"> 326.                 except UnicodeError:</font>
+<font color="red"> 327.                     msg = self.msg      #Defer encoding till later</font>
+<font color="red"> 328.         if self.args:</font>
+<font color="red"> 329.             msg = msg % self.args</font>
+<font color="red"> 330.         return msg</font>
+<font color="black"> 331. </font>
+<font color="green"> 332. def makeLogRecord(dict):</font>
+<font color="black"> 333.     &quot;&quot;&quot;</font>
+<font color="black"> 334.     Make a LogRecord whose attributes are defined by the specified dictionary,</font>
+<font color="black"> 335.     This function is useful for converting a logging event received over</font>
+<font color="black"> 336.     a socket connection (which is sent as a dictionary) into a LogRecord</font>
+<font color="black"> 337.     instance.</font>
+<font color="black"> 338.     &quot;&quot;&quot;</font>
+<font color="red"> 339.     rv = LogRecord(None, None, &quot;&quot;, 0, &quot;&quot;, (), None, None)</font>
+<font color="red"> 340.     rv.__dict__.update(dict)</font>
+<font color="red"> 341.     return rv</font>
+<font color="black"> 342. </font>
+<font color="black"> 343. #---------------------------------------------------------------------------</font>
+<font color="black"> 344. #   Formatter classes and functions</font>
+<font color="black"> 345. #---------------------------------------------------------------------------</font>
+<font color="black"> 346. </font>
+<font color="green"> 347. class Formatter(object):</font>
+<font color="black"> 348.     &quot;&quot;&quot;</font>
+<font color="black"> 349.     Formatter instances are used to convert a LogRecord to text.</font>
+<font color="black"> 350. </font>
+<font color="black"> 351.     Formatters need to know how a LogRecord is constructed. They are</font>
+<font color="black"> 352.     responsible for converting a LogRecord to (usually) a string which can</font>
+<font color="black"> 353.     be interpreted by either a human or an external system. The base Formatter</font>
+<font color="black"> 354.     allows a formatting string to be specified. If none is supplied, the</font>
+<font color="black"> 355.     default value of &quot;%s(message)\\n&quot; is used.</font>
+<font color="black"> 356. </font>
+<font color="black"> 357.     The Formatter can be initialized with a format string which makes use of</font>
+<font color="black"> 358.     knowledge of the LogRecord attributes - e.g. the default value mentioned</font>
+<font color="black"> 359.     above makes use of the fact that the user's message and arguments are pre-</font>
+<font color="black"> 360.     formatted into a LogRecord's message attribute. Currently, the useful</font>
+<font color="black"> 361.     attributes in a LogRecord are described by:</font>
+<font color="black"> 362. </font>
+<font color="black"> 363.     %(name)s            Name of the logger (logging channel)</font>
+<font color="black"> 364.     %(levelno)s         Numeric logging level for the message (DEBUG, INFO,</font>
+<font color="black"> 365.                         WARNING, ERROR, CRITICAL)</font>
+<font color="black"> 366.     %(levelname)s       Text logging level for the message (&quot;DEBUG&quot;, &quot;INFO&quot;,</font>
+<font color="black"> 367.                         &quot;WARNING&quot;, &quot;ERROR&quot;, &quot;CRITICAL&quot;)</font>
+<font color="black"> 368.     %(pathname)s        Full pathname of the source file where the logging</font>
+<font color="black"> 369.                         call was issued (if available)</font>
+<font color="black"> 370.     %(filename)s        Filename portion of pathname</font>
+<font color="black"> 371.     %(module)s          Module (name portion of filename)</font>
+<font color="black"> 372.     %(lineno)d          Source line number where the logging call was issued</font>
+<font color="black"> 373.                         (if available)</font>
+<font color="black"> 374.     %(funcName)s        Function name</font>
+<font color="black"> 375.     %(created)f         Time when the LogRecord was created (time.time()</font>
+<font color="black"> 376.                         return value)</font>
+<font color="black"> 377.     %(asctime)s         Textual time when the LogRecord was created</font>
+<font color="black"> 378.     %(msecs)d           Millisecond portion of the creation time</font>
+<font color="black"> 379.     %(relativeCreated)d Time in milliseconds when the LogRecord was created,</font>
+<font color="black"> 380.                         relative to the time the logging module was loaded</font>
+<font color="black"> 381.                         (typically at application startup time)</font>
+<font color="black"> 382.     %(thread)d          Thread ID (if available)</font>
+<font color="black"> 383.     %(threadName)s      Thread name (if available)</font>
+<font color="black"> 384.     %(process)d         Process ID (if available)</font>
+<font color="black"> 385.     %(message)s         The result of record.getMessage(), computed just as</font>
+<font color="black"> 386.                         the record is emitted</font>
+<font color="green"> 387.     &quot;&quot;&quot;</font>
+<font color="black"> 388. </font>
+<font color="green"> 389.     converter = time.localtime</font>
+<font color="black"> 390. </font>
+<font color="green"> 391.     def __init__(self, fmt=None, datefmt=None):</font>
+<font color="black"> 392.         &quot;&quot;&quot;</font>
+<font color="black"> 393.         Initialize the formatter with specified format strings.</font>
+<font color="black"> 394. </font>
+<font color="black"> 395.         Initialize the formatter either with the specified format string, or a</font>
+<font color="black"> 396.         default as described above. Allow for specialized date formatting with</font>
+<font color="black"> 397.         the optional datefmt argument (if omitted, you get the ISO8601 format).</font>
+<font color="black"> 398.         &quot;&quot;&quot;</font>
+<font color="green"> 399.         if fmt:</font>
+<font color="red"> 400.             self._fmt = fmt</font>
+<font color="black"> 401.         else:</font>
+<font color="green"> 402.             self._fmt = &quot;%(message)s&quot;</font>
+<font color="green"> 403.         self.datefmt = datefmt</font>
+<font color="black"> 404. </font>
+<font color="green"> 405.     def formatTime(self, record, datefmt=None):</font>
+<font color="black"> 406.         &quot;&quot;&quot;</font>
+<font color="black"> 407.         Return the creation time of the specified LogRecord as formatted text.</font>
+<font color="black"> 408. </font>
+<font color="black"> 409.         This method should be called from format() by a formatter which</font>
+<font color="black"> 410.         wants to make use of a formatted time. This method can be overridden</font>
+<font color="black"> 411.         in formatters to provide for any specific requirement, but the</font>
+<font color="black"> 412.         basic behaviour is as follows: if datefmt (a string) is specified,</font>
+<font color="black"> 413.         it is used with time.strftime() to format the creation time of the</font>
+<font color="black"> 414.         record. Otherwise, the ISO8601 format is used. The resulting</font>
+<font color="black"> 415.         string is returned. This function uses a user-configurable function</font>
+<font color="black"> 416.         to convert the creation time to a tuple. By default, time.localtime()</font>
+<font color="black"> 417.         is used; to change this for a particular formatter instance, set the</font>
+<font color="black"> 418.         'converter' attribute to a function with the same signature as</font>
+<font color="black"> 419.         time.localtime() or time.gmtime(). To change it for all formatters,</font>
+<font color="black"> 420.         for example if you want all logging times to be shown in GMT,</font>
+<font color="black"> 421.         set the 'converter' attribute in the Formatter class.</font>
+<font color="black"> 422.         &quot;&quot;&quot;</font>
+<font color="red"> 423.         ct = self.converter(record.created)</font>
+<font color="red"> 424.         if datefmt:</font>
+<font color="red"> 425.             s = time.strftime(datefmt, ct)</font>
+<font color="black"> 426.         else:</font>
+<font color="red"> 427.             t = time.strftime(&quot;%Y-%m-%d %H:%M:%S&quot;, ct)</font>
+<font color="red"> 428.             s = &quot;%s,%03d&quot; % (t, record.msecs)</font>
+<font color="red"> 429.         return s</font>
+<font color="black"> 430. </font>
+<font color="green"> 431.     def formatException(self, ei):</font>
+<font color="black"> 432.         &quot;&quot;&quot;</font>
+<font color="black"> 433.         Format and return the specified exception information as a string.</font>
+<font color="black"> 434. </font>
+<font color="black"> 435.         This default implementation just uses</font>
+<font color="black"> 436.         traceback.print_exception()</font>
+<font color="black"> 437.         &quot;&quot;&quot;</font>
+<font color="red"> 438.         sio = cStringIO.StringIO()</font>
+<font color="red"> 439.         traceback.print_exception(ei[0], ei[1], ei[2], None, sio)</font>
+<font color="red"> 440.         s = sio.getvalue()</font>
+<font color="red"> 441.         sio.close()</font>
+<font color="red"> 442.         if s[-1:] == &quot;\n&quot;:</font>
+<font color="red"> 443.             s = s[:-1]</font>
+<font color="red"> 444.         return s</font>
+<font color="black"> 445. </font>
+<font color="green"> 446.     def usesTime(self):</font>
+<font color="black"> 447.         &quot;&quot;&quot;</font>
+<font color="black"> 448.         Check if the format uses the creation time of the record.</font>
+<font color="black"> 449.         &quot;&quot;&quot;</font>
+<font color="red"> 450.         return self._fmt.find(&quot;%(asctime)&quot;) &gt;= 0</font>
+<font color="black"> 451. </font>
+<font color="green"> 452.     def format(self, record):</font>
+<font color="black"> 453.         &quot;&quot;&quot;</font>
+<font color="black"> 454.         Format the specified record as text.</font>
+<font color="black"> 455. </font>
+<font color="black"> 456.         The record's attribute dictionary is used as the operand to a</font>
+<font color="black"> 457.         string formatting operation which yields the returned string.</font>
+<font color="black"> 458.         Before formatting the dictionary, a couple of preparatory steps</font>
+<font color="black"> 459.         are carried out. The message attribute of the record is computed</font>
+<font color="black"> 460.         using LogRecord.getMessage(). If the formatting string uses the</font>
+<font color="black"> 461.         time (as determined by a call to usesTime(), formatTime() is</font>
+<font color="black"> 462.         called to format the event time. If there is exception information,</font>
+<font color="black"> 463.         it is formatted using formatException() and appended to the message.</font>
+<font color="black"> 464.         &quot;&quot;&quot;</font>
+<font color="red"> 465.         record.message = record.getMessage()</font>
+<font color="red"> 466.         if self.usesTime():</font>
+<font color="red"> 467.             record.asctime = self.formatTime(record, self.datefmt)</font>
+<font color="red"> 468.         try:</font>
+<font color="red"> 469.             s = self._fmt % record.__dict__</font>
+<font color="red"> 470.         except UnicodeDecodeError as e:</font>
+<font color="black"> 471.             # Issue 25664. The logger name may be Unicode. Try again ...</font>
+<font color="red"> 472.             try:</font>
+<font color="red"> 473.                 record.name = record.name.decode('utf-8')</font>
+<font color="red"> 474.                 s = self._fmt % record.__dict__</font>
+<font color="red"> 475.             except UnicodeDecodeError:</font>
+<font color="red"> 476.                 raise e</font>
+<font color="red"> 477.         if record.exc_info:</font>
+<font color="black"> 478.             # Cache the traceback text to avoid converting it multiple times</font>
+<font color="black"> 479.             # (it's constant anyway)</font>
+<font color="red"> 480.             if not record.exc_text:</font>
+<font color="red"> 481.                 record.exc_text = self.formatException(record.exc_info)</font>
+<font color="red"> 482.         if record.exc_text:</font>
+<font color="red"> 483.             if s[-1:] != &quot;\n&quot;:</font>
+<font color="red"> 484.                 s = s + &quot;\n&quot;</font>
+<font color="red"> 485.             try:</font>
+<font color="red"> 486.                 s = s + record.exc_text</font>
+<font color="red"> 487.             except UnicodeError:</font>
+<font color="black"> 488.                 # Sometimes filenames have non-ASCII chars, which can lead</font>
+<font color="black"> 489.                 # to errors when s is Unicode and record.exc_text is str</font>
+<font color="black"> 490.                 # See issue 8924.</font>
+<font color="black"> 491.                 # We also use replace for when there are multiple</font>
+<font color="black"> 492.                 # encodings, e.g. UTF-8 for the filesystem and latin-1</font>
+<font color="black"> 493.                 # for a script. See issue 13232.</font>
+<font color="red"> 494.                 s = s + record.exc_text.decode(sys.getfilesystemencoding(),</font>
+<font color="red"> 495.                                                'replace')</font>
+<font color="red"> 496.         return s</font>
+<font color="black"> 497. </font>
+<font color="black"> 498. #</font>
+<font color="black"> 499. #   The default formatter to use when no other is specified</font>
+<font color="black"> 500. #</font>
+<font color="green"> 501. _defaultFormatter = Formatter()</font>
+<font color="black"> 502. </font>
+<font color="green"> 503. class BufferingFormatter(object):</font>
+<font color="black"> 504.     &quot;&quot;&quot;</font>
+<font color="black"> 505.     A formatter suitable for formatting a number of records.</font>
+<font color="green"> 506.     &quot;&quot;&quot;</font>
+<font color="green"> 507.     def __init__(self, linefmt=None):</font>
+<font color="black"> 508.         &quot;&quot;&quot;</font>
+<font color="black"> 509.         Optionally specify a formatter which will be used to format each</font>
+<font color="black"> 510.         individual record.</font>
+<font color="black"> 511.         &quot;&quot;&quot;</font>
+<font color="red"> 512.         if linefmt:</font>
+<font color="red"> 513.             self.linefmt = linefmt</font>
+<font color="black"> 514.         else:</font>
+<font color="red"> 515.             self.linefmt = _defaultFormatter</font>
+<font color="black"> 516. </font>
+<font color="green"> 517.     def formatHeader(self, records):</font>
+<font color="black"> 518.         &quot;&quot;&quot;</font>
+<font color="black"> 519.         Return the header string for the specified records.</font>
+<font color="black"> 520.         &quot;&quot;&quot;</font>
+<font color="red"> 521.         return &quot;&quot;</font>
+<font color="black"> 522. </font>
+<font color="green"> 523.     def formatFooter(self, records):</font>
+<font color="black"> 524.         &quot;&quot;&quot;</font>
+<font color="black"> 525.         Return the footer string for the specified records.</font>
+<font color="black"> 526.         &quot;&quot;&quot;</font>
+<font color="red"> 527.         return &quot;&quot;</font>
+<font color="black"> 528. </font>
+<font color="green"> 529.     def format(self, records):</font>
+<font color="black"> 530.         &quot;&quot;&quot;</font>
+<font color="black"> 531.         Format the specified records and return the result as a string.</font>
+<font color="black"> 532.         &quot;&quot;&quot;</font>
+<font color="red"> 533.         rv = &quot;&quot;</font>
+<font color="red"> 534.         if len(records) &gt; 0:</font>
+<font color="red"> 535.             rv = rv + self.formatHeader(records)</font>
+<font color="red"> 536.             for record in records:</font>
+<font color="red"> 537.                 rv = rv + self.linefmt.format(record)</font>
+<font color="red"> 538.             rv = rv + self.formatFooter(records)</font>
+<font color="red"> 539.         return rv</font>
+<font color="black"> 540. </font>
+<font color="black"> 541. #---------------------------------------------------------------------------</font>
+<font color="black"> 542. #   Filter classes and functions</font>
+<font color="black"> 543. #---------------------------------------------------------------------------</font>
+<font color="black"> 544. </font>
+<font color="green"> 545. class Filter(object):</font>
+<font color="black"> 546.     &quot;&quot;&quot;</font>
+<font color="black"> 547.     Filter instances are used to perform arbitrary filtering of LogRecords.</font>
+<font color="black"> 548. </font>
+<font color="black"> 549.     Loggers and Handlers can optionally use Filter instances to filter</font>
+<font color="black"> 550.     records as desired. The base filter class only allows events which are</font>
+<font color="black"> 551.     below a certain point in the logger hierarchy. For example, a filter</font>
+<font color="black"> 552.     initialized with &quot;A.B&quot; will allow events logged by loggers &quot;A.B&quot;,</font>
+<font color="black"> 553.     &quot;A.B.C&quot;, &quot;A.B.C.D&quot;, &quot;A.B.D&quot; etc. but not &quot;A.BB&quot;, &quot;B.A.B&quot; etc. If</font>
+<font color="black"> 554.     initialized with the empty string, all events are passed.</font>
+<font color="green"> 555.     &quot;&quot;&quot;</font>
+<font color="green"> 556.     def __init__(self, name=''):</font>
+<font color="black"> 557.         &quot;&quot;&quot;</font>
+<font color="black"> 558.         Initialize a filter.</font>
+<font color="black"> 559. </font>
+<font color="black"> 560.         Initialize with the name of the logger which, together with its</font>
+<font color="black"> 561.         children, will have its events allowed through the filter. If no</font>
+<font color="black"> 562.         name is specified, allow every event.</font>
+<font color="black"> 563.         &quot;&quot;&quot;</font>
+<font color="red"> 564.         self.name = name</font>
+<font color="red"> 565.         self.nlen = len(name)</font>
+<font color="black"> 566. </font>
+<font color="green"> 567.     def filter(self, record):</font>
+<font color="black"> 568.         &quot;&quot;&quot;</font>
+<font color="black"> 569.         Determine if the specified record is to be logged.</font>
+<font color="black"> 570. </font>
+<font color="black"> 571.         Is the specified record to be logged? Returns 0 for no, nonzero for</font>
+<font color="black"> 572.         yes. If deemed appropriate, the record may be modified in-place.</font>
+<font color="black"> 573.         &quot;&quot;&quot;</font>
+<font color="red"> 574.         if self.nlen == 0:</font>
+<font color="red"> 575.             return 1</font>
+<font color="red"> 576.         elif self.name == record.name:</font>
+<font color="red"> 577.             return 1</font>
+<font color="red"> 578.         elif record.name.find(self.name, 0, self.nlen) != 0:</font>
+<font color="red"> 579.             return 0</font>
+<font color="red"> 580.         return (record.name[self.nlen] == &quot;.&quot;)</font>
+<font color="black"> 581. </font>
+<font color="green"> 582. class Filterer(object):</font>
+<font color="black"> 583.     &quot;&quot;&quot;</font>
+<font color="black"> 584.     A base class for loggers and handlers which allows them to share</font>
+<font color="black"> 585.     common code.</font>
+<font color="green"> 586.     &quot;&quot;&quot;</font>
+<font color="green"> 587.     def __init__(self):</font>
+<font color="black"> 588.         &quot;&quot;&quot;</font>
+<font color="black"> 589.         Initialize the list of filters to be an empty list.</font>
+<font color="black"> 590.         &quot;&quot;&quot;</font>
+<font color="green"> 591.         self.filters = []</font>
+<font color="black"> 592. </font>
+<font color="green"> 593.     def addFilter(self, filter):</font>
+<font color="black"> 594.         &quot;&quot;&quot;</font>
+<font color="black"> 595.         Add the specified filter to this handler.</font>
+<font color="black"> 596.         &quot;&quot;&quot;</font>
+<font color="red"> 597.         if not (filter in self.filters):</font>
+<font color="red"> 598.             self.filters.append(filter)</font>
+<font color="black"> 599. </font>
+<font color="green"> 600.     def removeFilter(self, filter):</font>
+<font color="black"> 601.         &quot;&quot;&quot;</font>
+<font color="black"> 602.         Remove the specified filter from this handler.</font>
+<font color="black"> 603.         &quot;&quot;&quot;</font>
+<font color="red"> 604.         if filter in self.filters:</font>
+<font color="red"> 605.             self.filters.remove(filter)</font>
+<font color="black"> 606. </font>
+<font color="green"> 607.     def filter(self, record):</font>
+<font color="black"> 608.         &quot;&quot;&quot;</font>
+<font color="black"> 609.         Determine if a record is loggable by consulting all the filters.</font>
+<font color="black"> 610. </font>
+<font color="black"> 611.         The default is to allow the record to be logged; any filter can veto</font>
+<font color="black"> 612.         this and the record is then dropped. Returns a zero value if a record</font>
+<font color="black"> 613.         is to be dropped, else non-zero.</font>
+<font color="black"> 614.         &quot;&quot;&quot;</font>
+<font color="red"> 615.         rv = 1</font>
+<font color="red"> 616.         for f in self.filters:</font>
+<font color="red"> 617.             if not f.filter(record):</font>
+<font color="red"> 618.                 rv = 0</font>
+<font color="red"> 619.                 break</font>
+<font color="red"> 620.         return rv</font>
+<font color="black"> 621. </font>
+<font color="black"> 622. #---------------------------------------------------------------------------</font>
+<font color="black"> 623. #   Handler classes and functions</font>
+<font color="black"> 624. #---------------------------------------------------------------------------</font>
+<font color="black"> 625. </font>
+<font color="green"> 626. _handlers = weakref.WeakValueDictionary()  #map of handler names to handlers</font>
+<font color="green"> 627. _handlerList = [] # added to allow handlers to be removed in reverse of order initialized</font>
+<font color="black"> 628. </font>
+<font color="green"> 629. def _removeHandlerRef(wr):</font>
+<font color="black"> 630.     &quot;&quot;&quot;</font>
+<font color="black"> 631.     Remove a handler reference from the internal cleanup list.</font>
+<font color="black"> 632.     &quot;&quot;&quot;</font>
+<font color="black"> 633.     # This function can be called during module teardown, when globals are</font>
+<font color="black"> 634.     # set to None. It can also be called from another thread. So we need to</font>
+<font color="black"> 635.     # pre-emptively grab the necessary globals and check if they're None,</font>
+<font color="black"> 636.     # to prevent race conditions and failures during interpreter shutdown.</font>
+<font color="red"> 637.     acquire, release, handlers = _acquireLock, _releaseLock, _handlerList</font>
+<font color="red"> 638.     if acquire and release and handlers:</font>
+<font color="red"> 639.         try:</font>
+<font color="red"> 640.             acquire()</font>
+<font color="red"> 641.             try:</font>
+<font color="red"> 642.                 if wr in handlers:</font>
+<font color="red"> 643.                     handlers.remove(wr)</font>
+<font color="black"> 644.             finally:</font>
+<font color="red"> 645.                 release()</font>
+<font color="red"> 646.         except TypeError:</font>
+<font color="black"> 647.             # https://bugs.python.org/issue21149 - If the RLock object behind</font>
+<font color="black"> 648.             # acquire() and release() has been partially finalized you may see</font>
+<font color="black"> 649.             # an error about NoneType not being callable.  Absolutely nothing</font>
+<font color="black"> 650.             # we can do in this GC during process shutdown situation.  Eat it.</font>
+<font color="red"> 651.             pass</font>
+<font color="black"> 652. </font>
+<font color="green"> 653. def _addHandlerRef(handler):</font>
+<font color="black"> 654.     &quot;&quot;&quot;</font>
+<font color="black"> 655.     Add a handler to the internal cleanup list using a weak reference.</font>
+<font color="black"> 656.     &quot;&quot;&quot;</font>
+<font color="green"> 657.     _acquireLock()</font>
+<font color="green"> 658.     try:</font>
+<font color="green"> 659.         _handlerList.append(weakref.ref(handler, _removeHandlerRef))</font>
+<font color="black"> 660.     finally:</font>
+<font color="green"> 661.         _releaseLock()</font>
+<font color="black"> 662. </font>
+<font color="green"> 663. class Handler(Filterer):</font>
+<font color="black"> 664.     &quot;&quot;&quot;</font>
+<font color="black"> 665.     Handler instances dispatch logging events to specific destinations.</font>
+<font color="black"> 666. </font>
+<font color="black"> 667.     The base handler class. Acts as a placeholder which defines the Handler</font>
+<font color="black"> 668.     interface. Handlers can optionally use Formatter instances to format</font>
+<font color="black"> 669.     records as desired. By default, no formatter is specified; in this case,</font>
+<font color="black"> 670.     the 'raw' message as determined by record.message is logged.</font>
+<font color="green"> 671.     &quot;&quot;&quot;</font>
+<font color="green"> 672.     def __init__(self, level=NOTSET):</font>
+<font color="black"> 673.         &quot;&quot;&quot;</font>
+<font color="black"> 674.         Initializes the instance - basically setting the formatter to None</font>
+<font color="black"> 675.         and the filter list to empty.</font>
+<font color="black"> 676.         &quot;&quot;&quot;</font>
+<font color="green"> 677.         Filterer.__init__(self)</font>
+<font color="green"> 678.         self._name = None</font>
+<font color="green"> 679.         self.level = _checkLevel(level)</font>
+<font color="green"> 680.         self.formatter = None</font>
+<font color="black"> 681.         # Add the handler to the global _handlerList (for cleanup on shutdown)</font>
+<font color="green"> 682.         _addHandlerRef(self)</font>
+<font color="green"> 683.         self.createLock()</font>
+<font color="black"> 684. </font>
+<font color="green"> 685.     def get_name(self):</font>
+<font color="red"> 686.         return self._name</font>
+<font color="black"> 687. </font>
+<font color="green"> 688.     def set_name(self, name):</font>
+<font color="red"> 689.         _acquireLock()</font>
+<font color="red"> 690.         try:</font>
+<font color="red"> 691.             if self._name in _handlers:</font>
+<font color="red"> 692.                 del _handlers[self._name]</font>
+<font color="red"> 693.             self._name = name</font>
+<font color="red"> 694.             if name:</font>
+<font color="red"> 695.                 _handlers[name] = self</font>
+<font color="black"> 696.         finally:</font>
+<font color="red"> 697.             _releaseLock()</font>
+<font color="black"> 698. </font>
+<font color="green"> 699.     name = property(get_name, set_name)</font>
+<font color="black"> 700. </font>
+<font color="green"> 701.     def createLock(self):</font>
+<font color="black"> 702.         &quot;&quot;&quot;</font>
+<font color="black"> 703.         Acquire a thread lock for serializing access to the underlying I/O.</font>
+<font color="black"> 704.         &quot;&quot;&quot;</font>
+<font color="green"> 705.         if thread:</font>
+<font color="green"> 706.             self.lock = threading.RLock()</font>
+<font color="black"> 707.         else:</font>
+<font color="red"> 708.             self.lock = None</font>
+<font color="black"> 709. </font>
+<font color="green"> 710.     def acquire(self):</font>
+<font color="black"> 711.         &quot;&quot;&quot;</font>
+<font color="black"> 712.         Acquire the I/O thread lock.</font>
+<font color="black"> 713.         &quot;&quot;&quot;</font>
+<font color="red"> 714.         if self.lock:</font>
+<font color="red"> 715.             self.lock.acquire()</font>
+<font color="black"> 716. </font>
+<font color="green"> 717.     def release(self):</font>
+<font color="black"> 718.         &quot;&quot;&quot;</font>
+<font color="black"> 719.         Release the I/O thread lock.</font>
+<font color="black"> 720.         &quot;&quot;&quot;</font>
+<font color="red"> 721.         if self.lock:</font>
+<font color="red"> 722.             self.lock.release()</font>
+<font color="black"> 723. </font>
+<font color="green"> 724.     def setLevel(self, level):</font>
+<font color="black"> 725.         &quot;&quot;&quot;</font>
+<font color="black"> 726.         Set the logging level of this handler.</font>
+<font color="black"> 727.         &quot;&quot;&quot;</font>
+<font color="red"> 728.         self.level = _checkLevel(level)</font>
+<font color="black"> 729. </font>
+<font color="green"> 730.     def format(self, record):</font>
+<font color="black"> 731.         &quot;&quot;&quot;</font>
+<font color="black"> 732.         Format the specified record.</font>
+<font color="black"> 733. </font>
+<font color="black"> 734.         If a formatter is set, use it. Otherwise, use the default formatter</font>
+<font color="black"> 735.         for the module.</font>
+<font color="black"> 736.         &quot;&quot;&quot;</font>
+<font color="red"> 737.         if self.formatter:</font>
+<font color="red"> 738.             fmt = self.formatter</font>
+<font color="black"> 739.         else:</font>
+<font color="red"> 740.             fmt = _defaultFormatter</font>
+<font color="red"> 741.         return fmt.format(record)</font>
+<font color="black"> 742. </font>
+<font color="green"> 743.     def emit(self, record):</font>
+<font color="black"> 744.         &quot;&quot;&quot;</font>
+<font color="black"> 745.         Do whatever it takes to actually log the specified logging record.</font>
+<font color="black"> 746. </font>
+<font color="black"> 747.         This version is intended to be implemented by subclasses and so</font>
+<font color="black"> 748.         raises a NotImplementedError.</font>
+<font color="black"> 749.         &quot;&quot;&quot;</font>
+<font color="red"> 750.         raise NotImplementedError('emit must be implemented '</font>
+<font color="black"> 751.                                   'by Handler subclasses')</font>
+<font color="black"> 752. </font>
+<font color="green"> 753.     def handle(self, record):</font>
+<font color="black"> 754.         &quot;&quot;&quot;</font>
+<font color="black"> 755.         Conditionally emit the specified logging record.</font>
+<font color="black"> 756. </font>
+<font color="black"> 757.         Emission depends on filters which may have been added to the handler.</font>
+<font color="black"> 758.         Wrap the actual emission of the record with acquisition/release of</font>
+<font color="black"> 759.         the I/O thread lock. Returns whether the filter passed the record for</font>
+<font color="black"> 760.         emission.</font>
+<font color="black"> 761.         &quot;&quot;&quot;</font>
+<font color="red"> 762.         rv = self.filter(record)</font>
+<font color="red"> 763.         if rv:</font>
+<font color="red"> 764.             self.acquire()</font>
+<font color="red"> 765.             try:</font>
+<font color="red"> 766.                 self.emit(record)</font>
+<font color="black"> 767.             finally:</font>
+<font color="red"> 768.                 self.release()</font>
+<font color="red"> 769.         return rv</font>
+<font color="black"> 770. </font>
+<font color="green"> 771.     def setFormatter(self, fmt):</font>
+<font color="black"> 772.         &quot;&quot;&quot;</font>
+<font color="black"> 773.         Set the formatter for this handler.</font>
+<font color="black"> 774.         &quot;&quot;&quot;</font>
+<font color="red"> 775.         self.formatter = fmt</font>
+<font color="black"> 776. </font>
+<font color="green"> 777.     def flush(self):</font>
+<font color="black"> 778.         &quot;&quot;&quot;</font>
+<font color="black"> 779.         Ensure all logging output has been flushed.</font>
+<font color="black"> 780. </font>
+<font color="black"> 781.         This version does nothing and is intended to be implemented by</font>
+<font color="black"> 782.         subclasses.</font>
+<font color="black"> 783.         &quot;&quot;&quot;</font>
+<font color="red"> 784.         pass</font>
+<font color="black"> 785. </font>
+<font color="green"> 786.     def close(self):</font>
+<font color="black"> 787.         &quot;&quot;&quot;</font>
+<font color="black"> 788.         Tidy up any resources used by the handler.</font>
+<font color="black"> 789. </font>
+<font color="black"> 790.         This version removes the handler from an internal map of handlers,</font>
+<font color="black"> 791.         _handlers, which is used for handler lookup by name. Subclasses</font>
+<font color="black"> 792.         should ensure that this gets called from overridden close()</font>
+<font color="black"> 793.         methods.</font>
+<font color="black"> 794.         &quot;&quot;&quot;</font>
+<font color="black"> 795.         #get the module data lock, as we're updating a shared structure.</font>
+<font color="red"> 796.         _acquireLock()</font>
+<font color="red"> 797.         try:    #unlikely to raise an exception, but you never know...</font>
+<font color="red"> 798.             if self._name and self._name in _handlers:</font>
+<font color="red"> 799.                 del _handlers[self._name]</font>
+<font color="black"> 800.         finally:</font>
+<font color="red"> 801.             _releaseLock()</font>
+<font color="black"> 802. </font>
+<font color="green"> 803.     def handleError(self, record):</font>
+<font color="black"> 804.         &quot;&quot;&quot;</font>
+<font color="black"> 805.         Handle errors which occur during an emit() call.</font>
+<font color="black"> 806. </font>
+<font color="black"> 807.         This method should be called from handlers when an exception is</font>
+<font color="black"> 808.         encountered during an emit() call. If raiseExceptions is false,</font>
+<font color="black"> 809.         exceptions get silently ignored. This is what is mostly wanted</font>
+<font color="black"> 810.         for a logging system - most users will not care about errors in</font>
+<font color="black"> 811.         the logging system, they are more interested in application errors.</font>
+<font color="black"> 812.         You could, however, replace this with a custom handler if you wish.</font>
+<font color="black"> 813.         The record which was being processed is passed in to this method.</font>
+<font color="black"> 814.         &quot;&quot;&quot;</font>
+<font color="red"> 815.         if raiseExceptions and sys.stderr:  # see issue 13807</font>
+<font color="red"> 816.             ei = sys.exc_info()</font>
+<font color="red"> 817.             try:</font>
+<font color="red"> 818.                 traceback.print_exception(ei[0], ei[1], ei[2],</font>
+<font color="red"> 819.                                           None, sys.stderr)</font>
+<font color="red"> 820.                 sys.stderr.write('Logged from file %s, line %s\n' % (</font>
+<font color="red"> 821.                                  record.filename, record.lineno))</font>
+<font color="red"> 822.             except IOError:</font>
+<font color="red"> 823.                 pass    # see issue 5971</font>
+<font color="black"> 824.             finally:</font>
+<font color="red"> 825.                 del ei</font>
+<font color="black"> 826. </font>
+<font color="green"> 827. class StreamHandler(Handler):</font>
+<font color="black"> 828.     &quot;&quot;&quot;</font>
+<font color="black"> 829.     A handler class which writes logging records, appropriately formatted,</font>
+<font color="black"> 830.     to a stream. Note that this class does not close the stream, as</font>
+<font color="black"> 831.     sys.stdout or sys.stderr may be used.</font>
+<font color="green"> 832.     &quot;&quot;&quot;</font>
+<font color="black"> 833. </font>
+<font color="green"> 834.     def __init__(self, stream=None):</font>
+<font color="black"> 835.         &quot;&quot;&quot;</font>
+<font color="black"> 836.         Initialize the handler.</font>
+<font color="black"> 837. </font>
+<font color="black"> 838.         If stream is not specified, sys.stderr is used.</font>
+<font color="black"> 839.         &quot;&quot;&quot;</font>
+<font color="red"> 840.         Handler.__init__(self)</font>
+<font color="red"> 841.         if stream is None:</font>
+<font color="red"> 842.             stream = sys.stderr</font>
+<font color="red"> 843.         self.stream = stream</font>
+<font color="black"> 844. </font>
+<font color="green"> 845.     def flush(self):</font>
+<font color="black"> 846.         &quot;&quot;&quot;</font>
+<font color="black"> 847.         Flushes the stream.</font>
+<font color="black"> 848.         &quot;&quot;&quot;</font>
+<font color="red"> 849.         self.acquire()</font>
+<font color="red"> 850.         try:</font>
+<font color="red"> 851.             if self.stream and hasattr(self.stream, &quot;flush&quot;):</font>
+<font color="red"> 852.                 self.stream.flush()</font>
+<font color="black"> 853.         finally:</font>
+<font color="red"> 854.             self.release()</font>
+<font color="black"> 855. </font>
+<font color="green"> 856.     def emit(self, record):</font>
+<font color="black"> 857.         &quot;&quot;&quot;</font>
+<font color="black"> 858.         Emit a record.</font>
+<font color="black"> 859. </font>
+<font color="black"> 860.         If a formatter is specified, it is used to format the record.</font>
+<font color="black"> 861.         The record is then written to the stream with a trailing newline.  If</font>
+<font color="black"> 862.         exception information is present, it is formatted using</font>
+<font color="black"> 863.         traceback.print_exception and appended to the stream.  If the stream</font>
+<font color="black"> 864.         has an 'encoding' attribute, it is used to determine how to do the</font>
+<font color="black"> 865.         output to the stream.</font>
+<font color="black"> 866.         &quot;&quot;&quot;</font>
+<font color="red"> 867.         try:</font>
+<font color="red"> 868.             msg = self.format(record)</font>
+<font color="red"> 869.             stream = self.stream</font>
+<font color="red"> 870.             fs = &quot;%s\n&quot;</font>
+<font color="red"> 871.             if not _unicode: #if no unicode support...</font>
+<font color="red"> 872.                 stream.write(fs % msg)</font>
+<font color="black"> 873.             else:</font>
+<font color="red"> 874.                 try:</font>
+<font color="red"> 875.                     if (isinstance(msg, unicode) and</font>
+<font color="red"> 876.                         getattr(stream, 'encoding', None)):</font>
+<font color="red"> 877.                         ufs = u'%s\n'</font>
+<font color="red"> 878.                         try:</font>
+<font color="red"> 879.                             stream.write(ufs % msg)</font>
+<font color="red"> 880.                         except UnicodeEncodeError:</font>
+<font color="black"> 881.                             #Printing to terminals sometimes fails. For example,</font>
+<font color="black"> 882.                             #with an encoding of 'cp1251', the above write will</font>
+<font color="black"> 883.                             #work if written to a stream opened or wrapped by</font>
+<font color="black"> 884.                             #the codecs module, but fail when writing to a</font>
+<font color="black"> 885.                             #terminal even when the codepage is set to cp1251.</font>
+<font color="black"> 886.                             #An extra encoding step seems to be needed.</font>
+<font color="red"> 887.                             stream.write((ufs % msg).encode(stream.encoding))</font>
+<font color="black"> 888.                     else:</font>
+<font color="red"> 889.                         stream.write(fs % msg)</font>
+<font color="red"> 890.                 except UnicodeError:</font>
+<font color="red"> 891.                     stream.write(fs % msg.encode(&quot;UTF-8&quot;))</font>
+<font color="red"> 892.             self.flush()</font>
+<font color="red"> 893.         except (KeyboardInterrupt, SystemExit):</font>
+<font color="red"> 894.             raise</font>
+<font color="red"> 895.         except:</font>
+<font color="red"> 896.             self.handleError(record)</font>
+<font color="black"> 897. </font>
+<font color="green"> 898. class FileHandler(StreamHandler):</font>
+<font color="black"> 899.     &quot;&quot;&quot;</font>
+<font color="black"> 900.     A handler class which writes formatted logging records to disk files.</font>
+<font color="green"> 901.     &quot;&quot;&quot;</font>
+<font color="green"> 902.     def __init__(self, filename, mode='a', encoding=None, delay=0):</font>
+<font color="black"> 903.         &quot;&quot;&quot;</font>
+<font color="black"> 904.         Open the specified file and use it as the stream for logging.</font>
+<font color="black"> 905.         &quot;&quot;&quot;</font>
+<font color="black"> 906.         #keep the absolute path, otherwise derived classes which use this</font>
+<font color="black"> 907.         #may come a cropper when the current directory changes</font>
+<font color="red"> 908.         if codecs is None:</font>
+<font color="red"> 909.             encoding = None</font>
+<font color="red"> 910.         self.baseFilename = os.path.abspath(filename)</font>
+<font color="red"> 911.         self.mode = mode</font>
+<font color="red"> 912.         self.encoding = encoding</font>
+<font color="red"> 913.         self.delay = delay</font>
+<font color="red"> 914.         if delay:</font>
+<font color="black"> 915.             #We don't open the stream, but we still need to call the</font>
+<font color="black"> 916.             #Handler constructor to set level, formatter, lock etc.</font>
+<font color="red"> 917.             Handler.__init__(self)</font>
+<font color="red"> 918.             self.stream = None</font>
+<font color="black"> 919.         else:</font>
+<font color="red"> 920.             StreamHandler.__init__(self, self._open())</font>
+<font color="black"> 921. </font>
+<font color="green"> 922.     def close(self):</font>
+<font color="black"> 923.         &quot;&quot;&quot;</font>
+<font color="black"> 924.         Closes the stream.</font>
+<font color="black"> 925.         &quot;&quot;&quot;</font>
+<font color="red"> 926.         self.acquire()</font>
+<font color="red"> 927.         try:</font>
+<font color="red"> 928.             try:</font>
+<font color="red"> 929.                 if self.stream:</font>
+<font color="red"> 930.                     try:</font>
+<font color="red"> 931.                         self.flush()</font>
+<font color="black"> 932.                     finally:</font>
+<font color="red"> 933.                         stream = self.stream</font>
+<font color="red"> 934.                         self.stream = None</font>
+<font color="red"> 935.                         if hasattr(stream, &quot;close&quot;):</font>
+<font color="red"> 936.                             stream.close()</font>
+<font color="black"> 937.             finally:</font>
+<font color="black"> 938.                 # Issue #19523: call unconditionally to</font>
+<font color="black"> 939.                 # prevent a handler leak when delay is set</font>
+<font color="red"> 940.                 StreamHandler.close(self)</font>
+<font color="black"> 941.         finally:</font>
+<font color="red"> 942.             self.release()</font>
+<font color="black"> 943. </font>
+<font color="green"> 944.     def _open(self):</font>
+<font color="black"> 945.         &quot;&quot;&quot;</font>
+<font color="black"> 946.         Open the current base file with the (original) mode and encoding.</font>
+<font color="black"> 947.         Return the resulting stream.</font>
+<font color="black"> 948.         &quot;&quot;&quot;</font>
+<font color="red"> 949.         if self.encoding is None:</font>
+<font color="red"> 950.             stream = open(self.baseFilename, self.mode)</font>
+<font color="black"> 951.         else:</font>
+<font color="red"> 952.             stream = codecs.open(self.baseFilename, self.mode, self.encoding)</font>
+<font color="red"> 953.         return stream</font>
+<font color="black"> 954. </font>
+<font color="green"> 955.     def emit(self, record):</font>
+<font color="black"> 956.         &quot;&quot;&quot;</font>
+<font color="black"> 957.         Emit a record.</font>
+<font color="black"> 958. </font>
+<font color="black"> 959.         If the stream was not opened because 'delay' was specified in the</font>
+<font color="black"> 960.         constructor, open it before calling the superclass's emit.</font>
+<font color="black"> 961.         &quot;&quot;&quot;</font>
+<font color="red"> 962.         if self.stream is None:</font>
+<font color="red"> 963.             self.stream = self._open()</font>
+<font color="red"> 964.         StreamHandler.emit(self, record)</font>
+<font color="black"> 965. </font>
+<font color="black"> 966. #---------------------------------------------------------------------------</font>
+<font color="black"> 967. #   Manager classes and functions</font>
+<font color="black"> 968. #---------------------------------------------------------------------------</font>
+<font color="black"> 969. </font>
+<font color="green"> 970. class PlaceHolder(object):</font>
+<font color="black"> 971.     &quot;&quot;&quot;</font>
+<font color="black"> 972.     PlaceHolder instances are used in the Manager logger hierarchy to take</font>
+<font color="black"> 973.     the place of nodes for which no loggers have been defined. This class is</font>
+<font color="black"> 974.     intended for internal use only and not as part of the public API.</font>
+<font color="green"> 975.     &quot;&quot;&quot;</font>
+<font color="green"> 976.     def __init__(self, alogger):</font>
+<font color="black"> 977.         &quot;&quot;&quot;</font>
+<font color="black"> 978.         Initialize with the specified logger being a child of this placeholder.</font>
+<font color="black"> 979.         &quot;&quot;&quot;</font>
+<font color="black"> 980.         #self.loggers = [alogger]</font>
+<font color="green"> 981.         self.loggerMap = { alogger : None }</font>
+<font color="black"> 982. </font>
+<font color="green"> 983.     def append(self, alogger):</font>
+<font color="black"> 984.         &quot;&quot;&quot;</font>
+<font color="black"> 985.         Add the specified logger as a child of this placeholder.</font>
+<font color="black"> 986.         &quot;&quot;&quot;</font>
+<font color="black"> 987.         #if alogger not in self.loggers:</font>
+<font color="green"> 988.         if alogger not in self.loggerMap:</font>
+<font color="black"> 989.             #self.loggers.append(alogger)</font>
+<font color="green"> 990.             self.loggerMap[alogger] = None</font>
+<font color="black"> 991. </font>
+<font color="black"> 992. #</font>
+<font color="black"> 993. #   Determine which class to use when instantiating loggers.</font>
+<font color="black"> 994. #</font>
+<font color="green"> 995. _loggerClass = None</font>
+<font color="black"> 996. </font>
+<font color="green"> 997. def setLoggerClass(klass):</font>
+<font color="black"> 998.     &quot;&quot;&quot;</font>
+<font color="black"> 999.     Set the class to be used when instantiating a logger. The class should</font>
+<font color="black">1000.     define __init__() such that only a name argument is required, and the</font>
+<font color="black">1001.     __init__() should call Logger.__init__()</font>
+<font color="black">1002.     &quot;&quot;&quot;</font>
+<font color="red">1003.     if klass != Logger:</font>
+<font color="red">1004.         if not issubclass(klass, Logger):</font>
+<font color="red">1005.             raise TypeError(&quot;logger not derived from logging.Logger: &quot;</font>
+<font color="red">1006.                             + klass.__name__)</font>
+<font color="black">1007.     global _loggerClass</font>
+<font color="red">1008.     _loggerClass = klass</font>
+<font color="black">1009. </font>
+<font color="green">1010. def getLoggerClass():</font>
+<font color="black">1011.     &quot;&quot;&quot;</font>
+<font color="black">1012.     Return the class to be used when instantiating a logger.</font>
+<font color="black">1013.     &quot;&quot;&quot;</font>
+<font color="black">1014. </font>
+<font color="red">1015.     return _loggerClass</font>
+<font color="black">1016. </font>
+<font color="green">1017. class Manager(object):</font>
+<font color="black">1018.     &quot;&quot;&quot;</font>
+<font color="black">1019.     There is [under normal circumstances] just one Manager instance, which</font>
+<font color="black">1020.     holds the hierarchy of loggers.</font>
+<font color="green">1021.     &quot;&quot;&quot;</font>
+<font color="green">1022.     def __init__(self, rootnode):</font>
+<font color="black">1023.         &quot;&quot;&quot;</font>
+<font color="black">1024.         Initialize the manager with the root node of the logger hierarchy.</font>
+<font color="black">1025.         &quot;&quot;&quot;</font>
+<font color="green">1026.         self.root = rootnode</font>
+<font color="green">1027.         self.disable = 0</font>
+<font color="green">1028.         self.emittedNoHandlerWarning = 0</font>
+<font color="green">1029.         self.loggerDict = {}</font>
+<font color="green">1030.         self.loggerClass = None</font>
+<font color="black">1031. </font>
+<font color="green">1032.     def getLogger(self, name):</font>
+<font color="black">1033.         &quot;&quot;&quot;</font>
+<font color="black">1034.         Get a logger with the specified name (channel name), creating it</font>
+<font color="black">1035.         if it doesn't yet exist. This name is a dot-separated hierarchical</font>
+<font color="black">1036.         name, such as &quot;a&quot;, &quot;a.b&quot;, &quot;a.b.c&quot; or similar.</font>
+<font color="black">1037. </font>
+<font color="black">1038.         If a PlaceHolder existed for the specified name [i.e. the logger</font>
+<font color="black">1039.         didn't exist but a child of it did], replace it with the created</font>
+<font color="black">1040.         logger and fix up the parent/child references which pointed to the</font>
+<font color="black">1041.         placeholder to now point to the logger.</font>
+<font color="black">1042.         &quot;&quot;&quot;</font>
+<font color="green">1043.         rv = None</font>
+<font color="green">1044.         if not isinstance(name, basestring):</font>
+<font color="red">1045.             raise TypeError('A logger name must be string or Unicode')</font>
+<font color="green">1046.         if isinstance(name, unicode):</font>
+<font color="red">1047.             name = name.encode('utf-8')</font>
+<font color="green">1048.         _acquireLock()</font>
+<font color="green">1049.         try:</font>
+<font color="green">1050.             if name in self.loggerDict:</font>
+<font color="green">1051.                 rv = self.loggerDict[name]</font>
+<font color="green">1052.                 if isinstance(rv, PlaceHolder):</font>
+<font color="green">1053.                     ph = rv</font>
+<font color="green">1054.                     rv = (self.loggerClass or _loggerClass)(name)</font>
+<font color="green">1055.                     rv.manager = self</font>
+<font color="green">1056.                     self.loggerDict[name] = rv</font>
+<font color="green">1057.                     self._fixupChildren(ph, rv)</font>
+<font color="green">1058.                     self._fixupParents(rv)</font>
+<font color="black">1059.             else:</font>
+<font color="green">1060.                 rv = (self.loggerClass or _loggerClass)(name)</font>
+<font color="green">1061.                 rv.manager = self</font>
+<font color="green">1062.                 self.loggerDict[name] = rv</font>
+<font color="green">1063.                 self._fixupParents(rv)</font>
+<font color="black">1064.         finally:</font>
+<font color="green">1065.             _releaseLock()</font>
+<font color="green">1066.         return rv</font>
+<font color="black">1067. </font>
+<font color="green">1068.     def setLoggerClass(self, klass):</font>
+<font color="black">1069.         &quot;&quot;&quot;</font>
+<font color="black">1070.         Set the class to be used when instantiating a logger with this Manager.</font>
+<font color="black">1071.         &quot;&quot;&quot;</font>
+<font color="red">1072.         if klass != Logger:</font>
+<font color="red">1073.             if not issubclass(klass, Logger):</font>
+<font color="red">1074.                 raise TypeError(&quot;logger not derived from logging.Logger: &quot;</font>
+<font color="red">1075.                                 + klass.__name__)</font>
+<font color="red">1076.         self.loggerClass = klass</font>
+<font color="black">1077. </font>
+<font color="green">1078.     def _fixupParents(self, alogger):</font>
+<font color="black">1079.         &quot;&quot;&quot;</font>
+<font color="black">1080.         Ensure that there are either loggers or placeholders all the way</font>
+<font color="black">1081.         from the specified logger to the root of the logger hierarchy.</font>
+<font color="black">1082.         &quot;&quot;&quot;</font>
+<font color="green">1083.         name = alogger.name</font>
+<font color="green">1084.         i = name.rfind(&quot;.&quot;)</font>
+<font color="green">1085.         rv = None</font>
+<font color="green">1086.         while (i &gt; 0) and not rv:</font>
+<font color="green">1087.             substr = name[:i]</font>
+<font color="green">1088.             if substr not in self.loggerDict:</font>
+<font color="green">1089.                 self.loggerDict[substr] = PlaceHolder(alogger)</font>
+<font color="black">1090.             else:</font>
+<font color="green">1091.                 obj = self.loggerDict[substr]</font>
+<font color="green">1092.                 if isinstance(obj, Logger):</font>
+<font color="green">1093.                     rv = obj</font>
+<font color="black">1094.                 else:</font>
+<font color="green">1095.                     assert isinstance(obj, PlaceHolder)</font>
+<font color="green">1096.                     obj.append(alogger)</font>
+<font color="green">1097.             i = name.rfind(&quot;.&quot;, 0, i - 1)</font>
+<font color="green">1098.         if not rv:</font>
+<font color="green">1099.             rv = self.root</font>
+<font color="green">1100.         alogger.parent = rv</font>
+<font color="black">1101. </font>
+<font color="green">1102.     def _fixupChildren(self, ph, alogger):</font>
+<font color="black">1103.         &quot;&quot;&quot;</font>
+<font color="black">1104.         Ensure that children of the placeholder ph are connected to the</font>
+<font color="black">1105.         specified logger.</font>
+<font color="black">1106.         &quot;&quot;&quot;</font>
+<font color="green">1107.         name = alogger.name</font>
+<font color="green">1108.         namelen = len(name)</font>
+<font color="green">1109.         for c in ph.loggerMap.keys():</font>
+<font color="black">1110.             #The if means ... if not c.parent.name.startswith(nm)</font>
+<font color="green">1111.             if c.parent.name[:namelen] != name:</font>
+<font color="green">1112.                 alogger.parent = c.parent</font>
+<font color="green">1113.                 c.parent = alogger</font>
+<font color="black">1114. </font>
+<font color="black">1115. #---------------------------------------------------------------------------</font>
+<font color="black">1116. #   Logger classes and functions</font>
+<font color="black">1117. #---------------------------------------------------------------------------</font>
+<font color="black">1118. </font>
+<font color="green">1119. class Logger(Filterer):</font>
+<font color="black">1120.     &quot;&quot;&quot;</font>
+<font color="black">1121.     Instances of the Logger class represent a single logging channel. A</font>
+<font color="black">1122.     &quot;logging channel&quot; indicates an area of an application. Exactly how an</font>
+<font color="black">1123.     &quot;area&quot; is defined is up to the application developer. Since an</font>
+<font color="black">1124.     application can have any number of areas, logging channels are identified</font>
+<font color="black">1125.     by a unique string. Application areas can be nested (e.g. an area</font>
+<font color="black">1126.     of &quot;input processing&quot; might include sub-areas &quot;read CSV files&quot;, &quot;read</font>
+<font color="black">1127.     XLS files&quot; and &quot;read Gnumeric files&quot;). To cater for this natural nesting,</font>
+<font color="black">1128.     channel names are organized into a namespace hierarchy where levels are</font>
+<font color="black">1129.     separated by periods, much like the Java or Python package namespace. So</font>
+<font color="black">1130.     in the instance given above, channel names might be &quot;input&quot; for the upper</font>
+<font color="black">1131.     level, and &quot;input.csv&quot;, &quot;input.xls&quot; and &quot;input.gnu&quot; for the sub-levels.</font>
+<font color="black">1132.     There is no arbitrary limit to the depth of nesting.</font>
+<font color="green">1133.     &quot;&quot;&quot;</font>
+<font color="green">1134.     def __init__(self, name, level=NOTSET):</font>
+<font color="black">1135.         &quot;&quot;&quot;</font>
+<font color="black">1136.         Initialize the logger with a name and an optional level.</font>
+<font color="black">1137.         &quot;&quot;&quot;</font>
+<font color="green">1138.         Filterer.__init__(self)</font>
+<font color="green">1139.         self.name = name</font>
+<font color="green">1140.         self.level = _checkLevel(level)</font>
+<font color="green">1141.         self.parent = None</font>
+<font color="green">1142.         self.propagate = 1</font>
+<font color="green">1143.         self.handlers = []</font>
+<font color="green">1144.         self.disabled = 0</font>
+<font color="black">1145. </font>
+<font color="green">1146.     def setLevel(self, level):</font>
+<font color="black">1147.         &quot;&quot;&quot;</font>
+<font color="black">1148.         Set the logging level of this logger.</font>
+<font color="black">1149.         &quot;&quot;&quot;</font>
+<font color="red">1150.         self.level = _checkLevel(level)</font>
+<font color="black">1151. </font>
+<font color="green">1152.     def debug(self, msg, *args, **kwargs):</font>
+<font color="black">1153.         &quot;&quot;&quot;</font>
+<font color="black">1154.         Log 'msg % args' with severity 'DEBUG'.</font>
+<font color="black">1155. </font>
+<font color="black">1156.         To pass exception information, use the keyword argument exc_info with</font>
+<font color="black">1157.         a true value, e.g.</font>
+<font color="black">1158. </font>
+<font color="black">1159.         logger.debug(&quot;Houston, we have a %s&quot;, &quot;thorny problem&quot;, exc_info=1)</font>
+<font color="black">1160.         &quot;&quot;&quot;</font>
+<font color="green">1161.         if self.isEnabledFor(DEBUG):</font>
+<font color="red">1162.             self._log(DEBUG, msg, args, **kwargs)</font>
+<font color="black">1163. </font>
+<font color="green">1164.     def info(self, msg, *args, **kwargs):</font>
+<font color="black">1165.         &quot;&quot;&quot;</font>
+<font color="black">1166.         Log 'msg % args' with severity 'INFO'.</font>
+<font color="black">1167. </font>
+<font color="black">1168.         To pass exception information, use the keyword argument exc_info with</font>
+<font color="black">1169.         a true value, e.g.</font>
+<font color="black">1170. </font>
+<font color="black">1171.         logger.info(&quot;Houston, we have a %s&quot;, &quot;interesting problem&quot;, exc_info=1)</font>
+<font color="black">1172.         &quot;&quot;&quot;</font>
+<font color="green">1173.         if self.isEnabledFor(INFO):</font>
+<font color="red">1174.             self._log(INFO, msg, args, **kwargs)</font>
+<font color="black">1175. </font>
+<font color="green">1176.     def warning(self, msg, *args, **kwargs):</font>
+<font color="black">1177.         &quot;&quot;&quot;</font>
+<font color="black">1178.         Log 'msg % args' with severity 'WARNING'.</font>
+<font color="black">1179. </font>
+<font color="black">1180.         To pass exception information, use the keyword argument exc_info with</font>
+<font color="black">1181.         a true value, e.g.</font>
+<font color="black">1182. </font>
+<font color="black">1183.         logger.warning(&quot;Houston, we have a %s&quot;, &quot;bit of a problem&quot;, exc_info=1)</font>
+<font color="black">1184.         &quot;&quot;&quot;</font>
+<font color="red">1185.         if self.isEnabledFor(WARNING):</font>
+<font color="red">1186.             self._log(WARNING, msg, args, **kwargs)</font>
+<font color="black">1187. </font>
+<font color="green">1188.     warn = warning</font>
+<font color="black">1189. </font>
+<font color="green">1190.     def error(self, msg, *args, **kwargs):</font>
+<font color="black">1191.         &quot;&quot;&quot;</font>
+<font color="black">1192.         Log 'msg % args' with severity 'ERROR'.</font>
+<font color="black">1193. </font>
+<font color="black">1194.         To pass exception information, use the keyword argument exc_info with</font>
+<font color="black">1195.         a true value, e.g.</font>
+<font color="black">1196. </font>
+<font color="black">1197.         logger.error(&quot;Houston, we have a %s&quot;, &quot;major problem&quot;, exc_info=1)</font>
+<font color="black">1198.         &quot;&quot;&quot;</font>
+<font color="red">1199.         if self.isEnabledFor(ERROR):</font>
+<font color="red">1200.             self._log(ERROR, msg, args, **kwargs)</font>
+<font color="black">1201. </font>
+<font color="green">1202.     def exception(self, msg, *args, **kwargs):</font>
+<font color="black">1203.         &quot;&quot;&quot;</font>
+<font color="black">1204.         Convenience method for logging an ERROR with exception information.</font>
+<font color="black">1205.         &quot;&quot;&quot;</font>
+<font color="red">1206.         kwargs['exc_info'] = 1</font>
+<font color="red">1207.         self.error(msg, *args, **kwargs)</font>
+<font color="black">1208. </font>
+<font color="green">1209.     def critical(self, msg, *args, **kwargs):</font>
+<font color="black">1210.         &quot;&quot;&quot;</font>
+<font color="black">1211.         Log 'msg % args' with severity 'CRITICAL'.</font>
+<font color="black">1212. </font>
+<font color="black">1213.         To pass exception information, use the keyword argument exc_info with</font>
+<font color="black">1214.         a true value, e.g.</font>
+<font color="black">1215. </font>
+<font color="black">1216.         logger.critical(&quot;Houston, we have a %s&quot;, &quot;major disaster&quot;, exc_info=1)</font>
+<font color="black">1217.         &quot;&quot;&quot;</font>
+<font color="red">1218.         if self.isEnabledFor(CRITICAL):</font>
+<font color="red">1219.             self._log(CRITICAL, msg, args, **kwargs)</font>
+<font color="black">1220. </font>
+<font color="green">1221.     fatal = critical</font>
+<font color="black">1222. </font>
+<font color="green">1223.     def log(self, level, msg, *args, **kwargs):</font>
+<font color="black">1224.         &quot;&quot;&quot;</font>
+<font color="black">1225.         Log 'msg % args' with the integer severity 'level'.</font>
+<font color="black">1226. </font>
+<font color="black">1227.         To pass exception information, use the keyword argument exc_info with</font>
+<font color="black">1228.         a true value, e.g.</font>
+<font color="black">1229. </font>
+<font color="black">1230.         logger.log(level, &quot;We have a %s&quot;, &quot;mysterious problem&quot;, exc_info=1)</font>
+<font color="black">1231.         &quot;&quot;&quot;</font>
+<font color="red">1232.         if not isinstance(level, (int, long)):</font>
+<font color="red">1233.             if raiseExceptions:</font>
+<font color="red">1234.                 raise TypeError(&quot;level must be an integer&quot;)</font>
+<font color="black">1235.             else:</font>
+<font color="red">1236.                 return</font>
+<font color="red">1237.         if self.isEnabledFor(level):</font>
+<font color="red">1238.             self._log(level, msg, args, **kwargs)</font>
+<font color="black">1239. </font>
+<font color="green">1240.     def findCaller(self):</font>
+<font color="black">1241.         &quot;&quot;&quot;</font>
+<font color="black">1242.         Find the stack frame of the caller so that we can note the source</font>
+<font color="black">1243.         file name, line number and function name.</font>
+<font color="black">1244.         &quot;&quot;&quot;</font>
+<font color="red">1245.         f = currentframe()</font>
+<font color="black">1246.         #On some versions of IronPython, currentframe() returns None if</font>
+<font color="black">1247.         #IronPython isn't run with -X:Frames.</font>
+<font color="red">1248.         if f is not None:</font>
+<font color="red">1249.             f = f.f_back</font>
+<font color="red">1250.         rv = &quot;(unknown file)&quot;, 0, &quot;(unknown function)&quot;</font>
+<font color="red">1251.         while hasattr(f, &quot;f_code&quot;):</font>
+<font color="red">1252.             co = f.f_code</font>
+<font color="red">1253.             filename = os.path.normcase(co.co_filename)</font>
+<font color="red">1254.             if filename == _srcfile:</font>
+<font color="red">1255.                 f = f.f_back</font>
+<font color="red">1256.                 continue</font>
+<font color="red">1257.             rv = (co.co_filename, f.f_lineno, co.co_name)</font>
+<font color="red">1258.             break</font>
+<font color="red">1259.         return rv</font>
+<font color="black">1260. </font>
+<font color="green">1261.     def makeRecord(self, name, level, fn, lno, msg, args, exc_info, func=None, extra=None):</font>
+<font color="black">1262.         &quot;&quot;&quot;</font>
+<font color="black">1263.         A factory method which can be overridden in subclasses to create</font>
+<font color="black">1264.         specialized LogRecords.</font>
+<font color="black">1265.         &quot;&quot;&quot;</font>
+<font color="red">1266.         rv = LogRecord(name, level, fn, lno, msg, args, exc_info, func)</font>
+<font color="red">1267.         if extra is not None:</font>
+<font color="red">1268.             for key in extra:</font>
+<font color="red">1269.                 if (key in [&quot;message&quot;, &quot;asctime&quot;]) or (key in rv.__dict__):</font>
+<font color="red">1270.                     raise KeyError(&quot;Attempt to overwrite %r in LogRecord&quot; % key)</font>
+<font color="red">1271.                 rv.__dict__[key] = extra[key]</font>
+<font color="red">1272.         return rv</font>
+<font color="black">1273. </font>
+<font color="green">1274.     def _log(self, level, msg, args, exc_info=None, extra=None):</font>
+<font color="black">1275.         &quot;&quot;&quot;</font>
+<font color="black">1276.         Low-level logging routine which creates a LogRecord and then calls</font>
+<font color="black">1277.         all the handlers of this logger to handle the record.</font>
+<font color="black">1278.         &quot;&quot;&quot;</font>
+<font color="red">1279.         if _srcfile:</font>
+<font color="black">1280.             #IronPython doesn't track Python frames, so findCaller raises an</font>
+<font color="black">1281.             #exception on some versions of IronPython. We trap it here so that</font>
+<font color="black">1282.             #IronPython can use logging.</font>
+<font color="red">1283.             try:</font>
+<font color="red">1284.                 fn, lno, func = self.findCaller()</font>
+<font color="red">1285.             except ValueError:</font>
+<font color="red">1286.                 fn, lno, func = &quot;(unknown file)&quot;, 0, &quot;(unknown function)&quot;</font>
+<font color="black">1287.         else:</font>
+<font color="red">1288.             fn, lno, func = &quot;(unknown file)&quot;, 0, &quot;(unknown function)&quot;</font>
+<font color="red">1289.         if exc_info:</font>
+<font color="red">1290.             if not isinstance(exc_info, tuple):</font>
+<font color="red">1291.                 exc_info = sys.exc_info()</font>
+<font color="red">1292.         record = self.makeRecord(self.name, level, fn, lno, msg, args, exc_info, func, extra)</font>
+<font color="red">1293.         self.handle(record)</font>
+<font color="black">1294. </font>
+<font color="green">1295.     def handle(self, record):</font>
+<font color="black">1296.         &quot;&quot;&quot;</font>
+<font color="black">1297.         Call the handlers for the specified record.</font>
+<font color="black">1298. </font>
+<font color="black">1299.         This method is used for unpickled records received from a socket, as</font>
+<font color="black">1300.         well as those created locally. Logger-level filtering is applied.</font>
+<font color="black">1301.         &quot;&quot;&quot;</font>
+<font color="red">1302.         if (not self.disabled) and self.filter(record):</font>
+<font color="red">1303.             self.callHandlers(record)</font>
+<font color="black">1304. </font>
+<font color="green">1305.     def addHandler(self, hdlr):</font>
+<font color="black">1306.         &quot;&quot;&quot;</font>
+<font color="black">1307.         Add the specified handler to this logger.</font>
+<font color="black">1308.         &quot;&quot;&quot;</font>
+<font color="green">1309.         _acquireLock()</font>
+<font color="green">1310.         try:</font>
+<font color="green">1311.             if not (hdlr in self.handlers):</font>
+<font color="green">1312.                 self.handlers.append(hdlr)</font>
+<font color="black">1313.         finally:</font>
+<font color="green">1314.             _releaseLock()</font>
+<font color="black">1315. </font>
+<font color="green">1316.     def removeHandler(self, hdlr):</font>
+<font color="black">1317.         &quot;&quot;&quot;</font>
+<font color="black">1318.         Remove the specified handler from this logger.</font>
+<font color="black">1319.         &quot;&quot;&quot;</font>
+<font color="red">1320.         _acquireLock()</font>
+<font color="red">1321.         try:</font>
+<font color="red">1322.             if hdlr in self.handlers:</font>
+<font color="red">1323.                 self.handlers.remove(hdlr)</font>
+<font color="black">1324.         finally:</font>
+<font color="red">1325.             _releaseLock()</font>
+<font color="black">1326. </font>
+<font color="green">1327.     def callHandlers(self, record):</font>
+<font color="black">1328.         &quot;&quot;&quot;</font>
+<font color="black">1329.         Pass a record to all relevant handlers.</font>
+<font color="black">1330. </font>
+<font color="black">1331.         Loop through all handlers for this logger and its parents in the</font>
+<font color="black">1332.         logger hierarchy. If no handler was found, output a one-off error</font>
+<font color="black">1333.         message to sys.stderr. Stop searching up the hierarchy whenever a</font>
+<font color="black">1334.         logger with the &quot;propagate&quot; attribute set to zero is found - that</font>
+<font color="black">1335.         will be the last logger whose handlers are called.</font>
+<font color="black">1336.         &quot;&quot;&quot;</font>
+<font color="red">1337.         c = self</font>
+<font color="red">1338.         found = 0</font>
+<font color="red">1339.         while c:</font>
+<font color="red">1340.             for hdlr in c.handlers:</font>
+<font color="red">1341.                 found = found + 1</font>
+<font color="red">1342.                 if record.levelno &gt;= hdlr.level:</font>
+<font color="red">1343.                     hdlr.handle(record)</font>
+<font color="red">1344.             if not c.propagate:</font>
+<font color="red">1345.                 c = None    #break out</font>
+<font color="black">1346.             else:</font>
+<font color="red">1347.                 c = c.parent</font>
+<font color="red">1348.         if (found == 0) and raiseExceptions and not self.manager.emittedNoHandlerWarning:</font>
+<font color="red">1349.             sys.stderr.write(&quot;No handlers could be found for logger&quot;</font>
+<font color="red">1350.                              &quot; \&quot;%s\&quot;\n&quot; % self.name)</font>
+<font color="red">1351.             self.manager.emittedNoHandlerWarning = 1</font>
+<font color="black">1352. </font>
+<font color="green">1353.     def getEffectiveLevel(self):</font>
+<font color="black">1354.         &quot;&quot;&quot;</font>
+<font color="black">1355.         Get the effective level for this logger.</font>
+<font color="black">1356. </font>
+<font color="black">1357.         Loop through this logger and its parents in the logger hierarchy,</font>
+<font color="black">1358.         looking for a non-zero logging level. Return the first one found.</font>
+<font color="black">1359.         &quot;&quot;&quot;</font>
+<font color="green">1360.         logger = self</font>
+<font color="green">1361.         while logger:</font>
+<font color="green">1362.             if logger.level:</font>
+<font color="green">1363.                 return logger.level</font>
+<font color="green">1364.             logger = logger.parent</font>
+<font color="red">1365.         return NOTSET</font>
+<font color="black">1366. </font>
+<font color="green">1367.     def isEnabledFor(self, level):</font>
+<font color="black">1368.         &quot;&quot;&quot;</font>
+<font color="black">1369.         Is this logger enabled for level 'level'?</font>
+<font color="black">1370.         &quot;&quot;&quot;</font>
+<font color="green">1371.         if self.manager.disable &gt;= level:</font>
+<font color="red">1372.             return 0</font>
+<font color="green">1373.         return level &gt;= self.getEffectiveLevel()</font>
+<font color="black">1374. </font>
+<font color="green">1375.     def getChild(self, suffix):</font>
+<font color="black">1376.         &quot;&quot;&quot;</font>
+<font color="black">1377.         Get a logger which is a descendant to this one.</font>
+<font color="black">1378. </font>
+<font color="black">1379.         This is a convenience method, such that</font>
+<font color="black">1380. </font>
+<font color="black">1381.         logging.getLogger('abc').getChild('def.ghi')</font>
+<font color="black">1382. </font>
+<font color="black">1383.         is the same as</font>
+<font color="black">1384. </font>
+<font color="black">1385.         logging.getLogger('abc.def.ghi')</font>
+<font color="black">1386. </font>
+<font color="black">1387.         It's useful, for example, when the parent logger is named using</font>
+<font color="black">1388.         __name__ rather than a literal string.</font>
+<font color="black">1389.         &quot;&quot;&quot;</font>
+<font color="red">1390.         if self.root is not self:</font>
+<font color="red">1391.             suffix = '.'.join((self.name, suffix))</font>
+<font color="red">1392.         return self.manager.getLogger(suffix)</font>
+<font color="black">1393. </font>
+<font color="green">1394. class RootLogger(Logger):</font>
+<font color="black">1395.     &quot;&quot;&quot;</font>
+<font color="black">1396.     A root logger is not that different to any other logger, except that</font>
+<font color="black">1397.     it must have a logging level and there is only one instance of it in</font>
+<font color="black">1398.     the hierarchy.</font>
+<font color="green">1399.     &quot;&quot;&quot;</font>
+<font color="green">1400.     def __init__(self, level):</font>
+<font color="black">1401.         &quot;&quot;&quot;</font>
+<font color="black">1402.         Initialize the logger with the name &quot;root&quot;.</font>
+<font color="black">1403.         &quot;&quot;&quot;</font>
+<font color="green">1404.         Logger.__init__(self, &quot;root&quot;, level)</font>
+<font color="black">1405. </font>
+<font color="green">1406. _loggerClass = Logger</font>
+<font color="black">1407. </font>
+<font color="green">1408. class LoggerAdapter(object):</font>
+<font color="black">1409.     &quot;&quot;&quot;</font>
+<font color="black">1410.     An adapter for loggers which makes it easier to specify contextual</font>
+<font color="black">1411.     information in logging output.</font>
+<font color="green">1412.     &quot;&quot;&quot;</font>
+<font color="black">1413. </font>
+<font color="green">1414.     def __init__(self, logger, extra):</font>
+<font color="black">1415.         &quot;&quot;&quot;</font>
+<font color="black">1416.         Initialize the adapter with a logger and a dict-like object which</font>
+<font color="black">1417.         provides contextual information. This constructor signature allows</font>
+<font color="black">1418.         easy stacking of LoggerAdapters, if so desired.</font>
+<font color="black">1419. </font>
+<font color="black">1420.         You can effectively pass keyword arguments as shown in the</font>
+<font color="black">1421.         following example:</font>
+<font color="black">1422. </font>
+<font color="black">1423.         adapter = LoggerAdapter(someLogger, dict(p1=v1, p2=&quot;v2&quot;))</font>
+<font color="black">1424.         &quot;&quot;&quot;</font>
+<font color="red">1425.         self.logger = logger</font>
+<font color="red">1426.         self.extra = extra</font>
+<font color="black">1427. </font>
+<font color="green">1428.     def process(self, msg, kwargs):</font>
+<font color="black">1429.         &quot;&quot;&quot;</font>
+<font color="black">1430.         Process the logging message and keyword arguments passed in to</font>
+<font color="black">1431.         a logging call to insert contextual information. You can either</font>
+<font color="black">1432.         manipulate the message itself, the keyword args or both. Return</font>
+<font color="black">1433.         the message and kwargs modified (or not) to suit your needs.</font>
+<font color="black">1434. </font>
+<font color="black">1435.         Normally, you'll only need to override this one method in a</font>
+<font color="black">1436.         LoggerAdapter subclass for your specific needs.</font>
+<font color="black">1437.         &quot;&quot;&quot;</font>
+<font color="red">1438.         kwargs[&quot;extra&quot;] = self.extra</font>
+<font color="red">1439.         return msg, kwargs</font>
+<font color="black">1440. </font>
+<font color="green">1441.     def debug(self, msg, *args, **kwargs):</font>
+<font color="black">1442.         &quot;&quot;&quot;</font>
+<font color="black">1443.         Delegate a debug call to the underlying logger, after adding</font>
+<font color="black">1444.         contextual information from this adapter instance.</font>
+<font color="black">1445.         &quot;&quot;&quot;</font>
+<font color="red">1446.         msg, kwargs = self.process(msg, kwargs)</font>
+<font color="red">1447.         self.logger.debug(msg, *args, **kwargs)</font>
+<font color="black">1448. </font>
+<font color="green">1449.     def info(self, msg, *args, **kwargs):</font>
+<font color="black">1450.         &quot;&quot;&quot;</font>
+<font color="black">1451.         Delegate an info call to the underlying logger, after adding</font>
+<font color="black">1452.         contextual information from this adapter instance.</font>
+<font color="black">1453.         &quot;&quot;&quot;</font>
+<font color="red">1454.         msg, kwargs = self.process(msg, kwargs)</font>
+<font color="red">1455.         self.logger.info(msg, *args, **kwargs)</font>
+<font color="black">1456. </font>
+<font color="green">1457.     def warning(self, msg, *args, **kwargs):</font>
+<font color="black">1458.         &quot;&quot;&quot;</font>
+<font color="black">1459.         Delegate a warning call to the underlying logger, after adding</font>
+<font color="black">1460.         contextual information from this adapter instance.</font>
+<font color="black">1461.         &quot;&quot;&quot;</font>
+<font color="red">1462.         msg, kwargs = self.process(msg, kwargs)</font>
+<font color="red">1463.         self.logger.warning(msg, *args, **kwargs)</font>
+<font color="black">1464. </font>
+<font color="green">1465.     def error(self, msg, *args, **kwargs):</font>
+<font color="black">1466.         &quot;&quot;&quot;</font>
+<font color="black">1467.         Delegate an error call to the underlying logger, after adding</font>
+<font color="black">1468.         contextual information from this adapter instance.</font>
+<font color="black">1469.         &quot;&quot;&quot;</font>
+<font color="red">1470.         msg, kwargs = self.process(msg, kwargs)</font>
+<font color="red">1471.         self.logger.error(msg, *args, **kwargs)</font>
+<font color="black">1472. </font>
+<font color="green">1473.     def exception(self, msg, *args, **kwargs):</font>
+<font color="black">1474.         &quot;&quot;&quot;</font>
+<font color="black">1475.         Delegate an exception call to the underlying logger, after adding</font>
+<font color="black">1476.         contextual information from this adapter instance.</font>
+<font color="black">1477.         &quot;&quot;&quot;</font>
+<font color="red">1478.         msg, kwargs = self.process(msg, kwargs)</font>
+<font color="red">1479.         kwargs[&quot;exc_info&quot;] = 1</font>
+<font color="red">1480.         self.logger.error(msg, *args, **kwargs)</font>
+<font color="black">1481. </font>
+<font color="green">1482.     def critical(self, msg, *args, **kwargs):</font>
+<font color="black">1483.         &quot;&quot;&quot;</font>
+<font color="black">1484.         Delegate a critical call to the underlying logger, after adding</font>
+<font color="black">1485.         contextual information from this adapter instance.</font>
+<font color="black">1486.         &quot;&quot;&quot;</font>
+<font color="red">1487.         msg, kwargs = self.process(msg, kwargs)</font>
+<font color="red">1488.         self.logger.critical(msg, *args, **kwargs)</font>
+<font color="black">1489. </font>
+<font color="green">1490.     def log(self, level, msg, *args, **kwargs):</font>
+<font color="black">1491.         &quot;&quot;&quot;</font>
+<font color="black">1492.         Delegate a log call to the underlying logger, after adding</font>
+<font color="black">1493.         contextual information from this adapter instance.</font>
+<font color="black">1494.         &quot;&quot;&quot;</font>
+<font color="red">1495.         msg, kwargs = self.process(msg, kwargs)</font>
+<font color="red">1496.         self.logger.log(level, msg, *args, **kwargs)</font>
+<font color="black">1497. </font>
+<font color="green">1498.     def isEnabledFor(self, level):</font>
+<font color="black">1499.         &quot;&quot;&quot;</font>
+<font color="black">1500.         See if the underlying logger is enabled for the specified level.</font>
+<font color="black">1501.         &quot;&quot;&quot;</font>
+<font color="red">1502.         return self.logger.isEnabledFor(level)</font>
+<font color="black">1503. </font>
+<font color="green">1504. root = RootLogger(WARNING)</font>
+<font color="green">1505. Logger.root = root</font>
+<font color="green">1506. Logger.manager = Manager(Logger.root)</font>
+<font color="black">1507. </font>
+<font color="black">1508. #---------------------------------------------------------------------------</font>
+<font color="black">1509. # Configuration classes and functions</font>
+<font color="black">1510. #---------------------------------------------------------------------------</font>
+<font color="black">1511. </font>
+<font color="green">1512. BASIC_FORMAT = &quot;%(levelname)s:%(name)s:%(message)s&quot;</font>
+<font color="black">1513. </font>
+<font color="green">1514. def basicConfig(**kwargs):</font>
+<font color="black">1515.     &quot;&quot;&quot;</font>
+<font color="black">1516.     Do basic configuration for the logging system.</font>
+<font color="black">1517. </font>
+<font color="black">1518.     This function does nothing if the root logger already has handlers</font>
+<font color="black">1519.     configured. It is a convenience method intended for use by simple scripts</font>
+<font color="black">1520.     to do one-shot configuration of the logging package.</font>
+<font color="black">1521. </font>
+<font color="black">1522.     The default behaviour is to create a StreamHandler which writes to</font>
+<font color="black">1523.     sys.stderr, set a formatter using the BASIC_FORMAT format string, and</font>
+<font color="black">1524.     add the handler to the root logger.</font>
+<font color="black">1525. </font>
+<font color="black">1526.     A number of optional keyword arguments may be specified, which can alter</font>
+<font color="black">1527.     the default behaviour.</font>
+<font color="black">1528. </font>
+<font color="black">1529.     filename  Specifies that a FileHandler be created, using the specified</font>
+<font color="black">1530.               filename, rather than a StreamHandler.</font>
+<font color="black">1531.     filemode  Specifies the mode to open the file, if filename is specified</font>
+<font color="black">1532.               (if filemode is unspecified, it defaults to 'a').</font>
+<font color="black">1533.     format    Use the specified format string for the handler.</font>
+<font color="black">1534.     datefmt   Use the specified date/time format.</font>
+<font color="black">1535.     level     Set the root logger level to the specified level.</font>
+<font color="black">1536.     stream    Use the specified stream to initialize the StreamHandler. Note</font>
+<font color="black">1537.               that this argument is incompatible with 'filename' - if both</font>
+<font color="black">1538.               are present, 'stream' is ignored.</font>
+<font color="black">1539. </font>
+<font color="black">1540.     Note that you could specify a stream created using open(filename, mode)</font>
+<font color="black">1541.     rather than passing the filename and mode in. However, it should be</font>
+<font color="black">1542.     remembered that StreamHandler does not close its stream (since it may be</font>
+<font color="black">1543.     using sys.stdout or sys.stderr), whereas FileHandler closes its stream</font>
+<font color="black">1544.     when the handler is closed.</font>
+<font color="black">1545.     &quot;&quot;&quot;</font>
+<font color="black">1546.     # Add thread safety in case someone mistakenly calls</font>
+<font color="black">1547.     # basicConfig() from multiple threads</font>
+<font color="red">1548.     _acquireLock()</font>
+<font color="red">1549.     try:</font>
+<font color="red">1550.         if len(root.handlers) == 0:</font>
+<font color="red">1551.             filename = kwargs.get(&quot;filename&quot;)</font>
+<font color="red">1552.             if filename:</font>
+<font color="red">1553.                 mode = kwargs.get(&quot;filemode&quot;, 'a')</font>
+<font color="red">1554.                 hdlr = FileHandler(filename, mode)</font>
+<font color="black">1555.             else:</font>
+<font color="red">1556.                 stream = kwargs.get(&quot;stream&quot;)</font>
+<font color="red">1557.                 hdlr = StreamHandler(stream)</font>
+<font color="red">1558.             fs = kwargs.get(&quot;format&quot;, BASIC_FORMAT)</font>
+<font color="red">1559.             dfs = kwargs.get(&quot;datefmt&quot;, None)</font>
+<font color="red">1560.             fmt = Formatter(fs, dfs)</font>
+<font color="red">1561.             hdlr.setFormatter(fmt)</font>
+<font color="red">1562.             root.addHandler(hdlr)</font>
+<font color="red">1563.             level = kwargs.get(&quot;level&quot;)</font>
+<font color="red">1564.             if level is not None:</font>
+<font color="red">1565.                 root.setLevel(level)</font>
+<font color="black">1566.     finally:</font>
+<font color="red">1567.         _releaseLock()</font>
+<font color="black">1568. </font>
+<font color="black">1569. #---------------------------------------------------------------------------</font>
+<font color="black">1570. # Utility functions at module level.</font>
+<font color="black">1571. # Basically delegate everything to the root logger.</font>
+<font color="black">1572. #---------------------------------------------------------------------------</font>
+<font color="black">1573. </font>
+<font color="green">1574. def getLogger(name=None):</font>
+<font color="black">1575.     &quot;&quot;&quot;</font>
+<font color="black">1576.     Return a logger with the specified name, creating it if necessary.</font>
+<font color="black">1577. </font>
+<font color="black">1578.     If no name is specified, return the root logger.</font>
+<font color="black">1579.     &quot;&quot;&quot;</font>
+<font color="green">1580.     if name:</font>
+<font color="green">1581.         return Logger.manager.getLogger(name)</font>
+<font color="black">1582.     else:</font>
+<font color="red">1583.         return root</font>
+<font color="black">1584. </font>
+<font color="black">1585. #def getRootLogger():</font>
+<font color="black">1586. #    &quot;&quot;&quot;</font>
+<font color="black">1587. #    Return the root logger.</font>
+<font color="black">1588. #</font>
+<font color="black">1589. #    Note that getLogger('') now does the same thing, so this function is</font>
+<font color="black">1590. #    deprecated and may disappear in the future.</font>
+<font color="black">1591. #    &quot;&quot;&quot;</font>
+<font color="black">1592. #    return root</font>
+<font color="black">1593. </font>
+<font color="green">1594. def critical(msg, *args, **kwargs):</font>
+<font color="black">1595.     &quot;&quot;&quot;</font>
+<font color="black">1596.     Log a message with severity 'CRITICAL' on the root logger.</font>
+<font color="black">1597.     &quot;&quot;&quot;</font>
+<font color="red">1598.     if len(root.handlers) == 0:</font>
+<font color="red">1599.         basicConfig()</font>
+<font color="red">1600.     root.critical(msg, *args, **kwargs)</font>
+<font color="black">1601. </font>
+<font color="green">1602. fatal = critical</font>
+<font color="black">1603. </font>
+<font color="green">1604. def error(msg, *args, **kwargs):</font>
+<font color="black">1605.     &quot;&quot;&quot;</font>
+<font color="black">1606.     Log a message with severity 'ERROR' on the root logger.</font>
+<font color="black">1607.     &quot;&quot;&quot;</font>
+<font color="red">1608.     if len(root.handlers) == 0:</font>
+<font color="red">1609.         basicConfig()</font>
+<font color="red">1610.     root.error(msg, *args, **kwargs)</font>
+<font color="black">1611. </font>
+<font color="green">1612. def exception(msg, *args, **kwargs):</font>
+<font color="black">1613.     &quot;&quot;&quot;</font>
+<font color="black">1614.     Log a message with severity 'ERROR' on the root logger,</font>
+<font color="black">1615.     with exception information.</font>
+<font color="black">1616.     &quot;&quot;&quot;</font>
+<font color="red">1617.     kwargs['exc_info'] = 1</font>
+<font color="red">1618.     error(msg, *args, **kwargs)</font>
+<font color="black">1619. </font>
+<font color="green">1620. def warning(msg, *args, **kwargs):</font>
+<font color="black">1621.     &quot;&quot;&quot;</font>
+<font color="black">1622.     Log a message with severity 'WARNING' on the root logger.</font>
+<font color="black">1623.     &quot;&quot;&quot;</font>
+<font color="red">1624.     if len(root.handlers) == 0:</font>
+<font color="red">1625.         basicConfig()</font>
+<font color="red">1626.     root.warning(msg, *args, **kwargs)</font>
+<font color="black">1627. </font>
+<font color="green">1628. warn = warning</font>
+<font color="black">1629. </font>
+<font color="green">1630. def info(msg, *args, **kwargs):</font>
+<font color="black">1631.     &quot;&quot;&quot;</font>
+<font color="black">1632.     Log a message with severity 'INFO' on the root logger.</font>
+<font color="black">1633.     &quot;&quot;&quot;</font>
+<font color="red">1634.     if len(root.handlers) == 0:</font>
+<font color="red">1635.         basicConfig()</font>
+<font color="red">1636.     root.info(msg, *args, **kwargs)</font>
+<font color="black">1637. </font>
+<font color="green">1638. def debug(msg, *args, **kwargs):</font>
+<font color="black">1639.     &quot;&quot;&quot;</font>
+<font color="black">1640.     Log a message with severity 'DEBUG' on the root logger.</font>
+<font color="black">1641.     &quot;&quot;&quot;</font>
+<font color="red">1642.     if len(root.handlers) == 0:</font>
+<font color="red">1643.         basicConfig()</font>
+<font color="red">1644.     root.debug(msg, *args, **kwargs)</font>
+<font color="black">1645. </font>
+<font color="green">1646. def log(level, msg, *args, **kwargs):</font>
+<font color="black">1647.     &quot;&quot;&quot;</font>
+<font color="black">1648.     Log 'msg % args' with the integer severity 'level' on the root logger.</font>
+<font color="black">1649.     &quot;&quot;&quot;</font>
+<font color="red">1650.     if len(root.handlers) == 0:</font>
+<font color="red">1651.         basicConfig()</font>
+<font color="red">1652.     root.log(level, msg, *args, **kwargs)</font>
+<font color="black">1653. </font>
+<font color="green">1654. def disable(level):</font>
+<font color="black">1655.     &quot;&quot;&quot;</font>
+<font color="black">1656.     Disable all logging calls of severity 'level' and below.</font>
+<font color="black">1657.     &quot;&quot;&quot;</font>
+<font color="red">1658.     root.manager.disable = level</font>
+<font color="black">1659. </font>
+<font color="green">1660. def shutdown(handlerList=_handlerList):</font>
+<font color="black">1661.     &quot;&quot;&quot;</font>
+<font color="black">1662.     Perform any cleanup actions in the logging system (e.g. flushing</font>
+<font color="black">1663.     buffers).</font>
+<font color="black">1664. </font>
+<font color="black">1665.     Should be called at application exit.</font>
+<font color="black">1666.     &quot;&quot;&quot;</font>
+<font color="red">1667.     for wr in reversed(handlerList[:]):</font>
+<font color="black">1668.         #errors might occur, for example, if files are locked</font>
+<font color="black">1669.         #we just ignore them if raiseExceptions is not set</font>
+<font color="red">1670.         try:</font>
+<font color="red">1671.             h = wr()</font>
+<font color="red">1672.             if h:</font>
+<font color="red">1673.                 try:</font>
+<font color="red">1674.                     h.acquire()</font>
+<font color="red">1675.                     h.flush()</font>
+<font color="red">1676.                     h.close()</font>
+<font color="red">1677.                 except (IOError, ValueError):</font>
+<font color="black">1678.                     # Ignore errors which might be caused</font>
+<font color="black">1679.                     # because handlers have been closed but</font>
+<font color="black">1680.                     # references to them are still around at</font>
+<font color="black">1681.                     # application exit.</font>
+<font color="red">1682.                     pass</font>
+<font color="black">1683.                 finally:</font>
+<font color="red">1684.                     h.release()</font>
+<font color="red">1685.         except:</font>
+<font color="red">1686.             if raiseExceptions:</font>
+<font color="red">1687.                 raise</font>
+<font color="black">1688.             #else, swallow</font>
+<font color="black">1689. </font>
+<font color="black">1690. #Let's try and shutdown automatically on application exit...</font>
+<font color="green">1691. import atexit</font>
+<font color="green">1692. atexit.register(shutdown)</font>
+<font color="black">1693. </font>
+<font color="black">1694. # Null handler</font>
+<font color="black">1695. </font>
+<font color="green">1696. class NullHandler(Handler):</font>
+<font color="black">1697.     &quot;&quot;&quot;</font>
+<font color="black">1698.     This handler does nothing. It's intended to be used to avoid the</font>
+<font color="black">1699.     &quot;No handlers could be found for logger XXX&quot; one-off warning. This is</font>
+<font color="black">1700.     important for library code, which may contain code to log events. If a user</font>
+<font color="black">1701.     of the library does not configure logging, the one-off warning might be</font>
+<font color="black">1702.     produced; to avoid this, the library developer simply needs to instantiate</font>
+<font color="black">1703.     a NullHandler and add it to the top-level logger of the library module or</font>
+<font color="black">1704.     package.</font>
+<font color="green">1705.     &quot;&quot;&quot;</font>
+<font color="green">1706.     def handle(self, record):</font>
+<font color="red">1707.         pass</font>
+<font color="black">1708. </font>
+<font color="green">1709.     def emit(self, record):</font>
+<font color="red">1710.         pass</font>
+<font color="black">1711. </font>
+<font color="green">1712.     def createLock(self):</font>
+<font color="green">1713.         self.lock = None</font>
+<font color="black">1714. </font>
+<font color="black">1715. # Warnings integration</font>
+<font color="black">1716. </font>
+<font color="green">1717. _warnings_showwarning = None</font>
+<font color="black">1718. </font>
+<font color="green">1719. def _showwarning(message, category, filename, lineno, file=None, line=None):</font>
+<font color="black">1720.     &quot;&quot;&quot;</font>
+<font color="black">1721.     Implementation of showwarnings which redirects to logging, which will first</font>
+<font color="black">1722.     check to see if the file parameter is None. If a file is specified, it will</font>
+<font color="black">1723.     delegate to the original warnings implementation of showwarning. Otherwise,</font>
+<font color="black">1724.     it will call warnings.formatwarning and will log the resulting string to a</font>
+<font color="black">1725.     warnings logger named &quot;py.warnings&quot; with level logging.WARNING.</font>
+<font color="black">1726.     &quot;&quot;&quot;</font>
+<font color="red">1727.     if file is not None:</font>
+<font color="red">1728.         if _warnings_showwarning is not None:</font>
+<font color="red">1729.             _warnings_showwarning(message, category, filename, lineno, file, line)</font>
+<font color="black">1730.     else:</font>
+<font color="red">1731.         s = warnings.formatwarning(message, category, filename, lineno, line)</font>
+<font color="red">1732.         logger = getLogger(&quot;py.warnings&quot;)</font>
+<font color="red">1733.         if not logger.handlers:</font>
+<font color="red">1734.             logger.addHandler(NullHandler())</font>
+<font color="red">1735.         logger.warning(&quot;%s&quot;, s)</font>
+<font color="black">1736. </font>
+<font color="green">1737. def captureWarnings(capture):</font>
+<font color="black">1738.     &quot;&quot;&quot;</font>
+<font color="black">1739.     If capture is true, redirect all warnings to the logging package.</font>
+<font color="black">1740.     If capture is False, ensure that warnings are not redirected to logging</font>
+<font color="black">1741.     but to their original destinations.</font>
+<font color="black">1742.     &quot;&quot;&quot;</font>
+<font color="black">1743.     global _warnings_showwarning</font>
+<font color="red">1744.     if capture:</font>
+<font color="red">1745.         if _warnings_showwarning is None:</font>
+<font color="red">1746.             _warnings_showwarning = warnings.showwarning</font>
+<font color="red">1747.             warnings.showwarning = _showwarning</font>
+<font color="black">1748.     else:</font>
+<font color="red">1749.         if _warnings_showwarning is not None:</font>
+<font color="red">1750.             warnings.showwarning = _warnings_showwarning</font>
+<font color="red">1751.             _warnings_showwarning = None</font>
+</pre>
+

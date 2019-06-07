@@ -1,0 +1,780 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/Cookie.py</b><br>
+
+
+file stats: <b>285 lines, 134 executed: 47.0% covered</b>
+<pre>
+<font color="black">   1. ####</font>
+<font color="black">   2. # Copyright 2000 by Timothy O'Malley &lt;timo@alum.mit.edu&gt;</font>
+<font color="black">   3. #</font>
+<font color="black">   4. #                All Rights Reserved</font>
+<font color="black">   5. #</font>
+<font color="black">   6. # Permission to use, copy, modify, and distribute this software</font>
+<font color="black">   7. # and its documentation for any purpose and without fee is hereby</font>
+<font color="black">   8. # granted, provided that the above copyright notice appear in all</font>
+<font color="black">   9. # copies and that both that copyright notice and this permission</font>
+<font color="black">  10. # notice appear in supporting documentation, and that the name of</font>
+<font color="black">  11. # Timothy O'Malley  not be used in advertising or publicity</font>
+<font color="black">  12. # pertaining to distribution of the software without specific, written</font>
+<font color="black">  13. # prior permission.</font>
+<font color="black">  14. #</font>
+<font color="black">  15. # Timothy O'Malley DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS</font>
+<font color="black">  16. # SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY</font>
+<font color="black">  17. # AND FITNESS, IN NO EVENT SHALL Timothy O'Malley BE LIABLE FOR</font>
+<font color="black">  18. # ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES</font>
+<font color="black">  19. # WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,</font>
+<font color="black">  20. # WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS</font>
+<font color="black">  21. # ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR</font>
+<font color="black">  22. # PERFORMANCE OF THIS SOFTWARE.</font>
+<font color="black">  23. #</font>
+<font color="black">  24. ####</font>
+<font color="black">  25. #</font>
+<font color="black">  26. # Id: Cookie.py,v 2.29 2000/08/23 05:28:49 timo Exp</font>
+<font color="black">  27. #   by Timothy O'Malley &lt;timo@alum.mit.edu&gt;</font>
+<font color="black">  28. #</font>
+<font color="black">  29. #  Cookie.py is a Python module for the handling of HTTP</font>
+<font color="black">  30. #  cookies as a Python dictionary.  See RFC 2109 for more</font>
+<font color="black">  31. #  information on cookies.</font>
+<font color="black">  32. #</font>
+<font color="black">  33. #  The original idea to treat Cookies as a dictionary came from</font>
+<font color="black">  34. #  Dave Mitchell (davem@magnet.com) in 1995, when he released the</font>
+<font color="black">  35. #  first version of nscookie.py.</font>
+<font color="black">  36. #</font>
+<font color="black">  37. ####</font>
+<font color="black">  38. </font>
+<font color="black">  39. r&quot;&quot;&quot;</font>
+<font color="black">  40. Here's a sample session to show how to use this module.</font>
+<font color="black">  41. At the moment, this is the only documentation.</font>
+<font color="black">  42. </font>
+<font color="black">  43. The Basics</font>
+<font color="black">  44. ----------</font>
+<font color="black">  45. </font>
+<font color="black">  46. Importing is easy..</font>
+<font color="black">  47. </font>
+<font color="black">  48.    &gt;&gt;&gt; import Cookie</font>
+<font color="black">  49. </font>
+<font color="black">  50. Most of the time you start by creating a cookie.  Cookies come in</font>
+<font color="black">  51. three flavors, each with slightly different encoding semantics, but</font>
+<font color="black">  52. more on that later.</font>
+<font color="black">  53. </font>
+<font color="black">  54.    &gt;&gt;&gt; C = Cookie.SimpleCookie()</font>
+<font color="black">  55.    &gt;&gt;&gt; C = Cookie.SerialCookie()</font>
+<font color="black">  56.    &gt;&gt;&gt; C = Cookie.SmartCookie()</font>
+<font color="black">  57. </font>
+<font color="black">  58. [Note: Long-time users of Cookie.py will remember using</font>
+<font color="black">  59. Cookie.Cookie() to create a Cookie object.  Although deprecated, it</font>
+<font color="black">  60. is still supported by the code.  See the Backward Compatibility notes</font>
+<font color="black">  61. for more information.]</font>
+<font color="black">  62. </font>
+<font color="black">  63. Once you've created your Cookie, you can add values just as if it were</font>
+<font color="black">  64. a dictionary.</font>
+<font color="black">  65. </font>
+<font color="black">  66.    &gt;&gt;&gt; C = Cookie.SmartCookie()</font>
+<font color="black">  67.    &gt;&gt;&gt; C[&quot;fig&quot;] = &quot;newton&quot;</font>
+<font color="black">  68.    &gt;&gt;&gt; C[&quot;sugar&quot;] = &quot;wafer&quot;</font>
+<font color="black">  69.    &gt;&gt;&gt; C.output()</font>
+<font color="black">  70.    'Set-Cookie: fig=newton\r\nSet-Cookie: sugar=wafer'</font>
+<font color="black">  71. </font>
+<font color="black">  72. Notice that the printable representation of a Cookie is the</font>
+<font color="black">  73. appropriate format for a Set-Cookie: header.  This is the</font>
+<font color="black">  74. default behavior.  You can change the header and printed</font>
+<font color="black">  75. attributes by using the .output() function</font>
+<font color="black">  76. </font>
+<font color="black">  77.    &gt;&gt;&gt; C = Cookie.SmartCookie()</font>
+<font color="black">  78.    &gt;&gt;&gt; C[&quot;rocky&quot;] = &quot;road&quot;</font>
+<font color="black">  79.    &gt;&gt;&gt; C[&quot;rocky&quot;][&quot;path&quot;] = &quot;/cookie&quot;</font>
+<font color="black">  80.    &gt;&gt;&gt; print C.output(header=&quot;Cookie:&quot;)</font>
+<font color="black">  81.    Cookie: rocky=road; Path=/cookie</font>
+<font color="black">  82.    &gt;&gt;&gt; print C.output(attrs=[], header=&quot;Cookie:&quot;)</font>
+<font color="black">  83.    Cookie: rocky=road</font>
+<font color="black">  84. </font>
+<font color="black">  85. The load() method of a Cookie extracts cookies from a string.  In a</font>
+<font color="black">  86. CGI script, you would use this method to extract the cookies from the</font>
+<font color="black">  87. HTTP_COOKIE environment variable.</font>
+<font color="black">  88. </font>
+<font color="black">  89.    &gt;&gt;&gt; C = Cookie.SmartCookie()</font>
+<font color="black">  90.    &gt;&gt;&gt; C.load(&quot;chips=ahoy; vienna=finger&quot;)</font>
+<font color="black">  91.    &gt;&gt;&gt; C.output()</font>
+<font color="black">  92.    'Set-Cookie: chips=ahoy\r\nSet-Cookie: vienna=finger'</font>
+<font color="black">  93. </font>
+<font color="black">  94. The load() method is darn-tootin smart about identifying cookies</font>
+<font color="black">  95. within a string.  Escaped quotation marks, nested semicolons, and other</font>
+<font color="black">  96. such trickeries do not confuse it.</font>
+<font color="black">  97. </font>
+<font color="black">  98.    &gt;&gt;&gt; C = Cookie.SmartCookie()</font>
+<font color="black">  99.    &gt;&gt;&gt; C.load('keebler=&quot;E=everybody; L=\\&quot;Loves\\&quot;; fudge=\\012;&quot;;')</font>
+<font color="black"> 100.    &gt;&gt;&gt; print C</font>
+<font color="black"> 101.    Set-Cookie: keebler=&quot;E=everybody; L=\&quot;Loves\&quot;; fudge=\012;&quot;</font>
+<font color="black"> 102. </font>
+<font color="black"> 103. Each element of the Cookie also supports all of the RFC 2109</font>
+<font color="black"> 104. Cookie attributes.  Here's an example which sets the Path</font>
+<font color="black"> 105. attribute.</font>
+<font color="black"> 106. </font>
+<font color="black"> 107.    &gt;&gt;&gt; C = Cookie.SmartCookie()</font>
+<font color="black"> 108.    &gt;&gt;&gt; C[&quot;oreo&quot;] = &quot;doublestuff&quot;</font>
+<font color="black"> 109.    &gt;&gt;&gt; C[&quot;oreo&quot;][&quot;path&quot;] = &quot;/&quot;</font>
+<font color="black"> 110.    &gt;&gt;&gt; print C</font>
+<font color="black"> 111.    Set-Cookie: oreo=doublestuff; Path=/</font>
+<font color="black"> 112. </font>
+<font color="black"> 113. Each dictionary element has a 'value' attribute, which gives you</font>
+<font color="black"> 114. back the value associated with the key.</font>
+<font color="black"> 115. </font>
+<font color="black"> 116.    &gt;&gt;&gt; C = Cookie.SmartCookie()</font>
+<font color="black"> 117.    &gt;&gt;&gt; C[&quot;twix&quot;] = &quot;none for you&quot;</font>
+<font color="black"> 118.    &gt;&gt;&gt; C[&quot;twix&quot;].value</font>
+<font color="black"> 119.    'none for you'</font>
+<font color="black"> 120. </font>
+<font color="black"> 121. </font>
+<font color="black"> 122. A Bit More Advanced</font>
+<font color="black"> 123. -------------------</font>
+<font color="black"> 124. </font>
+<font color="black"> 125. As mentioned before, there are three different flavors of Cookie</font>
+<font color="black"> 126. objects, each with different encoding/decoding semantics.  This</font>
+<font color="black"> 127. section briefly discusses the differences.</font>
+<font color="black"> 128. </font>
+<font color="black"> 129. SimpleCookie</font>
+<font color="black"> 130. </font>
+<font color="black"> 131. The SimpleCookie expects that all values should be standard strings.</font>
+<font color="black"> 132. Just to be sure, SimpleCookie invokes the str() builtin to convert</font>
+<font color="black"> 133. the value to a string, when the values are set dictionary-style.</font>
+<font color="black"> 134. </font>
+<font color="black"> 135.    &gt;&gt;&gt; C = Cookie.SimpleCookie()</font>
+<font color="black"> 136.    &gt;&gt;&gt; C[&quot;number&quot;] = 7</font>
+<font color="black"> 137.    &gt;&gt;&gt; C[&quot;string&quot;] = &quot;seven&quot;</font>
+<font color="black"> 138.    &gt;&gt;&gt; C[&quot;number&quot;].value</font>
+<font color="black"> 139.    '7'</font>
+<font color="black"> 140.    &gt;&gt;&gt; C[&quot;string&quot;].value</font>
+<font color="black"> 141.    'seven'</font>
+<font color="black"> 142.    &gt;&gt;&gt; C.output()</font>
+<font color="black"> 143.    'Set-Cookie: number=7\r\nSet-Cookie: string=seven'</font>
+<font color="black"> 144. </font>
+<font color="black"> 145. </font>
+<font color="black"> 146. SerialCookie</font>
+<font color="black"> 147. </font>
+<font color="black"> 148. The SerialCookie expects that all values should be serialized using</font>
+<font color="black"> 149. cPickle (or pickle, if cPickle isn't available).  As a result of</font>
+<font color="black"> 150. serializing, SerialCookie can save almost any Python object to a</font>
+<font color="black"> 151. value, and recover the exact same object when the cookie has been</font>
+<font color="black"> 152. returned.  (SerialCookie can yield some strange-looking cookie</font>
+<font color="black"> 153. values, however.)</font>
+<font color="black"> 154. </font>
+<font color="black"> 155.    &gt;&gt;&gt; C = Cookie.SerialCookie()</font>
+<font color="black"> 156.    &gt;&gt;&gt; C[&quot;number&quot;] = 7</font>
+<font color="black"> 157.    &gt;&gt;&gt; C[&quot;string&quot;] = &quot;seven&quot;</font>
+<font color="black"> 158.    &gt;&gt;&gt; C[&quot;number&quot;].value</font>
+<font color="black"> 159.    7</font>
+<font color="black"> 160.    &gt;&gt;&gt; C[&quot;string&quot;].value</font>
+<font color="black"> 161.    'seven'</font>
+<font color="black"> 162.    &gt;&gt;&gt; C.output()</font>
+<font color="black"> 163.    'Set-Cookie: number=&quot;I7\\012.&quot;\r\nSet-Cookie: string=&quot;S\'seven\'\\012p1\\012.&quot;'</font>
+<font color="black"> 164. </font>
+<font color="black"> 165. Be warned, however, if SerialCookie cannot de-serialize a value (because</font>
+<font color="black"> 166. it isn't a valid pickle'd object), IT WILL RAISE AN EXCEPTION.</font>
+<font color="black"> 167. </font>
+<font color="black"> 168. </font>
+<font color="black"> 169. SmartCookie</font>
+<font color="black"> 170. </font>
+<font color="black"> 171. The SmartCookie combines aspects of each of the other two flavors.</font>
+<font color="black"> 172. When setting a value in a dictionary-fashion, the SmartCookie will</font>
+<font color="black"> 173. serialize (ala cPickle) the value *if and only if* it isn't a</font>
+<font color="black"> 174. Python string.  String objects are *not* serialized.  Similarly,</font>
+<font color="black"> 175. when the load() method parses out values, it attempts to de-serialize</font>
+<font color="black"> 176. the value.  If it fails, then it fallsback to treating the value</font>
+<font color="black"> 177. as a string.</font>
+<font color="black"> 178. </font>
+<font color="black"> 179.    &gt;&gt;&gt; C = Cookie.SmartCookie()</font>
+<font color="black"> 180.    &gt;&gt;&gt; C[&quot;number&quot;] = 7</font>
+<font color="black"> 181.    &gt;&gt;&gt; C[&quot;string&quot;] = &quot;seven&quot;</font>
+<font color="black"> 182.    &gt;&gt;&gt; C[&quot;number&quot;].value</font>
+<font color="black"> 183.    7</font>
+<font color="black"> 184.    &gt;&gt;&gt; C[&quot;string&quot;].value</font>
+<font color="black"> 185.    'seven'</font>
+<font color="black"> 186.    &gt;&gt;&gt; C.output()</font>
+<font color="black"> 187.    'Set-Cookie: number=&quot;I7\\012.&quot;\r\nSet-Cookie: string=seven'</font>
+<font color="black"> 188. </font>
+<font color="black"> 189. </font>
+<font color="black"> 190. Backwards Compatibility</font>
+<font color="black"> 191. -----------------------</font>
+<font color="black"> 192. </font>
+<font color="black"> 193. In order to keep compatibility with earlier versions of Cookie.py,</font>
+<font color="black"> 194. it is still possible to use Cookie.Cookie() to create a Cookie.  In</font>
+<font color="black"> 195. fact, this simply returns a SmartCookie.</font>
+<font color="black"> 196. </font>
+<font color="black"> 197.    &gt;&gt;&gt; C = Cookie.Cookie()</font>
+<font color="black"> 198.    &gt;&gt;&gt; print C.__class__.__name__</font>
+<font color="black"> 199.    SmartCookie</font>
+<font color="black"> 200. </font>
+<font color="black"> 201. </font>
+<font color="black"> 202. Finis.</font>
+<font color="green"> 203. &quot;&quot;&quot;  #&quot;</font>
+<font color="black"> 204. #     ^</font>
+<font color="black"> 205. #     |----helps out font-lock</font>
+<font color="black"> 206. </font>
+<font color="black"> 207. #</font>
+<font color="black"> 208. # Import our required modules</font>
+<font color="black"> 209. #</font>
+<font color="green"> 210. import string</font>
+<font color="black"> 211. </font>
+<font color="green"> 212. try:</font>
+<font color="green"> 213.     from cPickle import dumps, loads</font>
+<font color="red"> 214. except ImportError:</font>
+<font color="red"> 215.     from pickle import dumps, loads</font>
+<font color="black"> 216. </font>
+<font color="green"> 217. import re, warnings</font>
+<font color="black"> 218. </font>
+<font color="green"> 219. __all__ = [&quot;CookieError&quot;,&quot;BaseCookie&quot;,&quot;SimpleCookie&quot;,&quot;SerialCookie&quot;,</font>
+<font color="green"> 220.            &quot;SmartCookie&quot;,&quot;Cookie&quot;]</font>
+<font color="black"> 221. </font>
+<font color="green"> 222. _nulljoin = ''.join</font>
+<font color="green"> 223. _semispacejoin = '; '.join</font>
+<font color="green"> 224. _spacejoin = ' '.join</font>
+<font color="black"> 225. </font>
+<font color="black"> 226. #</font>
+<font color="black"> 227. # Define an exception visible to External modules</font>
+<font color="black"> 228. #</font>
+<font color="green"> 229. class CookieError(Exception):</font>
+<font color="green"> 230.     pass</font>
+<font color="black"> 231. </font>
+<font color="black"> 232. </font>
+<font color="black"> 233. # These quoting routines conform to the RFC2109 specification, which in</font>
+<font color="black"> 234. # turn references the character definitions from RFC2068.  They provide</font>
+<font color="black"> 235. # a two-way quoting algorithm.  Any non-text character is translated</font>
+<font color="black"> 236. # into a 4 character sequence: a forward-slash followed by the</font>
+<font color="black"> 237. # three-digit octal equivalent of the character.  Any '\' or '&quot;' is</font>
+<font color="black"> 238. # quoted with a preceding '\' slash.</font>
+<font color="black"> 239. #</font>
+<font color="black"> 240. # These are taken from RFC2068 and RFC2109.</font>
+<font color="black"> 241. #       _LegalChars       is the list of chars which don't require &quot;'s</font>
+<font color="black"> 242. #       _Translator       hash-table for fast quoting</font>
+<font color="black"> 243. #</font>
+<font color="green"> 244. _LegalChars       = string.ascii_letters + string.digits + &quot;!#$%&amp;'*+-.^_`|~&quot;</font>
+<font color="green"> 245. _Translator       = {</font>
+<font color="green"> 246.     '\000' : '\\000',  '\001' : '\\001',  '\002' : '\\002',</font>
+<font color="green"> 247.     '\003' : '\\003',  '\004' : '\\004',  '\005' : '\\005',</font>
+<font color="green"> 248.     '\006' : '\\006',  '\007' : '\\007',  '\010' : '\\010',</font>
+<font color="green"> 249.     '\011' : '\\011',  '\012' : '\\012',  '\013' : '\\013',</font>
+<font color="green"> 250.     '\014' : '\\014',  '\015' : '\\015',  '\016' : '\\016',</font>
+<font color="green"> 251.     '\017' : '\\017',  '\020' : '\\020',  '\021' : '\\021',</font>
+<font color="green"> 252.     '\022' : '\\022',  '\023' : '\\023',  '\024' : '\\024',</font>
+<font color="green"> 253.     '\025' : '\\025',  '\026' : '\\026',  '\027' : '\\027',</font>
+<font color="green"> 254.     '\030' : '\\030',  '\031' : '\\031',  '\032' : '\\032',</font>
+<font color="green"> 255.     '\033' : '\\033',  '\034' : '\\034',  '\035' : '\\035',</font>
+<font color="green"> 256.     '\036' : '\\036',  '\037' : '\\037',</font>
+<font color="black"> 257. </font>
+<font color="black"> 258.     # Because of the way browsers really handle cookies (as opposed</font>
+<font color="black"> 259.     # to what the RFC says) we also encode , and ;</font>
+<font color="black"> 260. </font>
+<font color="green"> 261.     ',' : '\\054', ';' : '\\073',</font>
+<font color="black"> 262. </font>
+<font color="green"> 263.     '&quot;' : '\\&quot;',       '\\' : '\\\\',</font>
+<font color="black"> 264. </font>
+<font color="green"> 265.     '\177' : '\\177',  '\200' : '\\200',  '\201' : '\\201',</font>
+<font color="green"> 266.     '\202' : '\\202',  '\203' : '\\203',  '\204' : '\\204',</font>
+<font color="green"> 267.     '\205' : '\\205',  '\206' : '\\206',  '\207' : '\\207',</font>
+<font color="green"> 268.     '\210' : '\\210',  '\211' : '\\211',  '\212' : '\\212',</font>
+<font color="green"> 269.     '\213' : '\\213',  '\214' : '\\214',  '\215' : '\\215',</font>
+<font color="green"> 270.     '\216' : '\\216',  '\217' : '\\217',  '\220' : '\\220',</font>
+<font color="green"> 271.     '\221' : '\\221',  '\222' : '\\222',  '\223' : '\\223',</font>
+<font color="green"> 272.     '\224' : '\\224',  '\225' : '\\225',  '\226' : '\\226',</font>
+<font color="green"> 273.     '\227' : '\\227',  '\230' : '\\230',  '\231' : '\\231',</font>
+<font color="green"> 274.     '\232' : '\\232',  '\233' : '\\233',  '\234' : '\\234',</font>
+<font color="green"> 275.     '\235' : '\\235',  '\236' : '\\236',  '\237' : '\\237',</font>
+<font color="green"> 276.     '\240' : '\\240',  '\241' : '\\241',  '\242' : '\\242',</font>
+<font color="green"> 277.     '\243' : '\\243',  '\244' : '\\244',  '\245' : '\\245',</font>
+<font color="green"> 278.     '\246' : '\\246',  '\247' : '\\247',  '\250' : '\\250',</font>
+<font color="green"> 279.     '\251' : '\\251',  '\252' : '\\252',  '\253' : '\\253',</font>
+<font color="green"> 280.     '\254' : '\\254',  '\255' : '\\255',  '\256' : '\\256',</font>
+<font color="green"> 281.     '\257' : '\\257',  '\260' : '\\260',  '\261' : '\\261',</font>
+<font color="green"> 282.     '\262' : '\\262',  '\263' : '\\263',  '\264' : '\\264',</font>
+<font color="green"> 283.     '\265' : '\\265',  '\266' : '\\266',  '\267' : '\\267',</font>
+<font color="green"> 284.     '\270' : '\\270',  '\271' : '\\271',  '\272' : '\\272',</font>
+<font color="green"> 285.     '\273' : '\\273',  '\274' : '\\274',  '\275' : '\\275',</font>
+<font color="green"> 286.     '\276' : '\\276',  '\277' : '\\277',  '\300' : '\\300',</font>
+<font color="green"> 287.     '\301' : '\\301',  '\302' : '\\302',  '\303' : '\\303',</font>
+<font color="green"> 288.     '\304' : '\\304',  '\305' : '\\305',  '\306' : '\\306',</font>
+<font color="green"> 289.     '\307' : '\\307',  '\310' : '\\310',  '\311' : '\\311',</font>
+<font color="green"> 290.     '\312' : '\\312',  '\313' : '\\313',  '\314' : '\\314',</font>
+<font color="green"> 291.     '\315' : '\\315',  '\316' : '\\316',  '\317' : '\\317',</font>
+<font color="green"> 292.     '\320' : '\\320',  '\321' : '\\321',  '\322' : '\\322',</font>
+<font color="green"> 293.     '\323' : '\\323',  '\324' : '\\324',  '\325' : '\\325',</font>
+<font color="green"> 294.     '\326' : '\\326',  '\327' : '\\327',  '\330' : '\\330',</font>
+<font color="green"> 295.     '\331' : '\\331',  '\332' : '\\332',  '\333' : '\\333',</font>
+<font color="green"> 296.     '\334' : '\\334',  '\335' : '\\335',  '\336' : '\\336',</font>
+<font color="green"> 297.     '\337' : '\\337',  '\340' : '\\340',  '\341' : '\\341',</font>
+<font color="green"> 298.     '\342' : '\\342',  '\343' : '\\343',  '\344' : '\\344',</font>
+<font color="green"> 299.     '\345' : '\\345',  '\346' : '\\346',  '\347' : '\\347',</font>
+<font color="green"> 300.     '\350' : '\\350',  '\351' : '\\351',  '\352' : '\\352',</font>
+<font color="green"> 301.     '\353' : '\\353',  '\354' : '\\354',  '\355' : '\\355',</font>
+<font color="green"> 302.     '\356' : '\\356',  '\357' : '\\357',  '\360' : '\\360',</font>
+<font color="green"> 303.     '\361' : '\\361',  '\362' : '\\362',  '\363' : '\\363',</font>
+<font color="green"> 304.     '\364' : '\\364',  '\365' : '\\365',  '\366' : '\\366',</font>
+<font color="green"> 305.     '\367' : '\\367',  '\370' : '\\370',  '\371' : '\\371',</font>
+<font color="green"> 306.     '\372' : '\\372',  '\373' : '\\373',  '\374' : '\\374',</font>
+<font color="green"> 307.     '\375' : '\\375',  '\376' : '\\376',  '\377' : '\\377'</font>
+<font color="black"> 308.     }</font>
+<font color="black"> 309. </font>
+<font color="green"> 310. _idmap = ''.join(chr(x) for x in xrange(256))</font>
+<font color="black"> 311. </font>
+<font color="green"> 312. def _quote(str, LegalChars=_LegalChars,</font>
+<font color="green"> 313.            idmap=_idmap, translate=string.translate):</font>
+<font color="black"> 314.     #</font>
+<font color="black"> 315.     # If the string does not need to be double-quoted,</font>
+<font color="black"> 316.     # then just return the string.  Otherwise, surround</font>
+<font color="black"> 317.     # the string in doublequotes and precede quote (with a \)</font>
+<font color="black"> 318.     # special characters.</font>
+<font color="black"> 319.     #</font>
+<font color="red"> 320.     if &quot;&quot; == translate(str, idmap, LegalChars):</font>
+<font color="red"> 321.         return str</font>
+<font color="black"> 322.     else:</font>
+<font color="red"> 323.         return '&quot;' + _nulljoin( map(_Translator.get, str, str) ) + '&quot;'</font>
+<font color="black"> 324. # end _quote</font>
+<font color="black"> 325. </font>
+<font color="black"> 326. </font>
+<font color="green"> 327. _OctalPatt = re.compile(r&quot;\\[0-3][0-7][0-7]&quot;)</font>
+<font color="green"> 328. _QuotePatt = re.compile(r&quot;[\\].&quot;)</font>
+<font color="black"> 329. </font>
+<font color="green"> 330. def _unquote(str):</font>
+<font color="black"> 331.     # If there aren't any doublequotes,</font>
+<font color="black"> 332.     # then there can't be any special characters.  See RFC 2109.</font>
+<font color="red"> 333.     if  len(str) &lt; 2:</font>
+<font color="red"> 334.         return str</font>
+<font color="red"> 335.     if str[0] != '&quot;' or str[-1] != '&quot;':</font>
+<font color="red"> 336.         return str</font>
+<font color="black"> 337. </font>
+<font color="black"> 338.     # We have to assume that we must decode this string.</font>
+<font color="black"> 339.     # Down to work.</font>
+<font color="black"> 340. </font>
+<font color="black"> 341.     # Remove the &quot;s</font>
+<font color="red"> 342.     str = str[1:-1]</font>
+<font color="black"> 343. </font>
+<font color="black"> 344.     # Check for special sequences.  Examples:</font>
+<font color="black"> 345.     #    \012 --&gt; \n</font>
+<font color="black"> 346.     #    \&quot;   --&gt; &quot;</font>
+<font color="black"> 347.     #</font>
+<font color="red"> 348.     i = 0</font>
+<font color="red"> 349.     n = len(str)</font>
+<font color="red"> 350.     res = []</font>
+<font color="red"> 351.     while 0 &lt;= i &lt; n:</font>
+<font color="red"> 352.         Omatch = _OctalPatt.search(str, i)</font>
+<font color="red"> 353.         Qmatch = _QuotePatt.search(str, i)</font>
+<font color="red"> 354.         if not Omatch and not Qmatch:              # Neither matched</font>
+<font color="red"> 355.             res.append(str[i:])</font>
+<font color="red"> 356.             break</font>
+<font color="black"> 357.         # else:</font>
+<font color="red"> 358.         j = k = -1</font>
+<font color="red"> 359.         if Omatch: j = Omatch.start(0)</font>
+<font color="red"> 360.         if Qmatch: k = Qmatch.start(0)</font>
+<font color="red"> 361.         if Qmatch and ( not Omatch or k &lt; j ):     # QuotePatt matched</font>
+<font color="red"> 362.             res.append(str[i:k])</font>
+<font color="red"> 363.             res.append(str[k+1])</font>
+<font color="red"> 364.             i = k+2</font>
+<font color="black"> 365.         else:                                      # OctalPatt matched</font>
+<font color="red"> 366.             res.append(str[i:j])</font>
+<font color="red"> 367.             res.append( chr( int(str[j+1:j+4], 8) ) )</font>
+<font color="red"> 368.             i = j+4</font>
+<font color="red"> 369.     return _nulljoin(res)</font>
+<font color="black"> 370. # end _unquote</font>
+<font color="black"> 371. </font>
+<font color="black"> 372. # The _getdate() routine is used to set the expiration time in</font>
+<font color="black"> 373. # the cookie's HTTP header.      By default, _getdate() returns the</font>
+<font color="black"> 374. # current time in the appropriate &quot;expires&quot; format for a</font>
+<font color="black"> 375. # Set-Cookie header.     The one optional argument is an offset from</font>
+<font color="black"> 376. # now, in seconds.      For example, an offset of -3600 means &quot;one hour ago&quot;.</font>
+<font color="black"> 377. # The offset may be a floating point number.</font>
+<font color="black"> 378. #</font>
+<font color="black"> 379. </font>
+<font color="green"> 380. _weekdayname = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']</font>
+<font color="black"> 381. </font>
+<font color="green"> 382. _monthname = [None,</font>
+<font color="green"> 383.               'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',</font>
+<font color="green"> 384.               'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']</font>
+<font color="black"> 385. </font>
+<font color="green"> 386. def _getdate(future=0, weekdayname=_weekdayname, monthname=_monthname):</font>
+<font color="red"> 387.     from time import gmtime, time</font>
+<font color="red"> 388.     now = time()</font>
+<font color="red"> 389.     year, month, day, hh, mm, ss, wd, y, z = gmtime(now + future)</font>
+<font color="red"> 390.     return &quot;%s, %02d %3s %4d %02d:%02d:%02d GMT&quot; % \</font>
+<font color="red"> 391.            (weekdayname[wd], day, monthname[month], year, hh, mm, ss)</font>
+<font color="black"> 392. </font>
+<font color="black"> 393. </font>
+<font color="black"> 394. #</font>
+<font color="black"> 395. # A class to hold ONE key,value pair.</font>
+<font color="black"> 396. # In a cookie, each such pair may have several attributes.</font>
+<font color="black"> 397. #       so this class is used to keep the attributes associated</font>
+<font color="black"> 398. #       with the appropriate key,value pair.</font>
+<font color="black"> 399. # This class also includes a coded_value attribute, which</font>
+<font color="black"> 400. #       is used to hold the network representation of the</font>
+<font color="black"> 401. #       value.  This is most useful when Python objects are</font>
+<font color="black"> 402. #       pickled for network transit.</font>
+<font color="black"> 403. #</font>
+<font color="black"> 404. </font>
+<font color="green"> 405. class Morsel(dict):</font>
+<font color="black"> 406.     # RFC 2109 lists these attributes as reserved:</font>
+<font color="black"> 407.     #   path       comment         domain</font>
+<font color="black"> 408.     #   max-age    secure      version</font>
+<font color="black"> 409.     #</font>
+<font color="black"> 410.     # For historical reasons, these attributes are also reserved:</font>
+<font color="black"> 411.     #   expires</font>
+<font color="black"> 412.     #</font>
+<font color="black"> 413.     # This is an extension from Microsoft:</font>
+<font color="black"> 414.     #   httponly</font>
+<font color="black"> 415.     #</font>
+<font color="black"> 416.     # This dictionary provides a mapping from the lowercase</font>
+<font color="black"> 417.     # variant on the left to the appropriate traditional</font>
+<font color="black"> 418.     # formatting on the right.</font>
+<font color="green"> 419.     _reserved = { &quot;expires&quot; : &quot;expires&quot;,</font>
+<font color="green"> 420.                    &quot;path&quot;        : &quot;Path&quot;,</font>
+<font color="green"> 421.                    &quot;comment&quot; : &quot;Comment&quot;,</font>
+<font color="green"> 422.                    &quot;domain&quot;      : &quot;Domain&quot;,</font>
+<font color="green"> 423.                    &quot;max-age&quot; : &quot;Max-Age&quot;,</font>
+<font color="green"> 424.                    &quot;secure&quot;      : &quot;secure&quot;,</font>
+<font color="green"> 425.                    &quot;httponly&quot;  : &quot;httponly&quot;,</font>
+<font color="green"> 426.                    &quot;version&quot; : &quot;Version&quot;,</font>
+<font color="black"> 427.                    }</font>
+<font color="black"> 428. </font>
+<font color="green"> 429.     _flags = {'secure', 'httponly'}</font>
+<font color="black"> 430. </font>
+<font color="green"> 431.     def __init__(self):</font>
+<font color="black"> 432.         # Set defaults</font>
+<font color="red"> 433.         self.key = self.value = self.coded_value = None</font>
+<font color="black"> 434. </font>
+<font color="black"> 435.         # Set default attributes</font>
+<font color="red"> 436.         for K in self._reserved:</font>
+<font color="red"> 437.             dict.__setitem__(self, K, &quot;&quot;)</font>
+<font color="black"> 438.     # end __init__</font>
+<font color="black"> 439. </font>
+<font color="green"> 440.     def __setitem__(self, K, V):</font>
+<font color="red"> 441.         K = K.lower()</font>
+<font color="red"> 442.         if not K in self._reserved:</font>
+<font color="red"> 443.             raise CookieError(&quot;Invalid Attribute %s&quot; % K)</font>
+<font color="red"> 444.         dict.__setitem__(self, K, V)</font>
+<font color="black"> 445.     # end __setitem__</font>
+<font color="black"> 446. </font>
+<font color="green"> 447.     def isReservedKey(self, K):</font>
+<font color="red"> 448.         return K.lower() in self._reserved</font>
+<font color="black"> 449.     # end isReservedKey</font>
+<font color="black"> 450. </font>
+<font color="black"> 451.     def set(self, key, val, coded_val,</font>
+<font color="green"> 452.             LegalChars=_LegalChars,</font>
+<font color="green"> 453.             idmap=_idmap, translate=string.translate):</font>
+<font color="black"> 454.         # First we verify that the key isn't a reserved word</font>
+<font color="black"> 455.         # Second we make sure it only contains legal characters</font>
+<font color="red"> 456.         if key.lower() in self._reserved:</font>
+<font color="red"> 457.             raise CookieError(&quot;Attempt to set a reserved key: %s&quot; % key)</font>
+<font color="red"> 458.         if &quot;&quot; != translate(key, idmap, LegalChars):</font>
+<font color="red"> 459.             raise CookieError(&quot;Illegal key value: %s&quot; % key)</font>
+<font color="black"> 460. </font>
+<font color="black"> 461.         # It's a good key, so save it.</font>
+<font color="red"> 462.         self.key                 = key</font>
+<font color="red"> 463.         self.value               = val</font>
+<font color="red"> 464.         self.coded_value         = coded_val</font>
+<font color="black"> 465.     # end set</font>
+<font color="black"> 466. </font>
+<font color="green"> 467.     def output(self, attrs=None, header = &quot;Set-Cookie:&quot;):</font>
+<font color="red"> 468.         return &quot;%s %s&quot; % ( header, self.OutputString(attrs) )</font>
+<font color="black"> 469. </font>
+<font color="green"> 470.     __str__ = output</font>
+<font color="black"> 471. </font>
+<font color="green"> 472.     def __repr__(self):</font>
+<font color="red"> 473.         return '&lt;%s: %s=%s&gt;' % (self.__class__.__name__,</font>
+<font color="red"> 474.                                 self.key, repr(self.value) )</font>
+<font color="black"> 475. </font>
+<font color="green"> 476.     def js_output(self, attrs=None):</font>
+<font color="black"> 477.         # Print javascript</font>
+<font color="black"> 478.         return &quot;&quot;&quot;</font>
+<font color="black"> 479.         &lt;script type=&quot;text/javascript&quot;&gt;</font>
+<font color="black"> 480.         &lt;!-- begin hiding</font>
+<font color="black"> 481.         document.cookie = \&quot;%s\&quot;;</font>
+<font color="black"> 482.         // end hiding --&gt;</font>
+<font color="black"> 483.         &lt;/script&gt;</font>
+<font color="red"> 484.         &quot;&quot;&quot; % ( self.OutputString(attrs).replace('&quot;',r'\&quot;'), )</font>
+<font color="black"> 485.     # end js_output()</font>
+<font color="black"> 486. </font>
+<font color="green"> 487.     def OutputString(self, attrs=None):</font>
+<font color="black"> 488.         # Build up our result</font>
+<font color="black"> 489.         #</font>
+<font color="red"> 490.         result = []</font>
+<font color="red"> 491.         RA = result.append</font>
+<font color="black"> 492. </font>
+<font color="black"> 493.         # First, the key=value pair</font>
+<font color="red"> 494.         RA(&quot;%s=%s&quot; % (self.key, self.coded_value))</font>
+<font color="black"> 495. </font>
+<font color="black"> 496.         # Now add any defined attributes</font>
+<font color="red"> 497.         if attrs is None:</font>
+<font color="red"> 498.             attrs = self._reserved</font>
+<font color="red"> 499.         items = self.items()</font>
+<font color="red"> 500.         items.sort()</font>
+<font color="red"> 501.         for K,V in items:</font>
+<font color="red"> 502.             if V == &quot;&quot;: continue</font>
+<font color="red"> 503.             if K not in attrs: continue</font>
+<font color="red"> 504.             if K == &quot;expires&quot; and type(V) == type(1):</font>
+<font color="red"> 505.                 RA(&quot;%s=%s&quot; % (self._reserved[K], _getdate(V)))</font>
+<font color="red"> 506.             elif K == &quot;max-age&quot; and type(V) == type(1):</font>
+<font color="red"> 507.                 RA(&quot;%s=%d&quot; % (self._reserved[K], V))</font>
+<font color="red"> 508.             elif K == &quot;secure&quot;:</font>
+<font color="red"> 509.                 RA(str(self._reserved[K]))</font>
+<font color="red"> 510.             elif K == &quot;httponly&quot;:</font>
+<font color="red"> 511.                 RA(str(self._reserved[K]))</font>
+<font color="black"> 512.             else:</font>
+<font color="red"> 513.                 RA(&quot;%s=%s&quot; % (self._reserved[K], V))</font>
+<font color="black"> 514. </font>
+<font color="black"> 515.         # Return the result</font>
+<font color="red"> 516.         return _semispacejoin(result)</font>
+<font color="black"> 517.     # end OutputString</font>
+<font color="black"> 518. # end Morsel class</font>
+<font color="black"> 519. </font>
+<font color="black"> 520. </font>
+<font color="black"> 521. </font>
+<font color="black"> 522. #</font>
+<font color="black"> 523. # Pattern for finding cookie</font>
+<font color="black"> 524. #</font>
+<font color="black"> 525. # This used to be strict parsing based on the RFC2109 and RFC2068</font>
+<font color="black"> 526. # specifications.  I have since discovered that MSIE 3.0x doesn't</font>
+<font color="black"> 527. # follow the character rules outlined in those specs.  As a</font>
+<font color="black"> 528. # result, the parsing rules here are less strict.</font>
+<font color="black"> 529. #</font>
+<font color="black"> 530. </font>
+<font color="green"> 531. _LegalKeyChars  = r&quot;\w\d!#%&amp;'~_`&gt;&lt;@,:/\$\*\+\-\.\^\|\)\(\?\}\{\=&quot;</font>
+<font color="green"> 532. _LegalValueChars = _LegalKeyChars + r&quot;\[\]&quot;</font>
+<font color="green"> 533. _CookiePattern = re.compile(</font>
+<font color="black"> 534.     r&quot;(?x)&quot;                       # This is a Verbose pattern</font>
+<font color="black"> 535.     r&quot;\s*&quot;                        # Optional whitespace at start of cookie</font>
+<font color="black"> 536.     r&quot;(?P&lt;key&gt;&quot;                   # Start of group 'key'</font>
+<font color="black"> 537.     &quot;[&quot;+ _LegalKeyChars +&quot;]+?&quot;     # Any word of at least one letter, nongreedy</font>
+<font color="black"> 538.     r&quot;)&quot;                          # End of group 'key'</font>
+<font color="black"> 539.     r&quot;(&quot;                          # Optional group: there may not be a value.</font>
+<font color="black"> 540.     r&quot;\s*=\s*&quot;                    # Equal Sign</font>
+<font color="black"> 541.     r&quot;(?P&lt;val&gt;&quot;                   # Start of group 'val'</font>
+<font color="black"> 542.     r'&quot;(?:[^\\&quot;]|\\.)*&quot;'            # Any doublequoted string</font>
+<font color="black"> 543.     r&quot;|&quot;                            # or</font>
+<font color="black"> 544.     r&quot;\w{3},\s[\s\w\d-]{9,11}\s[\d:]{8}\sGMT&quot; # Special case for &quot;expires&quot; attr</font>
+<font color="black"> 545.     r&quot;|&quot;                            # or</font>
+<font color="green"> 546.     &quot;[&quot;+ _LegalValueChars +&quot;]*&quot;        # Any word or empty string</font>
+<font color="black"> 547.     r&quot;)&quot;                          # End of group 'val'</font>
+<font color="black"> 548.     r&quot;)?&quot;                         # End of optional value group</font>
+<font color="black"> 549.     r&quot;\s*&quot;                        # Any number of spaces.</font>
+<font color="black"> 550.     r&quot;(\s+|;|$)&quot;                  # Ending either at space, semicolon, or EOS.</font>
+<font color="black"> 551.     )</font>
+<font color="black"> 552. </font>
+<font color="black"> 553. </font>
+<font color="black"> 554. # At long last, here is the cookie class.</font>
+<font color="black"> 555. #   Using this class is almost just like using a dictionary.</font>
+<font color="black"> 556. # See this module's docstring for example usage.</font>
+<font color="black"> 557. #</font>
+<font color="green"> 558. class BaseCookie(dict):</font>
+<font color="black"> 559.     # A container class for a set of Morsels</font>
+<font color="black"> 560.     #</font>
+<font color="black"> 561. </font>
+<font color="green"> 562.     def value_decode(self, val):</font>
+<font color="black"> 563.         &quot;&quot;&quot;real_value, coded_value = value_decode(STRING)</font>
+<font color="black"> 564.         Called prior to setting a cookie's value from the network</font>
+<font color="black"> 565.         representation.  The VALUE is the value read from HTTP</font>
+<font color="black"> 566.         header.</font>
+<font color="black"> 567.         Override this function to modify the behavior of cookies.</font>
+<font color="black"> 568.         &quot;&quot;&quot;</font>
+<font color="red"> 569.         return val, val</font>
+<font color="black"> 570.     # end value_encode</font>
+<font color="black"> 571. </font>
+<font color="green"> 572.     def value_encode(self, val):</font>
+<font color="black"> 573.         &quot;&quot;&quot;real_value, coded_value = value_encode(VALUE)</font>
+<font color="black"> 574.         Called prior to setting a cookie's value from the dictionary</font>
+<font color="black"> 575.         representation.  The VALUE is the value being assigned.</font>
+<font color="black"> 576.         Override this function to modify the behavior of cookies.</font>
+<font color="black"> 577.         &quot;&quot;&quot;</font>
+<font color="red"> 578.         strval = str(val)</font>
+<font color="red"> 579.         return strval, strval</font>
+<font color="black"> 580.     # end value_encode</font>
+<font color="black"> 581. </font>
+<font color="green"> 582.     def __init__(self, input=None):</font>
+<font color="red"> 583.         if input: self.load(input)</font>
+<font color="black"> 584.     # end __init__</font>
+<font color="black"> 585. </font>
+<font color="green"> 586.     def __set(self, key, real_value, coded_value):</font>
+<font color="black"> 587.         &quot;&quot;&quot;Private method for setting a cookie's value&quot;&quot;&quot;</font>
+<font color="red"> 588.         M = self.get(key, Morsel())</font>
+<font color="red"> 589.         M.set(key, real_value, coded_value)</font>
+<font color="red"> 590.         dict.__setitem__(self, key, M)</font>
+<font color="black"> 591.     # end __set</font>
+<font color="black"> 592. </font>
+<font color="green"> 593.     def __setitem__(self, key, value):</font>
+<font color="black"> 594.         &quot;&quot;&quot;Dictionary style assignment.&quot;&quot;&quot;</font>
+<font color="red"> 595.         if isinstance(value, Morsel):</font>
+<font color="black"> 596.             # allow assignment of constructed Morsels (e.g. for pickling)</font>
+<font color="red"> 597.             dict.__setitem__(self, key, value)</font>
+<font color="black"> 598.         else:</font>
+<font color="red"> 599.             rval, cval = self.value_encode(value)</font>
+<font color="red"> 600.             self.__set(key, rval, cval)</font>
+<font color="black"> 601.     # end __setitem__</font>
+<font color="black"> 602. </font>
+<font color="green"> 603.     def output(self, attrs=None, header=&quot;Set-Cookie:&quot;, sep=&quot;\015\012&quot;):</font>
+<font color="black"> 604.         &quot;&quot;&quot;Return a string suitable for HTTP.&quot;&quot;&quot;</font>
+<font color="red"> 605.         result = []</font>
+<font color="red"> 606.         items = self.items()</font>
+<font color="red"> 607.         items.sort()</font>
+<font color="red"> 608.         for K,V in items:</font>
+<font color="red"> 609.             result.append( V.output(attrs, header) )</font>
+<font color="red"> 610.         return sep.join(result)</font>
+<font color="black"> 611.     # end output</font>
+<font color="black"> 612. </font>
+<font color="green"> 613.     __str__ = output</font>
+<font color="black"> 614. </font>
+<font color="green"> 615.     def __repr__(self):</font>
+<font color="red"> 616.         L = []</font>
+<font color="red"> 617.         items = self.items()</font>
+<font color="red"> 618.         items.sort()</font>
+<font color="red"> 619.         for K,V in items:</font>
+<font color="red"> 620.             L.append( '%s=%s' % (K,repr(V.value) ) )</font>
+<font color="red"> 621.         return '&lt;%s: %s&gt;' % (self.__class__.__name__, _spacejoin(L))</font>
+<font color="black"> 622. </font>
+<font color="green"> 623.     def js_output(self, attrs=None):</font>
+<font color="black"> 624.         &quot;&quot;&quot;Return a string suitable for JavaScript.&quot;&quot;&quot;</font>
+<font color="red"> 625.         result = []</font>
+<font color="red"> 626.         items = self.items()</font>
+<font color="red"> 627.         items.sort()</font>
+<font color="red"> 628.         for K,V in items:</font>
+<font color="red"> 629.             result.append( V.js_output(attrs) )</font>
+<font color="red"> 630.         return _nulljoin(result)</font>
+<font color="black"> 631.     # end js_output</font>
+<font color="black"> 632. </font>
+<font color="green"> 633.     def load(self, rawdata):</font>
+<font color="black"> 634.         &quot;&quot;&quot;Load cookies from a string (presumably HTTP_COOKIE) or</font>
+<font color="black"> 635.         from a dictionary.  Loading cookies from a dictionary 'd'</font>
+<font color="black"> 636.         is equivalent to calling:</font>
+<font color="black"> 637.             map(Cookie.__setitem__, d.keys(), d.values())</font>
+<font color="black"> 638.         &quot;&quot;&quot;</font>
+<font color="red"> 639.         if type(rawdata) == type(&quot;&quot;):</font>
+<font color="red"> 640.             self.__ParseString(rawdata)</font>
+<font color="black"> 641.         else:</font>
+<font color="black"> 642.             # self.update() wouldn't call our custom __setitem__</font>
+<font color="red"> 643.             for k, v in rawdata.items():</font>
+<font color="red"> 644.                 self[k] = v</font>
+<font color="red"> 645.         return</font>
+<font color="black"> 646.     # end load()</font>
+<font color="black"> 647. </font>
+<font color="green"> 648.     def __ParseString(self, str, patt=_CookiePattern):</font>
+<font color="red"> 649.         i = 0            # Our starting point</font>
+<font color="red"> 650.         n = len(str)     # Length of string</font>
+<font color="red"> 651.         M = None         # current morsel</font>
+<font color="black"> 652. </font>
+<font color="red"> 653.         while 0 &lt;= i &lt; n:</font>
+<font color="black"> 654.             # Start looking for a cookie</font>
+<font color="red"> 655.             match = patt.match(str, i)</font>
+<font color="red"> 656.             if not match: break          # No more cookies</font>
+<font color="black"> 657. </font>
+<font color="red"> 658.             K,V = match.group(&quot;key&quot;), match.group(&quot;val&quot;)</font>
+<font color="red"> 659.             i = match.end(0)</font>
+<font color="black"> 660. </font>
+<font color="black"> 661.             # Parse the key, value in case it's metainfo</font>
+<font color="red"> 662.             if K[0] == &quot;$&quot;:</font>
+<font color="black"> 663.                 # We ignore attributes which pertain to the cookie</font>
+<font color="black"> 664.                 # mechanism as a whole.  See RFC 2109.</font>
+<font color="black"> 665.                 # (Does anyone care?)</font>
+<font color="red"> 666.                 if M:</font>
+<font color="red"> 667.                     M[ K[1:] ] = V</font>
+<font color="red"> 668.             elif K.lower() in Morsel._reserved:</font>
+<font color="red"> 669.                 if M:</font>
+<font color="red"> 670.                     if V is None:</font>
+<font color="red"> 671.                         if K.lower() in Morsel._flags:</font>
+<font color="red"> 672.                             M[K] = True</font>
+<font color="black"> 673.                     else:</font>
+<font color="red"> 674.                         M[K] = _unquote(V)</font>
+<font color="red"> 675.             elif V is not None:</font>
+<font color="red"> 676.                 rval, cval = self.value_decode(V)</font>
+<font color="red"> 677.                 self.__set(K, rval, cval)</font>
+<font color="red"> 678.                 M = self[K]</font>
+<font color="black"> 679.     # end __ParseString</font>
+<font color="black"> 680. # end BaseCookie class</font>
+<font color="black"> 681. </font>
+<font color="green"> 682. class SimpleCookie(BaseCookie):</font>
+<font color="black"> 683.     &quot;&quot;&quot;SimpleCookie</font>
+<font color="black"> 684.     SimpleCookie supports strings as cookie values.  When setting</font>
+<font color="black"> 685.     the value using the dictionary assignment notation, SimpleCookie</font>
+<font color="black"> 686.     calls the builtin str() to convert the value to a string.  Values</font>
+<font color="black"> 687.     received from HTTP are kept as strings.</font>
+<font color="green"> 688.     &quot;&quot;&quot;</font>
+<font color="green"> 689.     def value_decode(self, val):</font>
+<font color="red"> 690.         return _unquote( val ), val</font>
+<font color="green"> 691.     def value_encode(self, val):</font>
+<font color="red"> 692.         strval = str(val)</font>
+<font color="red"> 693.         return strval, _quote( strval )</font>
+<font color="black"> 694. # end SimpleCookie</font>
+<font color="black"> 695. </font>
+<font color="green"> 696. class SerialCookie(BaseCookie):</font>
+<font color="black"> 697.     &quot;&quot;&quot;SerialCookie</font>
+<font color="black"> 698.     SerialCookie supports arbitrary objects as cookie values. All</font>
+<font color="black"> 699.     values are serialized (using cPickle) before being sent to the</font>
+<font color="black"> 700.     client.  All incoming values are assumed to be valid Pickle</font>
+<font color="black"> 701.     representations.  IF AN INCOMING VALUE IS NOT IN A VALID PICKLE</font>
+<font color="black"> 702.     FORMAT, THEN AN EXCEPTION WILL BE RAISED.</font>
+<font color="black"> 703. </font>
+<font color="black"> 704.     Note: Large cookie values add overhead because they must be</font>
+<font color="black"> 705.     retransmitted on every HTTP transaction.</font>
+<font color="black"> 706. </font>
+<font color="black"> 707.     Note: HTTP has a 2k limit on the size of a cookie.  This class</font>
+<font color="black"> 708.     does not check for this limit, so be careful!!!</font>
+<font color="green"> 709.     &quot;&quot;&quot;</font>
+<font color="green"> 710.     def __init__(self, input=None):</font>
+<font color="red"> 711.         warnings.warn(&quot;SerialCookie class is insecure; do not use it&quot;,</font>
+<font color="red"> 712.                       DeprecationWarning)</font>
+<font color="red"> 713.         BaseCookie.__init__(self, input)</font>
+<font color="black"> 714.     # end __init__</font>
+<font color="green"> 715.     def value_decode(self, val):</font>
+<font color="black"> 716.         # This could raise an exception!</font>
+<font color="red"> 717.         return loads( _unquote(val) ), val</font>
+<font color="green"> 718.     def value_encode(self, val):</font>
+<font color="red"> 719.         return val, _quote( dumps(val) )</font>
+<font color="black"> 720. # end SerialCookie</font>
+<font color="black"> 721. </font>
+<font color="green"> 722. class SmartCookie(BaseCookie):</font>
+<font color="black"> 723.     &quot;&quot;&quot;SmartCookie</font>
+<font color="black"> 724.     SmartCookie supports arbitrary objects as cookie values.  If the</font>
+<font color="black"> 725.     object is a string, then it is quoted.  If the object is not a</font>
+<font color="black"> 726.     string, however, then SmartCookie will use cPickle to serialize</font>
+<font color="black"> 727.     the object into a string representation.</font>
+<font color="black"> 728. </font>
+<font color="black"> 729.     Note: Large cookie values add overhead because they must be</font>
+<font color="black"> 730.     retransmitted on every HTTP transaction.</font>
+<font color="black"> 731. </font>
+<font color="black"> 732.     Note: HTTP has a 2k limit on the size of a cookie.  This class</font>
+<font color="black"> 733.     does not check for this limit, so be careful!!!</font>
+<font color="green"> 734.     &quot;&quot;&quot;</font>
+<font color="green"> 735.     def __init__(self, input=None):</font>
+<font color="red"> 736.         warnings.warn(&quot;Cookie/SmartCookie class is insecure; do not use it&quot;,</font>
+<font color="red"> 737.                       DeprecationWarning)</font>
+<font color="red"> 738.         BaseCookie.__init__(self, input)</font>
+<font color="black"> 739.     # end __init__</font>
+<font color="green"> 740.     def value_decode(self, val):</font>
+<font color="red"> 741.         strval = _unquote(val)</font>
+<font color="red"> 742.         try:</font>
+<font color="red"> 743.             return loads(strval), val</font>
+<font color="red"> 744.         except:</font>
+<font color="red"> 745.             return strval, val</font>
+<font color="green"> 746.     def value_encode(self, val):</font>
+<font color="red"> 747.         if type(val) == type(&quot;&quot;):</font>
+<font color="red"> 748.             return val, _quote(val)</font>
+<font color="black"> 749.         else:</font>
+<font color="red"> 750.             return val, _quote( dumps(val) )</font>
+<font color="black"> 751. # end SmartCookie</font>
+<font color="black"> 752. </font>
+<font color="black"> 753. </font>
+<font color="black"> 754. ###########################################################</font>
+<font color="black"> 755. # Backwards Compatibility:  Don't break any existing code!</font>
+<font color="black"> 756. </font>
+<font color="black"> 757. # We provide Cookie() as an alias for SmartCookie()</font>
+<font color="green"> 758. Cookie = SmartCookie</font>
+<font color="black"> 759. </font>
+<font color="black"> 760. #</font>
+<font color="black"> 761. ###########################################################</font>
+<font color="black"> 762. </font>
+<font color="green"> 763. def _test():</font>
+<font color="red"> 764.     import doctest, Cookie</font>
+<font color="red"> 765.     return doctest.testmod(Cookie)</font>
+<font color="black"> 766. </font>
+<font color="green"> 767. if __name__ == &quot;__main__&quot;:</font>
+<font color="red"> 768.     _test()</font>
+<font color="black"> 769. </font>
+<font color="black"> 770. </font>
+<font color="black"> 771. #Local Variables:</font>
+<font color="black"> 772. #tab-width: 4</font>
+<font color="black"> 773. #end:</font>
+</pre>
+

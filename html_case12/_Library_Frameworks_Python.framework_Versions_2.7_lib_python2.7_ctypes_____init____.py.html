@@ -1,0 +1,563 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/ctypes/__init__.py</b><br>
+
+
+file stats: <b>354 lines, 205 executed: 57.9% covered</b>
+<pre>
+<font color="green">   1. &quot;&quot;&quot;create and manipulate C data types in Python&quot;&quot;&quot;</font>
+<font color="black">   2. </font>
+<font color="green">   3. import os as _os, sys as _sys</font>
+<font color="black">   4. </font>
+<font color="green">   5. __version__ = &quot;1.1.0&quot;</font>
+<font color="black">   6. </font>
+<font color="green">   7. from _ctypes import Union, Structure, Array</font>
+<font color="green">   8. from _ctypes import _Pointer</font>
+<font color="green">   9. from _ctypes import CFuncPtr as _CFuncPtr</font>
+<font color="green">  10. from _ctypes import __version__ as _ctypes_version</font>
+<font color="green">  11. from _ctypes import RTLD_LOCAL, RTLD_GLOBAL</font>
+<font color="green">  12. from _ctypes import ArgumentError</font>
+<font color="black">  13. </font>
+<font color="green">  14. from struct import calcsize as _calcsize</font>
+<font color="black">  15. </font>
+<font color="green">  16. if __version__ != _ctypes_version:</font>
+<font color="red">  17.     raise Exception(&quot;Version number mismatch&quot;, __version__, _ctypes_version)</font>
+<font color="black">  18. </font>
+<font color="green">  19. if _os.name in (&quot;nt&quot;, &quot;ce&quot;):</font>
+<font color="red">  20.     from _ctypes import FormatError</font>
+<font color="black">  21. </font>
+<font color="green">  22. DEFAULT_MODE = RTLD_LOCAL</font>
+<font color="green">  23. if _os.name == &quot;posix&quot; and _sys.platform == &quot;darwin&quot;:</font>
+<font color="black">  24.     # On OS X 10.3, we use RTLD_GLOBAL as default mode</font>
+<font color="black">  25.     # because RTLD_LOCAL does not work at least on some</font>
+<font color="black">  26.     # libraries.  OS X 10.3 is Darwin 7, so we check for</font>
+<font color="black">  27.     # that.</font>
+<font color="black">  28. </font>
+<font color="green">  29.     if int(_os.uname()[2].split('.')[0]) &lt; 8:</font>
+<font color="red">  30.         DEFAULT_MODE = RTLD_GLOBAL</font>
+<font color="black">  31. </font>
+<font color="green">  32. from _ctypes import FUNCFLAG_CDECL as _FUNCFLAG_CDECL, \</font>
+<font color="black">  33.      FUNCFLAG_PYTHONAPI as _FUNCFLAG_PYTHONAPI, \</font>
+<font color="black">  34.      FUNCFLAG_USE_ERRNO as _FUNCFLAG_USE_ERRNO, \</font>
+<font color="black">  35.      FUNCFLAG_USE_LASTERROR as _FUNCFLAG_USE_LASTERROR</font>
+<font color="black">  36. </font>
+<font color="black">  37. &quot;&quot;&quot;</font>
+<font color="black">  38. WINOLEAPI -&gt; HRESULT</font>
+<font color="black">  39. WINOLEAPI_(type)</font>
+<font color="black">  40. </font>
+<font color="black">  41. STDMETHODCALLTYPE</font>
+<font color="black">  42. </font>
+<font color="black">  43. STDMETHOD(name)</font>
+<font color="black">  44. STDMETHOD_(type, name)</font>
+<font color="black">  45. </font>
+<font color="black">  46. STDAPICALLTYPE</font>
+<font color="black">  47. &quot;&quot;&quot;</font>
+<font color="black">  48. </font>
+<font color="green">  49. def create_string_buffer(init, size=None):</font>
+<font color="black">  50.     &quot;&quot;&quot;create_string_buffer(aString) -&gt; character array</font>
+<font color="black">  51.     create_string_buffer(anInteger) -&gt; character array</font>
+<font color="black">  52.     create_string_buffer(aString, anInteger) -&gt; character array</font>
+<font color="black">  53.     &quot;&quot;&quot;</font>
+<font color="red">  54.     if isinstance(init, (str, unicode)):</font>
+<font color="red">  55.         if size is None:</font>
+<font color="red">  56.             size = len(init)+1</font>
+<font color="red">  57.         buftype = c_char * size</font>
+<font color="red">  58.         buf = buftype()</font>
+<font color="red">  59.         buf.value = init</font>
+<font color="red">  60.         return buf</font>
+<font color="red">  61.     elif isinstance(init, (int, long)):</font>
+<font color="red">  62.         buftype = c_char * init</font>
+<font color="red">  63.         buf = buftype()</font>
+<font color="red">  64.         return buf</font>
+<font color="red">  65.     raise TypeError(init)</font>
+<font color="black">  66. </font>
+<font color="green">  67. def c_buffer(init, size=None):</font>
+<font color="black">  68. ##    &quot;deprecated, use create_string_buffer instead&quot;</font>
+<font color="black">  69. ##    import warnings</font>
+<font color="black">  70. ##    warnings.warn(&quot;c_buffer is deprecated, use create_string_buffer instead&quot;,</font>
+<font color="black">  71. ##                  DeprecationWarning, stacklevel=2)</font>
+<font color="red">  72.     return create_string_buffer(init, size)</font>
+<font color="black">  73. </font>
+<font color="green">  74. _c_functype_cache = {}</font>
+<font color="green">  75. def CFUNCTYPE(restype, *argtypes, **kw):</font>
+<font color="black">  76.     &quot;&quot;&quot;CFUNCTYPE(restype, *argtypes,</font>
+<font color="black">  77.                  use_errno=False, use_last_error=False) -&gt; function prototype.</font>
+<font color="black">  78. </font>
+<font color="black">  79.     restype: the result type</font>
+<font color="black">  80.     argtypes: a sequence specifying the argument types</font>
+<font color="black">  81. </font>
+<font color="black">  82.     The function prototype can be called in different ways to create a</font>
+<font color="black">  83.     callable object:</font>
+<font color="black">  84. </font>
+<font color="black">  85.     prototype(integer address) -&gt; foreign function</font>
+<font color="black">  86.     prototype(callable) -&gt; create and return a C callable function from callable</font>
+<font color="black">  87.     prototype(integer index, method name[, paramflags]) -&gt; foreign function calling a COM method</font>
+<font color="black">  88.     prototype((ordinal number, dll object)[, paramflags]) -&gt; foreign function exported by ordinal</font>
+<font color="black">  89.     prototype((function name, dll object)[, paramflags]) -&gt; foreign function exported by name</font>
+<font color="black">  90.     &quot;&quot;&quot;</font>
+<font color="green">  91.     flags = _FUNCFLAG_CDECL</font>
+<font color="green">  92.     if kw.pop(&quot;use_errno&quot;, False):</font>
+<font color="red">  93.         flags |= _FUNCFLAG_USE_ERRNO</font>
+<font color="green">  94.     if kw.pop(&quot;use_last_error&quot;, False):</font>
+<font color="red">  95.         flags |= _FUNCFLAG_USE_LASTERROR</font>
+<font color="green">  96.     if kw:</font>
+<font color="red">  97.         raise ValueError(&quot;unexpected keyword argument(s) %s&quot; % kw.keys())</font>
+<font color="green">  98.     try:</font>
+<font color="green">  99.         return _c_functype_cache[(restype, argtypes, flags)]</font>
+<font color="green"> 100.     except KeyError:</font>
+<font color="green"> 101.         class CFunctionType(_CFuncPtr):</font>
+<font color="green"> 102.             _argtypes_ = argtypes</font>
+<font color="green"> 103.             _restype_ = restype</font>
+<font color="green"> 104.             _flags_ = flags</font>
+<font color="green"> 105.         _c_functype_cache[(restype, argtypes, flags)] = CFunctionType</font>
+<font color="green"> 106.         return CFunctionType</font>
+<font color="black"> 107. </font>
+<font color="green"> 108. if _os.name in (&quot;nt&quot;, &quot;ce&quot;):</font>
+<font color="red"> 109.     from _ctypes import LoadLibrary as _dlopen</font>
+<font color="red"> 110.     from _ctypes import FUNCFLAG_STDCALL as _FUNCFLAG_STDCALL</font>
+<font color="red"> 111.     if _os.name == &quot;ce&quot;:</font>
+<font color="black"> 112.         # 'ce' doesn't have the stdcall calling convention</font>
+<font color="red"> 113.         _FUNCFLAG_STDCALL = _FUNCFLAG_CDECL</font>
+<font color="black"> 114. </font>
+<font color="red"> 115.     _win_functype_cache = {}</font>
+<font color="red"> 116.     def WINFUNCTYPE(restype, *argtypes, **kw):</font>
+<font color="black"> 117.         # docstring set later (very similar to CFUNCTYPE.__doc__)</font>
+<font color="red"> 118.         flags = _FUNCFLAG_STDCALL</font>
+<font color="red"> 119.         if kw.pop(&quot;use_errno&quot;, False):</font>
+<font color="red"> 120.             flags |= _FUNCFLAG_USE_ERRNO</font>
+<font color="red"> 121.         if kw.pop(&quot;use_last_error&quot;, False):</font>
+<font color="red"> 122.             flags |= _FUNCFLAG_USE_LASTERROR</font>
+<font color="red"> 123.         if kw:</font>
+<font color="red"> 124.             raise ValueError(&quot;unexpected keyword argument(s) %s&quot; % kw.keys())</font>
+<font color="red"> 125.         try:</font>
+<font color="red"> 126.             return _win_functype_cache[(restype, argtypes, flags)]</font>
+<font color="red"> 127.         except KeyError:</font>
+<font color="red"> 128.             class WinFunctionType(_CFuncPtr):</font>
+<font color="red"> 129.                 _argtypes_ = argtypes</font>
+<font color="red"> 130.                 _restype_ = restype</font>
+<font color="red"> 131.                 _flags_ = flags</font>
+<font color="red"> 132.             _win_functype_cache[(restype, argtypes, flags)] = WinFunctionType</font>
+<font color="red"> 133.             return WinFunctionType</font>
+<font color="red"> 134.     if WINFUNCTYPE.__doc__:</font>
+<font color="red"> 135.         WINFUNCTYPE.__doc__ = CFUNCTYPE.__doc__.replace(&quot;CFUNCTYPE&quot;, &quot;WINFUNCTYPE&quot;)</font>
+<font color="black"> 136. </font>
+<font color="green"> 137. elif _os.name == &quot;posix&quot;:</font>
+<font color="green"> 138.     from _ctypes import dlopen as _dlopen</font>
+<font color="black"> 139. </font>
+<font color="green"> 140. from _ctypes import sizeof, byref, addressof, alignment, resize</font>
+<font color="green"> 141. from _ctypes import get_errno, set_errno</font>
+<font color="green"> 142. from _ctypes import _SimpleCData</font>
+<font color="black"> 143. </font>
+<font color="green"> 144. def _check_size(typ, typecode=None):</font>
+<font color="black"> 145.     # Check if sizeof(ctypes_type) against struct.calcsize.  This</font>
+<font color="black"> 146.     # should protect somewhat against a misconfigured libffi.</font>
+<font color="green"> 147.     from struct import calcsize</font>
+<font color="green"> 148.     if typecode is None:</font>
+<font color="black"> 149.         # Most _type_ codes are the same as used in struct</font>
+<font color="green"> 150.         typecode = typ._type_</font>
+<font color="green"> 151.     actual, required = sizeof(typ), calcsize(typecode)</font>
+<font color="green"> 152.     if actual != required:</font>
+<font color="red"> 153.         raise SystemError(&quot;sizeof(%s) wrong: %d instead of %d&quot; % \</font>
+<font color="red"> 154.                           (typ, actual, required))</font>
+<font color="black"> 155. </font>
+<font color="green"> 156. class py_object(_SimpleCData):</font>
+<font color="green"> 157.     _type_ = &quot;O&quot;</font>
+<font color="green"> 158.     def __repr__(self):</font>
+<font color="red"> 159.         try:</font>
+<font color="red"> 160.             return super(py_object, self).__repr__()</font>
+<font color="red"> 161.         except ValueError:</font>
+<font color="red"> 162.             return &quot;%s(&lt;NULL&gt;)&quot; % type(self).__name__</font>
+<font color="green"> 163. _check_size(py_object, &quot;P&quot;)</font>
+<font color="black"> 164. </font>
+<font color="green"> 165. class c_short(_SimpleCData):</font>
+<font color="green"> 166.     _type_ = &quot;h&quot;</font>
+<font color="green"> 167. _check_size(c_short)</font>
+<font color="black"> 168. </font>
+<font color="green"> 169. class c_ushort(_SimpleCData):</font>
+<font color="green"> 170.     _type_ = &quot;H&quot;</font>
+<font color="green"> 171. _check_size(c_ushort)</font>
+<font color="black"> 172. </font>
+<font color="green"> 173. class c_long(_SimpleCData):</font>
+<font color="green"> 174.     _type_ = &quot;l&quot;</font>
+<font color="green"> 175. _check_size(c_long)</font>
+<font color="black"> 176. </font>
+<font color="green"> 177. class c_ulong(_SimpleCData):</font>
+<font color="green"> 178.     _type_ = &quot;L&quot;</font>
+<font color="green"> 179. _check_size(c_ulong)</font>
+<font color="black"> 180. </font>
+<font color="green"> 181. if _calcsize(&quot;i&quot;) == _calcsize(&quot;l&quot;):</font>
+<font color="black"> 182.     # if int and long have the same size, make c_int an alias for c_long</font>
+<font color="red"> 183.     c_int = c_long</font>
+<font color="red"> 184.     c_uint = c_ulong</font>
+<font color="black"> 185. else:</font>
+<font color="green"> 186.     class c_int(_SimpleCData):</font>
+<font color="green"> 187.         _type_ = &quot;i&quot;</font>
+<font color="green"> 188.     _check_size(c_int)</font>
+<font color="black"> 189. </font>
+<font color="green"> 190.     class c_uint(_SimpleCData):</font>
+<font color="green"> 191.         _type_ = &quot;I&quot;</font>
+<font color="green"> 192.     _check_size(c_uint)</font>
+<font color="black"> 193. </font>
+<font color="green"> 194. class c_float(_SimpleCData):</font>
+<font color="green"> 195.     _type_ = &quot;f&quot;</font>
+<font color="green"> 196. _check_size(c_float)</font>
+<font color="black"> 197. </font>
+<font color="green"> 198. class c_double(_SimpleCData):</font>
+<font color="green"> 199.     _type_ = &quot;d&quot;</font>
+<font color="green"> 200. _check_size(c_double)</font>
+<font color="black"> 201. </font>
+<font color="green"> 202. class c_longdouble(_SimpleCData):</font>
+<font color="green"> 203.     _type_ = &quot;g&quot;</font>
+<font color="green"> 204. if sizeof(c_longdouble) == sizeof(c_double):</font>
+<font color="red"> 205.     c_longdouble = c_double</font>
+<font color="black"> 206. </font>
+<font color="green"> 207. if _calcsize(&quot;l&quot;) == _calcsize(&quot;q&quot;):</font>
+<font color="black"> 208.     # if long and long long have the same size, make c_longlong an alias for c_long</font>
+<font color="green"> 209.     c_longlong = c_long</font>
+<font color="green"> 210.     c_ulonglong = c_ulong</font>
+<font color="black"> 211. else:</font>
+<font color="red"> 212.     class c_longlong(_SimpleCData):</font>
+<font color="red"> 213.         _type_ = &quot;q&quot;</font>
+<font color="red"> 214.     _check_size(c_longlong)</font>
+<font color="black"> 215. </font>
+<font color="red"> 216.     class c_ulonglong(_SimpleCData):</font>
+<font color="red"> 217.         _type_ = &quot;Q&quot;</font>
+<font color="black"> 218.     ##    def from_param(cls, val):</font>
+<font color="black"> 219.     ##        return ('d', float(val), val)</font>
+<font color="black"> 220.     ##    from_param = classmethod(from_param)</font>
+<font color="red"> 221.     _check_size(c_ulonglong)</font>
+<font color="black"> 222. </font>
+<font color="green"> 223. class c_ubyte(_SimpleCData):</font>
+<font color="green"> 224.     _type_ = &quot;B&quot;</font>
+<font color="green"> 225. c_ubyte.__ctype_le__ = c_ubyte.__ctype_be__ = c_ubyte</font>
+<font color="black"> 226. # backward compatibility:</font>
+<font color="black"> 227. ##c_uchar = c_ubyte</font>
+<font color="green"> 228. _check_size(c_ubyte)</font>
+<font color="black"> 229. </font>
+<font color="green"> 230. class c_byte(_SimpleCData):</font>
+<font color="green"> 231.     _type_ = &quot;b&quot;</font>
+<font color="green"> 232. c_byte.__ctype_le__ = c_byte.__ctype_be__ = c_byte</font>
+<font color="green"> 233. _check_size(c_byte)</font>
+<font color="black"> 234. </font>
+<font color="green"> 235. class c_char(_SimpleCData):</font>
+<font color="green"> 236.     _type_ = &quot;c&quot;</font>
+<font color="green"> 237. c_char.__ctype_le__ = c_char.__ctype_be__ = c_char</font>
+<font color="green"> 238. _check_size(c_char)</font>
+<font color="black"> 239. </font>
+<font color="green"> 240. class c_char_p(_SimpleCData):</font>
+<font color="green"> 241.     _type_ = &quot;z&quot;</font>
+<font color="green"> 242.     if _os.name == &quot;nt&quot;:</font>
+<font color="red"> 243.         def __repr__(self):</font>
+<font color="red"> 244.             if not windll.kernel32.IsBadStringPtrA(self, -1):</font>
+<font color="red"> 245.                 return &quot;%s(%r)&quot; % (self.__class__.__name__, self.value)</font>
+<font color="red"> 246.             return &quot;%s(%s)&quot; % (self.__class__.__name__, cast(self, c_void_p).value)</font>
+<font color="black"> 247.     else:</font>
+<font color="green"> 248.         def __repr__(self):</font>
+<font color="red"> 249.             return &quot;%s(%s)&quot; % (self.__class__.__name__, cast(self, c_void_p).value)</font>
+<font color="green"> 250. _check_size(c_char_p, &quot;P&quot;)</font>
+<font color="black"> 251. </font>
+<font color="green"> 252. class c_void_p(_SimpleCData):</font>
+<font color="green"> 253.     _type_ = &quot;P&quot;</font>
+<font color="green"> 254. c_voidp = c_void_p # backwards compatibility (to a bug)</font>
+<font color="green"> 255. _check_size(c_void_p)</font>
+<font color="black"> 256. </font>
+<font color="green"> 257. class c_bool(_SimpleCData):</font>
+<font color="green"> 258.     _type_ = &quot;?&quot;</font>
+<font color="black"> 259. </font>
+<font color="green"> 260. from _ctypes import POINTER, pointer, _pointer_type_cache</font>
+<font color="black"> 261. </font>
+<font color="green"> 262. def _reset_cache():</font>
+<font color="green"> 263.     _pointer_type_cache.clear()</font>
+<font color="green"> 264.     _c_functype_cache.clear()</font>
+<font color="green"> 265.     if _os.name in (&quot;nt&quot;, &quot;ce&quot;):</font>
+<font color="red"> 266.         _win_functype_cache.clear()</font>
+<font color="black"> 267.     # _SimpleCData.c_wchar_p_from_param</font>
+<font color="green"> 268.     POINTER(c_wchar).from_param = c_wchar_p.from_param</font>
+<font color="black"> 269.     # _SimpleCData.c_char_p_from_param</font>
+<font color="green"> 270.     POINTER(c_char).from_param = c_char_p.from_param</font>
+<font color="green"> 271.     _pointer_type_cache[None] = c_void_p</font>
+<font color="black"> 272.     # XXX for whatever reasons, creating the first instance of a callback</font>
+<font color="black"> 273.     # function is needed for the unittests on Win64 to succeed.  This MAY</font>
+<font color="black"> 274.     # be a compiler bug, since the problem occurs only when _ctypes is</font>
+<font color="black"> 275.     # compiled with the MS SDK compiler.  Or an uninitialized variable?</font>
+<font color="green"> 276.     CFUNCTYPE(c_int)(lambda: None)</font>
+<font color="black"> 277. </font>
+<font color="green"> 278. try:</font>
+<font color="green"> 279.     from _ctypes import set_conversion_mode</font>
+<font color="red"> 280. except ImportError:</font>
+<font color="red"> 281.     pass</font>
+<font color="black"> 282. else:</font>
+<font color="green"> 283.     if _os.name in (&quot;nt&quot;, &quot;ce&quot;):</font>
+<font color="red"> 284.         set_conversion_mode(&quot;mbcs&quot;, &quot;ignore&quot;)</font>
+<font color="black"> 285.     else:</font>
+<font color="green"> 286.         set_conversion_mode(&quot;ascii&quot;, &quot;strict&quot;)</font>
+<font color="black"> 287. </font>
+<font color="green"> 288.     class c_wchar_p(_SimpleCData):</font>
+<font color="green"> 289.         _type_ = &quot;Z&quot;</font>
+<font color="black"> 290. </font>
+<font color="green"> 291.     class c_wchar(_SimpleCData):</font>
+<font color="green"> 292.         _type_ = &quot;u&quot;</font>
+<font color="black"> 293. </font>
+<font color="green"> 294.     def create_unicode_buffer(init, size=None):</font>
+<font color="black"> 295.         &quot;&quot;&quot;create_unicode_buffer(aString) -&gt; character array</font>
+<font color="black"> 296.         create_unicode_buffer(anInteger) -&gt; character array</font>
+<font color="black"> 297.         create_unicode_buffer(aString, anInteger) -&gt; character array</font>
+<font color="black"> 298.         &quot;&quot;&quot;</font>
+<font color="red"> 299.         if isinstance(init, (str, unicode)):</font>
+<font color="red"> 300.             if size is None:</font>
+<font color="red"> 301.                 size = len(init)+1</font>
+<font color="red"> 302.             buftype = c_wchar * size</font>
+<font color="red"> 303.             buf = buftype()</font>
+<font color="red"> 304.             buf.value = init</font>
+<font color="red"> 305.             return buf</font>
+<font color="red"> 306.         elif isinstance(init, (int, long)):</font>
+<font color="red"> 307.             buftype = c_wchar * init</font>
+<font color="red"> 308.             buf = buftype()</font>
+<font color="red"> 309.             return buf</font>
+<font color="red"> 310.         raise TypeError(init)</font>
+<font color="black"> 311. </font>
+<font color="black"> 312. # XXX Deprecated</font>
+<font color="green"> 313. def SetPointerType(pointer, cls):</font>
+<font color="red"> 314.     if _pointer_type_cache.get(cls, None) is not None:</font>
+<font color="red"> 315.         raise RuntimeError(&quot;This type already exists in the cache&quot;)</font>
+<font color="red"> 316.     if id(pointer) not in _pointer_type_cache:</font>
+<font color="red"> 317.         raise RuntimeError(&quot;What's this???&quot;)</font>
+<font color="red"> 318.     pointer.set_type(cls)</font>
+<font color="red"> 319.     _pointer_type_cache[cls] = pointer</font>
+<font color="red"> 320.     del _pointer_type_cache[id(pointer)]</font>
+<font color="black"> 321. </font>
+<font color="black"> 322. # XXX Deprecated</font>
+<font color="green"> 323. def ARRAY(typ, len):</font>
+<font color="red"> 324.     return typ * len</font>
+<font color="black"> 325. </font>
+<font color="black"> 326. ################################################################</font>
+<font color="black"> 327. </font>
+<font color="black"> 328. </font>
+<font color="green"> 329. class CDLL(object):</font>
+<font color="black"> 330.     &quot;&quot;&quot;An instance of this class represents a loaded dll/shared</font>
+<font color="black"> 331.     library, exporting functions using the standard C calling</font>
+<font color="black"> 332.     convention (named 'cdecl' on Windows).</font>
+<font color="black"> 333. </font>
+<font color="black"> 334.     The exported functions can be accessed as attributes, or by</font>
+<font color="black"> 335.     indexing with the function name.  Examples:</font>
+<font color="black"> 336. </font>
+<font color="black"> 337.     &lt;obj&gt;.qsort -&gt; callable object</font>
+<font color="black"> 338.     &lt;obj&gt;['qsort'] -&gt; callable object</font>
+<font color="black"> 339. </font>
+<font color="black"> 340.     Calling the functions releases the Python GIL during the call and</font>
+<font color="black"> 341.     reacquires it afterwards.</font>
+<font color="green"> 342.     &quot;&quot;&quot;</font>
+<font color="green"> 343.     _func_flags_ = _FUNCFLAG_CDECL</font>
+<font color="green"> 344.     _func_restype_ = c_int</font>
+<font color="black"> 345.     # default values for repr</font>
+<font color="green"> 346.     _name = '&lt;uninitialized&gt;'</font>
+<font color="green"> 347.     _handle = 0</font>
+<font color="green"> 348.     _FuncPtr = None</font>
+<font color="black"> 349. </font>
+<font color="green"> 350.     def __init__(self, name, mode=DEFAULT_MODE, handle=None,</font>
+<font color="green"> 351.                  use_errno=False,</font>
+<font color="green"> 352.                  use_last_error=False):</font>
+<font color="green"> 353.         self._name = name</font>
+<font color="green"> 354.         flags = self._func_flags_</font>
+<font color="green"> 355.         if use_errno:</font>
+<font color="red"> 356.             flags |= _FUNCFLAG_USE_ERRNO</font>
+<font color="green"> 357.         if use_last_error:</font>
+<font color="red"> 358.             flags |= _FUNCFLAG_USE_LASTERROR</font>
+<font color="black"> 359. </font>
+<font color="green"> 360.         class _FuncPtr(_CFuncPtr):</font>
+<font color="green"> 361.             _flags_ = flags</font>
+<font color="green"> 362.             _restype_ = self._func_restype_</font>
+<font color="green"> 363.         self._FuncPtr = _FuncPtr</font>
+<font color="black"> 364. </font>
+<font color="green"> 365.         if handle is None:</font>
+<font color="green"> 366.             self._handle = _dlopen(self._name, mode)</font>
+<font color="black"> 367.         else:</font>
+<font color="red"> 368.             self._handle = handle</font>
+<font color="black"> 369. </font>
+<font color="green"> 370.     def __repr__(self):</font>
+<font color="red"> 371.         return &quot;&lt;%s '%s', handle %x at %x&gt;&quot; % \</font>
+<font color="red"> 372.                (self.__class__.__name__, self._name,</font>
+<font color="red"> 373.                 (self._handle &amp; (_sys.maxint*2 + 1)),</font>
+<font color="red"> 374.                 id(self) &amp; (_sys.maxint*2 + 1))</font>
+<font color="black"> 375. </font>
+<font color="green"> 376.     def __getattr__(self, name):</font>
+<font color="green"> 377.         if name.startswith('__') and name.endswith('__'):</font>
+<font color="red"> 378.             raise AttributeError(name)</font>
+<font color="green"> 379.         func = self.__getitem__(name)</font>
+<font color="green"> 380.         setattr(self, name, func)</font>
+<font color="green"> 381.         return func</font>
+<font color="black"> 382. </font>
+<font color="green"> 383.     def __getitem__(self, name_or_ordinal):</font>
+<font color="green"> 384.         func = self._FuncPtr((name_or_ordinal, self))</font>
+<font color="green"> 385.         if not isinstance(name_or_ordinal, (int, long)):</font>
+<font color="green"> 386.             func.__name__ = name_or_ordinal</font>
+<font color="green"> 387.         return func</font>
+<font color="black"> 388. </font>
+<font color="green"> 389. class PyDLL(CDLL):</font>
+<font color="black"> 390.     &quot;&quot;&quot;This class represents the Python library itself.  It allows</font>
+<font color="black"> 391.     accessing Python API functions.  The GIL is not released, and</font>
+<font color="black"> 392.     Python exceptions are handled correctly.</font>
+<font color="green"> 393.     &quot;&quot;&quot;</font>
+<font color="green"> 394.     _func_flags_ = _FUNCFLAG_CDECL | _FUNCFLAG_PYTHONAPI</font>
+<font color="black"> 395. </font>
+<font color="green"> 396. if _os.name in (&quot;nt&quot;, &quot;ce&quot;):</font>
+<font color="black"> 397. </font>
+<font color="red"> 398.     class WinDLL(CDLL):</font>
+<font color="black"> 399.         &quot;&quot;&quot;This class represents a dll exporting functions using the</font>
+<font color="black"> 400.         Windows stdcall calling convention.</font>
+<font color="red"> 401.         &quot;&quot;&quot;</font>
+<font color="red"> 402.         _func_flags_ = _FUNCFLAG_STDCALL</font>
+<font color="black"> 403. </font>
+<font color="black"> 404.     # XXX Hm, what about HRESULT as normal parameter?</font>
+<font color="black"> 405.     # Mustn't it derive from c_long then?</font>
+<font color="red"> 406.     from _ctypes import _check_HRESULT, _SimpleCData</font>
+<font color="red"> 407.     class HRESULT(_SimpleCData):</font>
+<font color="red"> 408.         _type_ = &quot;l&quot;</font>
+<font color="black"> 409.         # _check_retval_ is called with the function's result when it</font>
+<font color="black"> 410.         # is used as restype.  It checks for the FAILED bit, and</font>
+<font color="black"> 411.         # raises a WindowsError if it is set.</font>
+<font color="black"> 412.         #</font>
+<font color="black"> 413.         # The _check_retval_ method is implemented in C, so that the</font>
+<font color="black"> 414.         # method definition itself is not included in the traceback</font>
+<font color="black"> 415.         # when it raises an error - that is what we want (and Python</font>
+<font color="black"> 416.         # doesn't have a way to raise an exception in the caller's</font>
+<font color="black"> 417.         # frame).</font>
+<font color="red"> 418.         _check_retval_ = _check_HRESULT</font>
+<font color="black"> 419. </font>
+<font color="red"> 420.     class OleDLL(CDLL):</font>
+<font color="black"> 421.         &quot;&quot;&quot;This class represents a dll exporting functions using the</font>
+<font color="black"> 422.         Windows stdcall calling convention, and returning HRESULT.</font>
+<font color="black"> 423.         HRESULT error values are automatically raised as WindowsError</font>
+<font color="black"> 424.         exceptions.</font>
+<font color="red"> 425.         &quot;&quot;&quot;</font>
+<font color="red"> 426.         _func_flags_ = _FUNCFLAG_STDCALL</font>
+<font color="red"> 427.         _func_restype_ = HRESULT</font>
+<font color="black"> 428. </font>
+<font color="green"> 429. class LibraryLoader(object):</font>
+<font color="green"> 430.     def __init__(self, dlltype):</font>
+<font color="green"> 431.         self._dlltype = dlltype</font>
+<font color="black"> 432. </font>
+<font color="green"> 433.     def __getattr__(self, name):</font>
+<font color="red"> 434.         if name[0] == '_':</font>
+<font color="red"> 435.             raise AttributeError(name)</font>
+<font color="red"> 436.         dll = self._dlltype(name)</font>
+<font color="red"> 437.         setattr(self, name, dll)</font>
+<font color="red"> 438.         return dll</font>
+<font color="black"> 439. </font>
+<font color="green"> 440.     def __getitem__(self, name):</font>
+<font color="red"> 441.         return getattr(self, name)</font>
+<font color="black"> 442. </font>
+<font color="green"> 443.     def LoadLibrary(self, name):</font>
+<font color="red"> 444.         return self._dlltype(name)</font>
+<font color="black"> 445. </font>
+<font color="green"> 446. cdll = LibraryLoader(CDLL)</font>
+<font color="green"> 447. pydll = LibraryLoader(PyDLL)</font>
+<font color="black"> 448. </font>
+<font color="green"> 449. if _os.name in (&quot;nt&quot;, &quot;ce&quot;):</font>
+<font color="red"> 450.     pythonapi = PyDLL(&quot;python dll&quot;, None, _sys.dllhandle)</font>
+<font color="green"> 451. elif _sys.platform == &quot;cygwin&quot;:</font>
+<font color="red"> 452.     pythonapi = PyDLL(&quot;libpython%d.%d.dll&quot; % _sys.version_info[:2])</font>
+<font color="black"> 453. else:</font>
+<font color="green"> 454.     pythonapi = PyDLL(None)</font>
+<font color="black"> 455. </font>
+<font color="black"> 456. </font>
+<font color="green"> 457. if _os.name in (&quot;nt&quot;, &quot;ce&quot;):</font>
+<font color="red"> 458.     windll = LibraryLoader(WinDLL)</font>
+<font color="red"> 459.     oledll = LibraryLoader(OleDLL)</font>
+<font color="black"> 460. </font>
+<font color="red"> 461.     if _os.name == &quot;nt&quot;:</font>
+<font color="red"> 462.         GetLastError = windll.kernel32.GetLastError</font>
+<font color="black"> 463.     else:</font>
+<font color="red"> 464.         GetLastError = windll.coredll.GetLastError</font>
+<font color="red"> 465.     from _ctypes import get_last_error, set_last_error</font>
+<font color="black"> 466. </font>
+<font color="red"> 467.     def WinError(code=None, descr=None):</font>
+<font color="red"> 468.         if code is None:</font>
+<font color="red"> 469.             code = GetLastError()</font>
+<font color="red"> 470.         if descr is None:</font>
+<font color="red"> 471.             descr = FormatError(code).strip()</font>
+<font color="red"> 472.         return WindowsError(code, descr)</font>
+<font color="black"> 473. </font>
+<font color="green"> 474. if sizeof(c_uint) == sizeof(c_void_p):</font>
+<font color="red"> 475.     c_size_t = c_uint</font>
+<font color="red"> 476.     c_ssize_t = c_int</font>
+<font color="green"> 477. elif sizeof(c_ulong) == sizeof(c_void_p):</font>
+<font color="green"> 478.     c_size_t = c_ulong</font>
+<font color="green"> 479.     c_ssize_t = c_long</font>
+<font color="red"> 480. elif sizeof(c_ulonglong) == sizeof(c_void_p):</font>
+<font color="red"> 481.     c_size_t = c_ulonglong</font>
+<font color="red"> 482.     c_ssize_t = c_longlong</font>
+<font color="black"> 483. </font>
+<font color="black"> 484. # functions</font>
+<font color="black"> 485. </font>
+<font color="green"> 486. from _ctypes import _memmove_addr, _memset_addr, _string_at_addr, _cast_addr</font>
+<font color="black"> 487. </font>
+<font color="black"> 488. ## void *memmove(void *, const void *, size_t);</font>
+<font color="green"> 489. memmove = CFUNCTYPE(c_void_p, c_void_p, c_void_p, c_size_t)(_memmove_addr)</font>
+<font color="black"> 490. </font>
+<font color="black"> 491. ## void *memset(void *, int, size_t)</font>
+<font color="green"> 492. memset = CFUNCTYPE(c_void_p, c_void_p, c_int, c_size_t)(_memset_addr)</font>
+<font color="black"> 493. </font>
+<font color="green"> 494. def PYFUNCTYPE(restype, *argtypes):</font>
+<font color="green"> 495.     class CFunctionType(_CFuncPtr):</font>
+<font color="green"> 496.         _argtypes_ = argtypes</font>
+<font color="green"> 497.         _restype_ = restype</font>
+<font color="green"> 498.         _flags_ = _FUNCFLAG_CDECL | _FUNCFLAG_PYTHONAPI</font>
+<font color="green"> 499.     return CFunctionType</font>
+<font color="black"> 500. </font>
+<font color="green"> 501. _cast = PYFUNCTYPE(py_object, c_void_p, py_object, py_object)(_cast_addr)</font>
+<font color="green"> 502. def cast(obj, typ):</font>
+<font color="red"> 503.     return _cast(obj, obj, typ)</font>
+<font color="black"> 504. </font>
+<font color="green"> 505. _string_at = PYFUNCTYPE(py_object, c_void_p, c_int)(_string_at_addr)</font>
+<font color="green"> 506. def string_at(ptr, size=-1):</font>
+<font color="black"> 507.     &quot;&quot;&quot;string_at(addr[, size]) -&gt; string</font>
+<font color="black"> 508. </font>
+<font color="black"> 509.     Return the string at addr.&quot;&quot;&quot;</font>
+<font color="red"> 510.     return _string_at(ptr, size)</font>
+<font color="black"> 511. </font>
+<font color="green"> 512. try:</font>
+<font color="green"> 513.     from _ctypes import _wstring_at_addr</font>
+<font color="red"> 514. except ImportError:</font>
+<font color="red"> 515.     pass</font>
+<font color="black"> 516. else:</font>
+<font color="green"> 517.     _wstring_at = PYFUNCTYPE(py_object, c_void_p, c_int)(_wstring_at_addr)</font>
+<font color="green"> 518.     def wstring_at(ptr, size=-1):</font>
+<font color="black"> 519.         &quot;&quot;&quot;wstring_at(addr[, size]) -&gt; string</font>
+<font color="black"> 520. </font>
+<font color="black"> 521.         Return the string at addr.&quot;&quot;&quot;</font>
+<font color="red"> 522.         return _wstring_at(ptr, size)</font>
+<font color="black"> 523. </font>
+<font color="black"> 524. </font>
+<font color="green"> 525. if _os.name in (&quot;nt&quot;, &quot;ce&quot;): # COM stuff</font>
+<font color="red"> 526.     def DllGetClassObject(rclsid, riid, ppv):</font>
+<font color="red"> 527.         try:</font>
+<font color="red"> 528.             ccom = __import__(&quot;comtypes.server.inprocserver&quot;, globals(), locals(), ['*'])</font>
+<font color="red"> 529.         except ImportError:</font>
+<font color="red"> 530.             return -2147221231 # CLASS_E_CLASSNOTAVAILABLE</font>
+<font color="black"> 531.         else:</font>
+<font color="red"> 532.             return ccom.DllGetClassObject(rclsid, riid, ppv)</font>
+<font color="black"> 533. </font>
+<font color="red"> 534.     def DllCanUnloadNow():</font>
+<font color="red"> 535.         try:</font>
+<font color="red"> 536.             ccom = __import__(&quot;comtypes.server.inprocserver&quot;, globals(), locals(), ['*'])</font>
+<font color="red"> 537.         except ImportError:</font>
+<font color="red"> 538.             return 0 # S_OK</font>
+<font color="red"> 539.         return ccom.DllCanUnloadNow()</font>
+<font color="black"> 540. </font>
+<font color="green"> 541. from ctypes._endian import BigEndianStructure, LittleEndianStructure</font>
+<font color="black"> 542. </font>
+<font color="black"> 543. # Fill in specifically-sized types</font>
+<font color="green"> 544. c_int8 = c_byte</font>
+<font color="green"> 545. c_uint8 = c_ubyte</font>
+<font color="green"> 546. for kind in [c_short, c_int, c_long, c_longlong]:</font>
+<font color="green"> 547.     if sizeof(kind) == 2: c_int16 = kind</font>
+<font color="green"> 548.     elif sizeof(kind) == 4: c_int32 = kind</font>
+<font color="green"> 549.     elif sizeof(kind) == 8: c_int64 = kind</font>
+<font color="green"> 550. for kind in [c_ushort, c_uint, c_ulong, c_ulonglong]:</font>
+<font color="green"> 551.     if sizeof(kind) == 2: c_uint16 = kind</font>
+<font color="green"> 552.     elif sizeof(kind) == 4: c_uint32 = kind</font>
+<font color="green"> 553.     elif sizeof(kind) == 8: c_uint64 = kind</font>
+<font color="green"> 554. del(kind)</font>
+<font color="black"> 555. </font>
+<font color="green"> 556. _reset_cache()</font>
+</pre>
+

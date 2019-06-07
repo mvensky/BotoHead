@@ -1,0 +1,455 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/json/encoder.py</b><br>
+
+
+file stats: <b>273 lines, 164 executed: 60.1% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Implementation of JSONEncoder</font>
+<font color="green">   2. &quot;&quot;&quot;</font>
+<font color="green">   3. import re</font>
+<font color="black">   4. </font>
+<font color="green">   5. try:</font>
+<font color="green">   6.     from _json import encode_basestring_ascii as c_encode_basestring_ascii</font>
+<font color="red">   7. except ImportError:</font>
+<font color="red">   8.     c_encode_basestring_ascii = None</font>
+<font color="green">   9. try:</font>
+<font color="green">  10.     from _json import make_encoder as c_make_encoder</font>
+<font color="red">  11. except ImportError:</font>
+<font color="red">  12.     c_make_encoder = None</font>
+<font color="black">  13. </font>
+<font color="green">  14. ESCAPE = re.compile(r'[\x00-\x1f\\&quot;\b\f\n\r\t]')</font>
+<font color="green">  15. ESCAPE_ASCII = re.compile(r'([\\&quot;]|[^\ -~])')</font>
+<font color="green">  16. HAS_UTF8 = re.compile(r'[\x80-\xff]')</font>
+<font color="green">  17. ESCAPE_DCT = {</font>
+<font color="green">  18.     '\\': '\\\\',</font>
+<font color="green">  19.     '&quot;': '\\&quot;',</font>
+<font color="green">  20.     '\b': '\\b',</font>
+<font color="green">  21.     '\f': '\\f',</font>
+<font color="green">  22.     '\n': '\\n',</font>
+<font color="green">  23.     '\r': '\\r',</font>
+<font color="green">  24.     '\t': '\\t',</font>
+<font color="black">  25. }</font>
+<font color="green">  26. for i in range(0x20):</font>
+<font color="green">  27.     ESCAPE_DCT.setdefault(chr(i), '\\u{0:04x}'.format(i))</font>
+<font color="black">  28.     #ESCAPE_DCT.setdefault(chr(i), '\\u%04x' % (i,))</font>
+<font color="black">  29. </font>
+<font color="green">  30. INFINITY = float('inf')</font>
+<font color="green">  31. FLOAT_REPR = float.__repr__</font>
+<font color="black">  32. </font>
+<font color="green">  33. def encode_basestring(s):</font>
+<font color="black">  34.     &quot;&quot;&quot;Return a JSON representation of a Python string</font>
+<font color="black">  35. </font>
+<font color="black">  36.     &quot;&quot;&quot;</font>
+<font color="red">  37.     def replace(match):</font>
+<font color="red">  38.         return ESCAPE_DCT[match.group(0)]</font>
+<font color="red">  39.     return '&quot;' + ESCAPE.sub(replace, s) + '&quot;'</font>
+<font color="black">  40. </font>
+<font color="black">  41. </font>
+<font color="green">  42. def py_encode_basestring_ascii(s):</font>
+<font color="black">  43.     &quot;&quot;&quot;Return an ASCII-only JSON representation of a Python string</font>
+<font color="black">  44. </font>
+<font color="black">  45.     &quot;&quot;&quot;</font>
+<font color="red">  46.     if isinstance(s, str) and HAS_UTF8.search(s) is not None:</font>
+<font color="red">  47.         s = s.decode('utf-8')</font>
+<font color="red">  48.     def replace(match):</font>
+<font color="red">  49.         s = match.group(0)</font>
+<font color="red">  50.         try:</font>
+<font color="red">  51.             return ESCAPE_DCT[s]</font>
+<font color="red">  52.         except KeyError:</font>
+<font color="red">  53.             n = ord(s)</font>
+<font color="red">  54.             if n &lt; 0x10000:</font>
+<font color="red">  55.                 return '\\u{0:04x}'.format(n)</font>
+<font color="black">  56.                 #return '\\u%04x' % (n,)</font>
+<font color="black">  57.             else:</font>
+<font color="black">  58.                 # surrogate pair</font>
+<font color="red">  59.                 n -= 0x10000</font>
+<font color="red">  60.                 s1 = 0xd800 | ((n &gt;&gt; 10) &amp; 0x3ff)</font>
+<font color="red">  61.                 s2 = 0xdc00 | (n &amp; 0x3ff)</font>
+<font color="red">  62.                 return '\\u{0:04x}\\u{1:04x}'.format(s1, s2)</font>
+<font color="black">  63.                 #return '\\u%04x\\u%04x' % (s1, s2)</font>
+<font color="red">  64.     return '&quot;' + str(ESCAPE_ASCII.sub(replace, s)) + '&quot;'</font>
+<font color="black">  65. </font>
+<font color="black">  66. </font>
+<font color="black">  67. encode_basestring_ascii = (</font>
+<font color="green">  68.     c_encode_basestring_ascii or py_encode_basestring_ascii)</font>
+<font color="black">  69. </font>
+<font color="green">  70. class JSONEncoder(object):</font>
+<font color="black">  71.     &quot;&quot;&quot;Extensible JSON &lt;http://json.org&gt; encoder for Python data structures.</font>
+<font color="black">  72. </font>
+<font color="black">  73.     Supports the following objects and types by default:</font>
+<font color="black">  74. </font>
+<font color="black">  75.     +-------------------+---------------+</font>
+<font color="black">  76.     | Python            | JSON          |</font>
+<font color="black">  77.     +===================+===============+</font>
+<font color="black">  78.     | dict              | object        |</font>
+<font color="black">  79.     +-------------------+---------------+</font>
+<font color="black">  80.     | list, tuple       | array         |</font>
+<font color="black">  81.     +-------------------+---------------+</font>
+<font color="black">  82.     | str, unicode      | string        |</font>
+<font color="black">  83.     +-------------------+---------------+</font>
+<font color="black">  84.     | int, long, float  | number        |</font>
+<font color="black">  85.     +-------------------+---------------+</font>
+<font color="black">  86.     | True              | true          |</font>
+<font color="black">  87.     +-------------------+---------------+</font>
+<font color="black">  88.     | False             | false         |</font>
+<font color="black">  89.     +-------------------+---------------+</font>
+<font color="black">  90.     | None              | null          |</font>
+<font color="black">  91.     +-------------------+---------------+</font>
+<font color="black">  92. </font>
+<font color="black">  93.     To extend this to recognize other objects, subclass and implement a</font>
+<font color="black">  94.     ``.default()`` method with another method that returns a serializable</font>
+<font color="black">  95.     object for ``o`` if possible, otherwise it should call the superclass</font>
+<font color="black">  96.     implementation (to raise ``TypeError``).</font>
+<font color="black">  97. </font>
+<font color="green">  98.     &quot;&quot;&quot;</font>
+<font color="green">  99.     item_separator = ', '</font>
+<font color="green"> 100.     key_separator = ': '</font>
+<font color="green"> 101.     def __init__(self, skipkeys=False, ensure_ascii=True,</font>
+<font color="green"> 102.             check_circular=True, allow_nan=True, sort_keys=False,</font>
+<font color="green"> 103.             indent=None, separators=None, encoding='utf-8', default=None):</font>
+<font color="black"> 104.         &quot;&quot;&quot;Constructor for JSONEncoder, with sensible defaults.</font>
+<font color="black"> 105. </font>
+<font color="black"> 106.         If skipkeys is false, then it is a TypeError to attempt</font>
+<font color="black"> 107.         encoding of keys that are not str, int, long, float or None.  If</font>
+<font color="black"> 108.         skipkeys is True, such items are simply skipped.</font>
+<font color="black"> 109. </font>
+<font color="black"> 110.         If *ensure_ascii* is true (the default), all non-ASCII</font>
+<font color="black"> 111.         characters in the output are escaped with \uXXXX sequences,</font>
+<font color="black"> 112.         and the results are str instances consisting of ASCII</font>
+<font color="black"> 113.         characters only.  If ensure_ascii is False, a result may be a</font>
+<font color="black"> 114.         unicode instance.  This usually happens if the input contains</font>
+<font color="black"> 115.         unicode strings or the *encoding* parameter is used.</font>
+<font color="black"> 116. </font>
+<font color="black"> 117.         If check_circular is true, then lists, dicts, and custom encoded</font>
+<font color="black"> 118.         objects will be checked for circular references during encoding to</font>
+<font color="black"> 119.         prevent an infinite recursion (which would cause an OverflowError).</font>
+<font color="black"> 120.         Otherwise, no such check takes place.</font>
+<font color="black"> 121. </font>
+<font color="black"> 122.         If allow_nan is true, then NaN, Infinity, and -Infinity will be</font>
+<font color="black"> 123.         encoded as such.  This behavior is not JSON specification compliant,</font>
+<font color="black"> 124.         but is consistent with most JavaScript based encoders and decoders.</font>
+<font color="black"> 125.         Otherwise, it will be a ValueError to encode such floats.</font>
+<font color="black"> 126. </font>
+<font color="black"> 127.         If sort_keys is true, then the output of dictionaries will be</font>
+<font color="black"> 128.         sorted by key; this is useful for regression tests to ensure</font>
+<font color="black"> 129.         that JSON serializations can be compared on a day-to-day basis.</font>
+<font color="black"> 130. </font>
+<font color="black"> 131.         If indent is a non-negative integer, then JSON array</font>
+<font color="black"> 132.         elements and object members will be pretty-printed with that</font>
+<font color="black"> 133.         indent level.  An indent level of 0 will only insert newlines.</font>
+<font color="black"> 134.         None is the most compact representation.  Since the default</font>
+<font color="black"> 135.         item separator is ', ',  the output might include trailing</font>
+<font color="black"> 136.         whitespace when indent is specified.  You can use</font>
+<font color="black"> 137.         separators=(',', ': ') to avoid this.</font>
+<font color="black"> 138. </font>
+<font color="black"> 139.         If specified, separators should be a (item_separator, key_separator)</font>
+<font color="black"> 140.         tuple.  The default is (', ', ': ').  To get the most compact JSON</font>
+<font color="black"> 141.         representation you should specify (',', ':') to eliminate whitespace.</font>
+<font color="black"> 142. </font>
+<font color="black"> 143.         If specified, default is a function that gets called for objects</font>
+<font color="black"> 144.         that can't otherwise be serialized.  It should return a JSON encodable</font>
+<font color="black"> 145.         version of the object or raise a ``TypeError``.</font>
+<font color="black"> 146. </font>
+<font color="black"> 147.         If encoding is not None, then all input strings will be</font>
+<font color="black"> 148.         transformed into unicode using that encoding prior to JSON-encoding.</font>
+<font color="black"> 149.         The default is UTF-8.</font>
+<font color="black"> 150. </font>
+<font color="black"> 151.         &quot;&quot;&quot;</font>
+<font color="black"> 152. </font>
+<font color="green"> 153.         self.skipkeys = skipkeys</font>
+<font color="green"> 154.         self.ensure_ascii = ensure_ascii</font>
+<font color="green"> 155.         self.check_circular = check_circular</font>
+<font color="green"> 156.         self.allow_nan = allow_nan</font>
+<font color="green"> 157.         self.sort_keys = sort_keys</font>
+<font color="green"> 158.         self.indent = indent</font>
+<font color="green"> 159.         if separators is not None:</font>
+<font color="red"> 160.             self.item_separator, self.key_separator = separators</font>
+<font color="green"> 161.         if default is not None:</font>
+<font color="red"> 162.             self.default = default</font>
+<font color="green"> 163.         self.encoding = encoding</font>
+<font color="black"> 164. </font>
+<font color="green"> 165.     def default(self, o):</font>
+<font color="black"> 166.         &quot;&quot;&quot;Implement this method in a subclass such that it returns</font>
+<font color="black"> 167.         a serializable object for ``o``, or calls the base implementation</font>
+<font color="black"> 168.         (to raise a ``TypeError``).</font>
+<font color="black"> 169. </font>
+<font color="black"> 170.         For example, to support arbitrary iterators, you could</font>
+<font color="black"> 171.         implement default like this::</font>
+<font color="black"> 172. </font>
+<font color="black"> 173.             def default(self, o):</font>
+<font color="black"> 174.                 try:</font>
+<font color="black"> 175.                     iterable = iter(o)</font>
+<font color="black"> 176.                 except TypeError:</font>
+<font color="black"> 177.                     pass</font>
+<font color="black"> 178.                 else:</font>
+<font color="black"> 179.                     return list(iterable)</font>
+<font color="black"> 180.                 # Let the base class default method raise the TypeError</font>
+<font color="black"> 181.                 return JSONEncoder.default(self, o)</font>
+<font color="black"> 182. </font>
+<font color="black"> 183.         &quot;&quot;&quot;</font>
+<font color="red"> 184.         raise TypeError(repr(o) + &quot; is not JSON serializable&quot;)</font>
+<font color="black"> 185. </font>
+<font color="green"> 186.     def encode(self, o):</font>
+<font color="black"> 187.         &quot;&quot;&quot;Return a JSON string representation of a Python data structure.</font>
+<font color="black"> 188. </font>
+<font color="black"> 189.         &gt;&gt;&gt; JSONEncoder().encode({&quot;foo&quot;: [&quot;bar&quot;, &quot;baz&quot;]})</font>
+<font color="black"> 190.         '{&quot;foo&quot;: [&quot;bar&quot;, &quot;baz&quot;]}'</font>
+<font color="black"> 191. </font>
+<font color="black"> 192.         &quot;&quot;&quot;</font>
+<font color="black"> 193.         # This is for extremely simple cases and benchmarks.</font>
+<font color="green"> 194.         if isinstance(o, basestring):</font>
+<font color="red"> 195.             if isinstance(o, str):</font>
+<font color="red"> 196.                 _encoding = self.encoding</font>
+<font color="red"> 197.                 if (_encoding is not None</font>
+<font color="red"> 198.                         and not (_encoding == 'utf-8')):</font>
+<font color="red"> 199.                     o = o.decode(_encoding)</font>
+<font color="red"> 200.             if self.ensure_ascii:</font>
+<font color="red"> 201.                 return encode_basestring_ascii(o)</font>
+<font color="black"> 202.             else:</font>
+<font color="red"> 203.                 return encode_basestring(o)</font>
+<font color="black"> 204.         # This doesn't pass the iterator directly to ''.join() because the</font>
+<font color="black"> 205.         # exceptions aren't as detailed.  The list call should be roughly</font>
+<font color="black"> 206.         # equivalent to the PySequence_Fast that ''.join() would do.</font>
+<font color="green"> 207.         chunks = self.iterencode(o, _one_shot=True)</font>
+<font color="green"> 208.         if not isinstance(chunks, (list, tuple)):</font>
+<font color="green"> 209.             chunks = list(chunks)</font>
+<font color="green"> 210.         return ''.join(chunks)</font>
+<font color="black"> 211. </font>
+<font color="green"> 212.     def iterencode(self, o, _one_shot=False):</font>
+<font color="black"> 213.         &quot;&quot;&quot;Encode the given object and yield each string</font>
+<font color="black"> 214.         representation as available.</font>
+<font color="black"> 215. </font>
+<font color="black"> 216.         For example::</font>
+<font color="black"> 217. </font>
+<font color="black"> 218.             for chunk in JSONEncoder().iterencode(bigobject):</font>
+<font color="black"> 219.                 mysocket.write(chunk)</font>
+<font color="black"> 220. </font>
+<font color="black"> 221.         &quot;&quot;&quot;</font>
+<font color="green"> 222.         if self.check_circular:</font>
+<font color="green"> 223.             markers = {}</font>
+<font color="black"> 224.         else:</font>
+<font color="red"> 225.             markers = None</font>
+<font color="green"> 226.         if self.ensure_ascii:</font>
+<font color="green"> 227.             _encoder = encode_basestring_ascii</font>
+<font color="black"> 228.         else:</font>
+<font color="red"> 229.             _encoder = encode_basestring</font>
+<font color="green"> 230.         if self.encoding != 'utf-8':</font>
+<font color="red"> 231.             def _encoder(o, _orig_encoder=_encoder, _encoding=self.encoding):</font>
+<font color="red"> 232.                 if isinstance(o, str):</font>
+<font color="red"> 233.                     o = o.decode(_encoding)</font>
+<font color="red"> 234.                 return _orig_encoder(o)</font>
+<font color="black"> 235. </font>
+<font color="green"> 236.         def floatstr(o, allow_nan=self.allow_nan,</font>
+<font color="green"> 237.                 _repr=FLOAT_REPR, _inf=INFINITY, _neginf=-INFINITY):</font>
+<font color="black"> 238.             # Check for specials.  Note that this type of test is processor</font>
+<font color="black"> 239.             # and/or platform-specific, so do tests which don't depend on the</font>
+<font color="black"> 240.             # internals.</font>
+<font color="black"> 241. </font>
+<font color="red"> 242.             if o != o:</font>
+<font color="red"> 243.                 text = 'NaN'</font>
+<font color="red"> 244.             elif o == _inf:</font>
+<font color="red"> 245.                 text = 'Infinity'</font>
+<font color="red"> 246.             elif o == _neginf:</font>
+<font color="red"> 247.                 text = '-Infinity'</font>
+<font color="black"> 248.             else:</font>
+<font color="red"> 249.                 return _repr(o)</font>
+<font color="black"> 250. </font>
+<font color="red"> 251.             if not allow_nan:</font>
+<font color="red"> 252.                 raise ValueError(</font>
+<font color="red"> 253.                     &quot;Out of range float values are not JSON compliant: &quot; +</font>
+<font color="red"> 254.                     repr(o))</font>
+<font color="black"> 255. </font>
+<font color="red"> 256.             return text</font>
+<font color="black"> 257. </font>
+<font color="black"> 258. </font>
+<font color="green"> 259.         if (_one_shot and c_make_encoder is not None</font>
+<font color="green"> 260.                 and self.indent is None and not self.sort_keys):</font>
+<font color="red"> 261.             _iterencode = c_make_encoder(</font>
+<font color="red"> 262.                 markers, self.default, _encoder, self.indent,</font>
+<font color="red"> 263.                 self.key_separator, self.item_separator, self.sort_keys,</font>
+<font color="red"> 264.                 self.skipkeys, self.allow_nan)</font>
+<font color="black"> 265.         else:</font>
+<font color="green"> 266.             _iterencode = _make_iterencode(</font>
+<font color="green"> 267.                 markers, self.default, _encoder, self.indent, floatstr,</font>
+<font color="green"> 268.                 self.key_separator, self.item_separator, self.sort_keys,</font>
+<font color="green"> 269.                 self.skipkeys, _one_shot)</font>
+<font color="green"> 270.         return _iterencode(o, 0)</font>
+<font color="black"> 271. </font>
+<font color="black"> 272. def _make_iterencode(markers, _default, _encoder, _indent, _floatstr,</font>
+<font color="black"> 273.         _key_separator, _item_separator, _sort_keys, _skipkeys, _one_shot,</font>
+<font color="black"> 274.         ## HACK: hand-optimized bytecode; turn globals into locals</font>
+<font color="green"> 275.         ValueError=ValueError,</font>
+<font color="green"> 276.         basestring=basestring,</font>
+<font color="green"> 277.         dict=dict,</font>
+<font color="green"> 278.         float=float,</font>
+<font color="green"> 279.         id=id,</font>
+<font color="green"> 280.         int=int,</font>
+<font color="green"> 281.         isinstance=isinstance,</font>
+<font color="green"> 282.         list=list,</font>
+<font color="green"> 283.         long=long,</font>
+<font color="green"> 284.         str=str,</font>
+<font color="green"> 285.         tuple=tuple,</font>
+<font color="black"> 286.     ):</font>
+<font color="black"> 287. </font>
+<font color="green"> 288.     def _iterencode_list(lst, _current_indent_level):</font>
+<font color="green"> 289.         if not lst:</font>
+<font color="red"> 290.             yield '[]'</font>
+<font color="red"> 291.             return</font>
+<font color="green"> 292.         if markers is not None:</font>
+<font color="green"> 293.             markerid = id(lst)</font>
+<font color="green"> 294.             if markerid in markers:</font>
+<font color="red"> 295.                 raise ValueError(&quot;Circular reference detected&quot;)</font>
+<font color="green"> 296.             markers[markerid] = lst</font>
+<font color="green"> 297.         buf = '['</font>
+<font color="green"> 298.         if _indent is not None:</font>
+<font color="green"> 299.             _current_indent_level += 1</font>
+<font color="green"> 300.             newline_indent = '\n' + (' ' * (_indent * _current_indent_level))</font>
+<font color="green"> 301.             separator = _item_separator + newline_indent</font>
+<font color="green"> 302.             buf += newline_indent</font>
+<font color="black"> 303.         else:</font>
+<font color="red"> 304.             newline_indent = None</font>
+<font color="red"> 305.             separator = _item_separator</font>
+<font color="green"> 306.         first = True</font>
+<font color="green"> 307.         for value in lst:</font>
+<font color="green"> 308.             if first:</font>
+<font color="green"> 309.                 first = False</font>
+<font color="black"> 310.             else:</font>
+<font color="red"> 311.                 buf = separator</font>
+<font color="green"> 312.             if isinstance(value, basestring):</font>
+<font color="red"> 313.                 yield buf + _encoder(value)</font>
+<font color="green"> 314.             elif value is None:</font>
+<font color="red"> 315.                 yield buf + 'null'</font>
+<font color="green"> 316.             elif value is True:</font>
+<font color="red"> 317.                 yield buf + 'true'</font>
+<font color="green"> 318.             elif value is False:</font>
+<font color="red"> 319.                 yield buf + 'false'</font>
+<font color="green"> 320.             elif isinstance(value, (int, long)):</font>
+<font color="red"> 321.                 yield buf + str(value)</font>
+<font color="green"> 322.             elif isinstance(value, float):</font>
+<font color="red"> 323.                 yield buf + _floatstr(value)</font>
+<font color="black"> 324.             else:</font>
+<font color="green"> 325.                 yield buf</font>
+<font color="green"> 326.                 if isinstance(value, (list, tuple)):</font>
+<font color="red"> 327.                     chunks = _iterencode_list(value, _current_indent_level)</font>
+<font color="green"> 328.                 elif isinstance(value, dict):</font>
+<font color="green"> 329.                     chunks = _iterencode_dict(value, _current_indent_level)</font>
+<font color="black"> 330.                 else:</font>
+<font color="red"> 331.                     chunks = _iterencode(value, _current_indent_level)</font>
+<font color="green"> 332.                 for chunk in chunks:</font>
+<font color="green"> 333.                     yield chunk</font>
+<font color="green"> 334.         if newline_indent is not None:</font>
+<font color="green"> 335.             _current_indent_level -= 1</font>
+<font color="green"> 336.             yield '\n' + (' ' * (_indent * _current_indent_level))</font>
+<font color="green"> 337.         yield ']'</font>
+<font color="green"> 338.         if markers is not None:</font>
+<font color="green"> 339.             del markers[markerid]</font>
+<font color="black"> 340. </font>
+<font color="green"> 341.     def _iterencode_dict(dct, _current_indent_level):</font>
+<font color="green"> 342.         if not dct:</font>
+<font color="red"> 343.             yield '{}'</font>
+<font color="red"> 344.             return</font>
+<font color="green"> 345.         if markers is not None:</font>
+<font color="green"> 346.             markerid = id(dct)</font>
+<font color="green"> 347.             if markerid in markers:</font>
+<font color="red"> 348.                 raise ValueError(&quot;Circular reference detected&quot;)</font>
+<font color="green"> 349.             markers[markerid] = dct</font>
+<font color="green"> 350.         yield '{'</font>
+<font color="green"> 351.         if _indent is not None:</font>
+<font color="green"> 352.             _current_indent_level += 1</font>
+<font color="green"> 353.             newline_indent = '\n' + (' ' * (_indent * _current_indent_level))</font>
+<font color="green"> 354.             item_separator = _item_separator + newline_indent</font>
+<font color="green"> 355.             yield newline_indent</font>
+<font color="black"> 356.         else:</font>
+<font color="red"> 357.             newline_indent = None</font>
+<font color="red"> 358.             item_separator = _item_separator</font>
+<font color="green"> 359.         first = True</font>
+<font color="green"> 360.         if _sort_keys:</font>
+<font color="red"> 361.             items = sorted(dct.items(), key=lambda kv: kv[0])</font>
+<font color="black"> 362.         else:</font>
+<font color="green"> 363.             items = dct.iteritems()</font>
+<font color="green"> 364.         for key, value in items:</font>
+<font color="green"> 365.             if isinstance(key, basestring):</font>
+<font color="green"> 366.                 pass</font>
+<font color="black"> 367.             # JavaScript is weakly typed for these, so it makes sense to</font>
+<font color="black"> 368.             # also allow them.  Many encoders seem to do something like this.</font>
+<font color="red"> 369.             elif isinstance(key, float):</font>
+<font color="red"> 370.                 key = _floatstr(key)</font>
+<font color="red"> 371.             elif key is True:</font>
+<font color="red"> 372.                 key = 'true'</font>
+<font color="red"> 373.             elif key is False:</font>
+<font color="red"> 374.                 key = 'false'</font>
+<font color="red"> 375.             elif key is None:</font>
+<font color="red"> 376.                 key = 'null'</font>
+<font color="red"> 377.             elif isinstance(key, (int, long)):</font>
+<font color="red"> 378.                 key = str(key)</font>
+<font color="red"> 379.             elif _skipkeys:</font>
+<font color="red"> 380.                 continue</font>
+<font color="black"> 381.             else:</font>
+<font color="red"> 382.                 raise TypeError(&quot;key &quot; + repr(key) + &quot; is not a string&quot;)</font>
+<font color="green"> 383.             if first:</font>
+<font color="green"> 384.                 first = False</font>
+<font color="black"> 385.             else:</font>
+<font color="green"> 386.                 yield item_separator</font>
+<font color="green"> 387.             yield _encoder(key)</font>
+<font color="green"> 388.             yield _key_separator</font>
+<font color="green"> 389.             if isinstance(value, basestring):</font>
+<font color="green"> 390.                 yield _encoder(value)</font>
+<font color="green"> 391.             elif value is None:</font>
+<font color="red"> 392.                 yield 'null'</font>
+<font color="green"> 393.             elif value is True:</font>
+<font color="red"> 394.                 yield 'true'</font>
+<font color="green"> 395.             elif value is False:</font>
+<font color="red"> 396.                 yield 'false'</font>
+<font color="green"> 397.             elif isinstance(value, (int, long)):</font>
+<font color="green"> 398.                 yield str(value)</font>
+<font color="green"> 399.             elif isinstance(value, float):</font>
+<font color="red"> 400.                 yield _floatstr(value)</font>
+<font color="black"> 401.             else:</font>
+<font color="green"> 402.                 if isinstance(value, (list, tuple)):</font>
+<font color="green"> 403.                     chunks = _iterencode_list(value, _current_indent_level)</font>
+<font color="green"> 404.                 elif isinstance(value, dict):</font>
+<font color="green"> 405.                     chunks = _iterencode_dict(value, _current_indent_level)</font>
+<font color="black"> 406.                 else:</font>
+<font color="red"> 407.                     chunks = _iterencode(value, _current_indent_level)</font>
+<font color="green"> 408.                 for chunk in chunks:</font>
+<font color="green"> 409.                     yield chunk</font>
+<font color="green"> 410.         if newline_indent is not None:</font>
+<font color="green"> 411.             _current_indent_level -= 1</font>
+<font color="green"> 412.             yield '\n' + (' ' * (_indent * _current_indent_level))</font>
+<font color="green"> 413.         yield '}'</font>
+<font color="green"> 414.         if markers is not None:</font>
+<font color="green"> 415.             del markers[markerid]</font>
+<font color="black"> 416. </font>
+<font color="green"> 417.     def _iterencode(o, _current_indent_level):</font>
+<font color="green"> 418.         if isinstance(o, basestring):</font>
+<font color="red"> 419.             yield _encoder(o)</font>
+<font color="green"> 420.         elif o is None:</font>
+<font color="red"> 421.             yield 'null'</font>
+<font color="green"> 422.         elif o is True:</font>
+<font color="red"> 423.             yield 'true'</font>
+<font color="green"> 424.         elif o is False:</font>
+<font color="red"> 425.             yield 'false'</font>
+<font color="green"> 426.         elif isinstance(o, (int, long)):</font>
+<font color="red"> 427.             yield str(o)</font>
+<font color="green"> 428.         elif isinstance(o, float):</font>
+<font color="red"> 429.             yield _floatstr(o)</font>
+<font color="green"> 430.         elif isinstance(o, (list, tuple)):</font>
+<font color="green"> 431.             for chunk in _iterencode_list(o, _current_indent_level):</font>
+<font color="green"> 432.                 yield chunk</font>
+<font color="green"> 433.         elif isinstance(o, dict):</font>
+<font color="green"> 434.             for chunk in _iterencode_dict(o, _current_indent_level):</font>
+<font color="green"> 435.                 yield chunk</font>
+<font color="black"> 436.         else:</font>
+<font color="red"> 437.             if markers is not None:</font>
+<font color="red"> 438.                 markerid = id(o)</font>
+<font color="red"> 439.                 if markerid in markers:</font>
+<font color="red"> 440.                     raise ValueError(&quot;Circular reference detected&quot;)</font>
+<font color="red"> 441.                 markers[markerid] = o</font>
+<font color="red"> 442.             o = _default(o)</font>
+<font color="red"> 443.             for chunk in _iterencode(o, _current_indent_level):</font>
+<font color="red"> 444.                 yield chunk</font>
+<font color="red"> 445.             if markers is not None:</font>
+<font color="red"> 446.                 del markers[markerid]</font>
+<font color="black"> 447. </font>
+<font color="green"> 448.     return _iterencode</font>
+</pre>
+

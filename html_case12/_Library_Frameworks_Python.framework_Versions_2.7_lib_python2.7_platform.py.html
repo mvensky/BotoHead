@@ -1,0 +1,1624 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/platform.py</b><br>
+
+
+file stats: <b>764 lines, 52 executed: 6.8% covered</b>
+<pre>
+<font color="black">   1. #!/usr/bin/env python</font>
+<font color="black">   2. </font>
+<font color="black">   3. &quot;&quot;&quot; This module tries to retrieve as much platform-identifying data as</font>
+<font color="black">   4.     possible. It makes this information available via function APIs.</font>
+<font color="black">   5. </font>
+<font color="black">   6.     If called from the command line, it prints the platform</font>
+<font color="black">   7.     information concatenated as single string to stdout. The output</font>
+<font color="black">   8.     format is useable as part of a filename.</font>
+<font color="black">   9. </font>
+<font color="red">  10. &quot;&quot;&quot;</font>
+<font color="black">  11. #    This module is maintained by Marc-Andre Lemburg &lt;mal@egenix.com&gt;.</font>
+<font color="black">  12. #    If you find problems, please submit bug reports/patches via the</font>
+<font color="black">  13. #    Python bug tracker (http://bugs.python.org) and assign them to &quot;lemburg&quot;.</font>
+<font color="black">  14. #</font>
+<font color="black">  15. #    Note: Please keep this module compatible to Python 1.5.2.</font>
+<font color="black">  16. #</font>
+<font color="black">  17. #    Still needed:</font>
+<font color="black">  18. #    * more support for WinCE</font>
+<font color="black">  19. #    * support for MS-DOS (PythonDX ?)</font>
+<font color="black">  20. #    * support for Amiga and other still unsupported platforms running Python</font>
+<font color="black">  21. #    * support for additional Linux distributions</font>
+<font color="black">  22. #</font>
+<font color="black">  23. #    Many thanks to all those who helped adding platform-specific</font>
+<font color="black">  24. #    checks (in no particular order):</font>
+<font color="black">  25. #</font>
+<font color="black">  26. #      Charles G Waldman, David Arnold, Gordon McMillan, Ben Darnell,</font>
+<font color="black">  27. #      Jeff Bauer, Cliff Crawford, Ivan Van Laningham, Josef</font>
+<font color="black">  28. #      Betancourt, Randall Hopper, Karl Putland, John Farrell, Greg</font>
+<font color="black">  29. #      Andruk, Just van Rossum, Thomas Heller, Mark R. Levinson, Mark</font>
+<font color="black">  30. #      Hammond, Bill Tutt, Hans Nowak, Uwe Zessin (OpenVMS support),</font>
+<font color="black">  31. #      Colin Kong, Trent Mick, Guido van Rossum, Anthony Baxter, Steve</font>
+<font color="black">  32. #      Dower</font>
+<font color="black">  33. #</font>
+<font color="black">  34. #    History:</font>
+<font color="black">  35. #</font>
+<font color="black">  36. #    &lt;see CVS and SVN checkin messages for history&gt;</font>
+<font color="black">  37. #</font>
+<font color="black">  38. #    1.0.8 - changed Windows support to read version from kernel32.dll</font>
+<font color="black">  39. #    1.0.7 - added DEV_NULL</font>
+<font color="black">  40. #    1.0.6 - added linux_distribution()</font>
+<font color="black">  41. #    1.0.5 - fixed Java support to allow running the module on Jython</font>
+<font color="black">  42. #    1.0.4 - added IronPython support</font>
+<font color="black">  43. #    1.0.3 - added normalization of Windows system name</font>
+<font color="black">  44. #    1.0.2 - added more Windows support</font>
+<font color="black">  45. #    1.0.1 - reformatted to make doc.py happy</font>
+<font color="black">  46. #    1.0.0 - reformatted a bit and checked into Python CVS</font>
+<font color="black">  47. #    0.8.0 - added sys.version parser and various new access</font>
+<font color="black">  48. #            APIs (python_version(), python_compiler(), etc.)</font>
+<font color="black">  49. #    0.7.2 - fixed architecture() to use sizeof(pointer) where available</font>
+<font color="black">  50. #    0.7.1 - added support for Caldera OpenLinux</font>
+<font color="black">  51. #    0.7.0 - some fixes for WinCE; untabified the source file</font>
+<font color="black">  52. #    0.6.2 - support for OpenVMS - requires version 1.5.2-V006 or higher and</font>
+<font color="black">  53. #            vms_lib.getsyi() configured</font>
+<font color="black">  54. #    0.6.1 - added code to prevent 'uname -p' on platforms which are</font>
+<font color="black">  55. #            known not to support it</font>
+<font color="black">  56. #    0.6.0 - fixed win32_ver() to hopefully work on Win95,98,NT and Win2k;</font>
+<font color="black">  57. #            did some cleanup of the interfaces - some APIs have changed</font>
+<font color="black">  58. #    0.5.5 - fixed another type in the MacOS code... should have</font>
+<font color="black">  59. #            used more coffee today ;-)</font>
+<font color="black">  60. #    0.5.4 - fixed a few typos in the MacOS code</font>
+<font color="black">  61. #    0.5.3 - added experimental MacOS support; added better popen()</font>
+<font color="black">  62. #            workarounds in _syscmd_ver() -- still not 100% elegant</font>
+<font color="black">  63. #            though</font>
+<font color="black">  64. #    0.5.2 - fixed uname() to return '' instead of 'unknown' in all</font>
+<font color="black">  65. #            return values (the system uname command tends to return</font>
+<font color="black">  66. #            'unknown' instead of just leaving the field empty)</font>
+<font color="black">  67. #    0.5.1 - included code for slackware dist; added exception handlers</font>
+<font color="black">  68. #            to cover up situations where platforms don't have os.popen</font>
+<font color="black">  69. #            (e.g. Mac) or fail on socket.gethostname(); fixed libc</font>
+<font color="black">  70. #            detection RE</font>
+<font color="black">  71. #    0.5.0 - changed the API names referring to system commands to *syscmd*;</font>
+<font color="black">  72. #            added java_ver(); made syscmd_ver() a private</font>
+<font color="black">  73. #            API (was system_ver() in previous versions) -- use uname()</font>
+<font color="black">  74. #            instead; extended the win32_ver() to also return processor</font>
+<font color="black">  75. #            type information</font>
+<font color="black">  76. #    0.4.0 - added win32_ver() and modified the platform() output for WinXX</font>
+<font color="black">  77. #    0.3.4 - fixed a bug in _follow_symlinks()</font>
+<font color="black">  78. #    0.3.3 - fixed popen() and &quot;file&quot; command invokation bugs</font>
+<font color="black">  79. #    0.3.2 - added architecture() API and support for it in platform()</font>
+<font color="black">  80. #    0.3.1 - fixed syscmd_ver() RE to support Windows NT</font>
+<font color="black">  81. #    0.3.0 - added system alias support</font>
+<font color="black">  82. #    0.2.3 - removed 'wince' again... oh well.</font>
+<font color="black">  83. #    0.2.2 - added 'wince' to syscmd_ver() supported platforms</font>
+<font color="black">  84. #    0.2.1 - added cache logic and changed the platform string format</font>
+<font color="black">  85. #    0.2.0 - changed the API to use functions instead of module globals</font>
+<font color="black">  86. #            since some action take too long to be run on module import</font>
+<font color="black">  87. #    0.1.0 - first release</font>
+<font color="black">  88. #</font>
+<font color="black">  89. #    You can always get the latest version of this module at:</font>
+<font color="black">  90. #</font>
+<font color="black">  91. #             http://www.egenix.com/files/python/platform.py</font>
+<font color="black">  92. #</font>
+<font color="black">  93. #    If that URL should fail, try contacting the author.</font>
+<font color="black">  94. </font>
+<font color="black">  95. __copyright__ = &quot;&quot;&quot;</font>
+<font color="black">  96.     Copyright (c) 1999-2000, Marc-Andre Lemburg; mailto:mal@lemburg.com</font>
+<font color="black">  97.     Copyright (c) 2000-2010, eGenix.com Software GmbH; mailto:info@egenix.com</font>
+<font color="black">  98. </font>
+<font color="black">  99.     Permission to use, copy, modify, and distribute this software and its</font>
+<font color="black"> 100.     documentation for any purpose and without fee or royalty is hereby granted,</font>
+<font color="black"> 101.     provided that the above copyright notice appear in all copies and that</font>
+<font color="black"> 102.     both that copyright notice and this permission notice appear in</font>
+<font color="black"> 103.     supporting documentation or portions thereof, including modifications,</font>
+<font color="black"> 104.     that you make.</font>
+<font color="black"> 105. </font>
+<font color="black"> 106.     EGENIX.COM SOFTWARE GMBH DISCLAIMS ALL WARRANTIES WITH REGARD TO</font>
+<font color="black"> 107.     THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND</font>
+<font color="black"> 108.     FITNESS, IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL,</font>
+<font color="black"> 109.     INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING</font>
+<font color="black"> 110.     FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT,</font>
+<font color="black"> 111.     NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION</font>
+<font color="black"> 112.     WITH THE USE OR PERFORMANCE OF THIS SOFTWARE !</font>
+<font color="black"> 113. </font>
+<font color="red"> 114. &quot;&quot;&quot;</font>
+<font color="black"> 115. </font>
+<font color="red"> 116. __version__ = '1.0.7'</font>
+<font color="black"> 117. </font>
+<font color="red"> 118. import sys,string,os,re</font>
+<font color="black"> 119. </font>
+<font color="black"> 120. ### Globals &amp; Constants</font>
+<font color="black"> 121. </font>
+<font color="black"> 122. # Determine the platform's /dev/null device</font>
+<font color="red"> 123. try:</font>
+<font color="red"> 124.     DEV_NULL = os.devnull</font>
+<font color="red"> 125. except AttributeError:</font>
+<font color="black"> 126.     # os.devnull was added in Python 2.4, so emulate it for earlier</font>
+<font color="black"> 127.     # Python versions</font>
+<font color="red"> 128.     if sys.platform in ('dos','win32','win16','os2'):</font>
+<font color="black"> 129.         # Use the old CP/M NUL as device name</font>
+<font color="red"> 130.         DEV_NULL = 'NUL'</font>
+<font color="black"> 131.     else:</font>
+<font color="black"> 132.         # Standard Unix uses /dev/null</font>
+<font color="red"> 133.         DEV_NULL = '/dev/null'</font>
+<font color="black"> 134. </font>
+<font color="black"> 135. ### Platform specific APIs</font>
+<font color="black"> 136. </font>
+<font color="red"> 137. _libc_search = re.compile(r'(__libc_init)'</font>
+<font color="black"> 138.                           '|'</font>
+<font color="black"> 139.                           '(GLIBC_([0-9.]+))'</font>
+<font color="black"> 140.                           '|'</font>
+<font color="black"> 141.                           '(libc(_\w+)?\.so(?:\.(\d[0-9.]*))?)')</font>
+<font color="black"> 142. </font>
+<font color="red"> 143. def libc_ver(executable=sys.executable,lib='',version='',</font>
+<font color="black"> 144. </font>
+<font color="red"> 145.              chunksize=2048):</font>
+<font color="black"> 146. </font>
+<font color="black"> 147.     &quot;&quot;&quot; Tries to determine the libc version that the file executable</font>
+<font color="black"> 148.         (which defaults to the Python interpreter) is linked against.</font>
+<font color="black"> 149. </font>
+<font color="black"> 150.         Returns a tuple of strings (lib,version) which default to the</font>
+<font color="black"> 151.         given parameters in case the lookup fails.</font>
+<font color="black"> 152. </font>
+<font color="black"> 153.         Note that the function has intimate knowledge of how different</font>
+<font color="black"> 154.         libc versions add symbols to the executable and thus is probably</font>
+<font color="black"> 155.         only useable for executables compiled using gcc.</font>
+<font color="black"> 156. </font>
+<font color="black"> 157.         The file is read and scanned in chunks of chunksize bytes.</font>
+<font color="black"> 158. </font>
+<font color="black"> 159.     &quot;&quot;&quot;</font>
+<font color="red"> 160.     if hasattr(os.path, 'realpath'):</font>
+<font color="black"> 161.         # Python 2.2 introduced os.path.realpath(); it is used</font>
+<font color="black"> 162.         # here to work around problems with Cygwin not being</font>
+<font color="black"> 163.         # able to open symlinks for reading</font>
+<font color="red"> 164.         executable = os.path.realpath(executable)</font>
+<font color="red"> 165.     f = open(executable,'rb')</font>
+<font color="red"> 166.     binary = f.read(chunksize)</font>
+<font color="red"> 167.     pos = 0</font>
+<font color="red"> 168.     while 1:</font>
+<font color="red"> 169.         m = _libc_search.search(binary,pos)</font>
+<font color="red"> 170.         if not m:</font>
+<font color="red"> 171.             binary = f.read(chunksize)</font>
+<font color="red"> 172.             if not binary:</font>
+<font color="red"> 173.                 break</font>
+<font color="red"> 174.             pos = 0</font>
+<font color="red"> 175.             continue</font>
+<font color="red"> 176.         libcinit,glibc,glibcversion,so,threads,soversion = m.groups()</font>
+<font color="red"> 177.         if libcinit and not lib:</font>
+<font color="red"> 178.             lib = 'libc'</font>
+<font color="red"> 179.         elif glibc:</font>
+<font color="red"> 180.             if lib != 'glibc':</font>
+<font color="red"> 181.                 lib = 'glibc'</font>
+<font color="red"> 182.                 version = glibcversion</font>
+<font color="red"> 183.             elif glibcversion &gt; version:</font>
+<font color="red"> 184.                 version = glibcversion</font>
+<font color="red"> 185.         elif so:</font>
+<font color="red"> 186.             if lib != 'glibc':</font>
+<font color="red"> 187.                 lib = 'libc'</font>
+<font color="red"> 188.                 if soversion and soversion &gt; version:</font>
+<font color="red"> 189.                     version = soversion</font>
+<font color="red"> 190.                 if threads and version[-len(threads):] != threads:</font>
+<font color="red"> 191.                     version = version + threads</font>
+<font color="red"> 192.         pos = m.end()</font>
+<font color="red"> 193.     f.close()</font>
+<font color="red"> 194.     return lib,version</font>
+<font color="black"> 195. </font>
+<font color="red"> 196. def _dist_try_harder(distname,version,id):</font>
+<font color="black"> 197. </font>
+<font color="black"> 198.     &quot;&quot;&quot; Tries some special tricks to get the distribution</font>
+<font color="black"> 199.         information in case the default method fails.</font>
+<font color="black"> 200. </font>
+<font color="black"> 201.         Currently supports older SuSE Linux, Caldera OpenLinux and</font>
+<font color="black"> 202.         Slackware Linux distributions.</font>
+<font color="black"> 203. </font>
+<font color="black"> 204.     &quot;&quot;&quot;</font>
+<font color="red"> 205.     if os.path.exists('/var/adm/inst-log/info'):</font>
+<font color="black"> 206.         # SuSE Linux stores distribution information in that file</font>
+<font color="red"> 207.         info = open('/var/adm/inst-log/info').readlines()</font>
+<font color="red"> 208.         distname = 'SuSE'</font>
+<font color="red"> 209.         for line in info:</font>
+<font color="red"> 210.             tv = string.split(line)</font>
+<font color="red"> 211.             if len(tv) == 2:</font>
+<font color="red"> 212.                 tag,value = tv</font>
+<font color="black"> 213.             else:</font>
+<font color="red"> 214.                 continue</font>
+<font color="red"> 215.             if tag == 'MIN_DIST_VERSION':</font>
+<font color="red"> 216.                 version = string.strip(value)</font>
+<font color="red"> 217.             elif tag == 'DIST_IDENT':</font>
+<font color="red"> 218.                 values = string.split(value,'-')</font>
+<font color="red"> 219.                 id = values[2]</font>
+<font color="red"> 220.         return distname,version,id</font>
+<font color="black"> 221. </font>
+<font color="red"> 222.     if os.path.exists('/etc/.installed'):</font>
+<font color="black"> 223.         # Caldera OpenLinux has some infos in that file (thanks to Colin Kong)</font>
+<font color="red"> 224.         info = open('/etc/.installed').readlines()</font>
+<font color="red"> 225.         for line in info:</font>
+<font color="red"> 226.             pkg = string.split(line,'-')</font>
+<font color="red"> 227.             if len(pkg) &gt;= 2 and pkg[0] == 'OpenLinux':</font>
+<font color="black"> 228.                 # XXX does Caldera support non Intel platforms ? If yes,</font>
+<font color="black"> 229.                 #     where can we find the needed id ?</font>
+<font color="red"> 230.                 return 'OpenLinux',pkg[1],id</font>
+<font color="black"> 231. </font>
+<font color="red"> 232.     if os.path.isdir('/usr/lib/setup'):</font>
+<font color="black"> 233.         # Check for slackware version tag file (thanks to Greg Andruk)</font>
+<font color="red"> 234.         verfiles = os.listdir('/usr/lib/setup')</font>
+<font color="red"> 235.         for n in range(len(verfiles)-1, -1, -1):</font>
+<font color="red"> 236.             if verfiles[n][:14] != 'slack-version-':</font>
+<font color="red"> 237.                 del verfiles[n]</font>
+<font color="red"> 238.         if verfiles:</font>
+<font color="red"> 239.             verfiles.sort()</font>
+<font color="red"> 240.             distname = 'slackware'</font>
+<font color="red"> 241.             version = verfiles[-1][14:]</font>
+<font color="red"> 242.             return distname,version,id</font>
+<font color="black"> 243. </font>
+<font color="red"> 244.     return distname,version,id</font>
+<font color="black"> 245. </font>
+<font color="red"> 246. _release_filename = re.compile(r'(\w+)[-_](release|version)')</font>
+<font color="red"> 247. _lsb_release_version = re.compile(r'(.+)'</font>
+<font color="black"> 248.                                    ' release '</font>
+<font color="black"> 249.                                    '([\d.]+)'</font>
+<font color="black"> 250.                                    '[^(]*(?:\((.+)\))?')</font>
+<font color="red"> 251. _release_version = re.compile(r'([^0-9]+)'</font>
+<font color="black"> 252.                                '(?: release )?'</font>
+<font color="black"> 253.                                '([\d.]+)'</font>
+<font color="black"> 254.                                '[^(]*(?:\((.+)\))?')</font>
+<font color="black"> 255. </font>
+<font color="black"> 256. # See also http://www.novell.com/coolsolutions/feature/11251.html</font>
+<font color="black"> 257. # and http://linuxmafia.com/faq/Admin/release-files.html</font>
+<font color="black"> 258. # and http://data.linux-ntfs.org/rpm/whichrpm</font>
+<font color="black"> 259. # and http://www.die.net/doc/linux/man/man1/lsb_release.1.html</font>
+<font color="black"> 260. </font>
+<font color="black"> 261. _supported_dists = (</font>
+<font color="black"> 262.     'SuSE', 'debian', 'fedora', 'redhat', 'centos',</font>
+<font color="black"> 263.     'mandrake', 'mandriva', 'rocks', 'slackware', 'yellowdog', 'gentoo',</font>
+<font color="red"> 264.     'UnitedLinux', 'turbolinux')</font>
+<font color="black"> 265. </font>
+<font color="red"> 266. def _parse_release_file(firstline):</font>
+<font color="black"> 267. </font>
+<font color="black"> 268.     # Default to empty 'version' and 'id' strings.  Both defaults are used</font>
+<font color="black"> 269.     # when 'firstline' is empty.  'id' defaults to empty when an id can not</font>
+<font color="black"> 270.     # be deduced.</font>
+<font color="red"> 271.     version = ''</font>
+<font color="red"> 272.     id = ''</font>
+<font color="black"> 273. </font>
+<font color="black"> 274.     # Parse the first line</font>
+<font color="red"> 275.     m = _lsb_release_version.match(firstline)</font>
+<font color="red"> 276.     if m is not None:</font>
+<font color="black"> 277.         # LSB format: &quot;distro release x.x (codename)&quot;</font>
+<font color="red"> 278.         return tuple(m.groups())</font>
+<font color="black"> 279. </font>
+<font color="black"> 280.     # Pre-LSB format: &quot;distro x.x (codename)&quot;</font>
+<font color="red"> 281.     m = _release_version.match(firstline)</font>
+<font color="red"> 282.     if m is not None:</font>
+<font color="red"> 283.         return tuple(m.groups())</font>
+<font color="black"> 284. </font>
+<font color="black"> 285.     # Unknown format... take the first two words</font>
+<font color="red"> 286.     l = string.split(string.strip(firstline))</font>
+<font color="red"> 287.     if l:</font>
+<font color="red"> 288.         version = l[0]</font>
+<font color="red"> 289.         if len(l) &gt; 1:</font>
+<font color="red"> 290.             id = l[1]</font>
+<font color="red"> 291.     return '', version, id</font>
+<font color="black"> 292. </font>
+<font color="red"> 293. def linux_distribution(distname='', version='', id='',</font>
+<font color="black"> 294. </font>
+<font color="red"> 295.                        supported_dists=_supported_dists,</font>
+<font color="red"> 296.                        full_distribution_name=1):</font>
+<font color="black"> 297. </font>
+<font color="black"> 298.     &quot;&quot;&quot; Tries to determine the name of the Linux OS distribution name.</font>
+<font color="black"> 299. </font>
+<font color="black"> 300.         The function first looks for a distribution release file in</font>
+<font color="black"> 301.         /etc and then reverts to _dist_try_harder() in case no</font>
+<font color="black"> 302.         suitable files are found.</font>
+<font color="black"> 303. </font>
+<font color="black"> 304.         supported_dists may be given to define the set of Linux</font>
+<font color="black"> 305.         distributions to look for. It defaults to a list of currently</font>
+<font color="black"> 306.         supported Linux distributions identified by their release file</font>
+<font color="black"> 307.         name.</font>
+<font color="black"> 308. </font>
+<font color="black"> 309.         If full_distribution_name is true (default), the full</font>
+<font color="black"> 310.         distribution read from the OS is returned. Otherwise the short</font>
+<font color="black"> 311.         name taken from supported_dists is used.</font>
+<font color="black"> 312. </font>
+<font color="black"> 313.         Returns a tuple (distname,version,id) which default to the</font>
+<font color="black"> 314.         args given as parameters.</font>
+<font color="black"> 315. </font>
+<font color="black"> 316.     &quot;&quot;&quot;</font>
+<font color="red"> 317.     try:</font>
+<font color="red"> 318.         etc = os.listdir('/etc')</font>
+<font color="red"> 319.     except os.error:</font>
+<font color="black"> 320.         # Probably not a Unix system</font>
+<font color="red"> 321.         return distname,version,id</font>
+<font color="red"> 322.     etc.sort()</font>
+<font color="red"> 323.     for file in etc:</font>
+<font color="red"> 324.         m = _release_filename.match(file)</font>
+<font color="red"> 325.         if m is not None:</font>
+<font color="red"> 326.             _distname,dummy = m.groups()</font>
+<font color="red"> 327.             if _distname in supported_dists:</font>
+<font color="red"> 328.                 distname = _distname</font>
+<font color="red"> 329.                 break</font>
+<font color="black"> 330.     else:</font>
+<font color="red"> 331.         return _dist_try_harder(distname,version,id)</font>
+<font color="black"> 332. </font>
+<font color="black"> 333.     # Read the first line</font>
+<font color="red"> 334.     f = open('/etc/'+file, 'r')</font>
+<font color="red"> 335.     firstline = f.readline()</font>
+<font color="red"> 336.     f.close()</font>
+<font color="red"> 337.     _distname, _version, _id = _parse_release_file(firstline)</font>
+<font color="black"> 338. </font>
+<font color="red"> 339.     if _distname and full_distribution_name:</font>
+<font color="red"> 340.         distname = _distname</font>
+<font color="red"> 341.     if _version:</font>
+<font color="red"> 342.         version = _version</font>
+<font color="red"> 343.     if _id:</font>
+<font color="red"> 344.         id = _id</font>
+<font color="red"> 345.     return distname, version, id</font>
+<font color="black"> 346. </font>
+<font color="black"> 347. # To maintain backwards compatibility:</font>
+<font color="black"> 348. </font>
+<font color="red"> 349. def dist(distname='',version='',id='',</font>
+<font color="black"> 350. </font>
+<font color="red"> 351.          supported_dists=_supported_dists):</font>
+<font color="black"> 352. </font>
+<font color="black"> 353.     &quot;&quot;&quot; Tries to determine the name of the Linux OS distribution name.</font>
+<font color="black"> 354. </font>
+<font color="black"> 355.         The function first looks for a distribution release file in</font>
+<font color="black"> 356.         /etc and then reverts to _dist_try_harder() in case no</font>
+<font color="black"> 357.         suitable files are found.</font>
+<font color="black"> 358. </font>
+<font color="black"> 359.         Returns a tuple (distname,version,id) which default to the</font>
+<font color="black"> 360.         args given as parameters.</font>
+<font color="black"> 361. </font>
+<font color="black"> 362.     &quot;&quot;&quot;</font>
+<font color="red"> 363.     return linux_distribution(distname, version, id,</font>
+<font color="red"> 364.                               supported_dists=supported_dists,</font>
+<font color="red"> 365.                               full_distribution_name=0)</font>
+<font color="black"> 366. </font>
+<font color="red"> 367. class _popen:</font>
+<font color="black"> 368. </font>
+<font color="black"> 369.     &quot;&quot;&quot; Fairly portable (alternative) popen implementation.</font>
+<font color="black"> 370. </font>
+<font color="black"> 371.         This is mostly needed in case os.popen() is not available, or</font>
+<font color="black"> 372.         doesn't work as advertised, e.g. in Win9X GUI programs like</font>
+<font color="black"> 373.         PythonWin or IDLE.</font>
+<font color="black"> 374. </font>
+<font color="black"> 375.         Writing to the pipe is currently not supported.</font>
+<font color="black"> 376. </font>
+<font color="red"> 377.     &quot;&quot;&quot;</font>
+<font color="red"> 378.     tmpfile = ''</font>
+<font color="red"> 379.     pipe = None</font>
+<font color="red"> 380.     bufsize = None</font>
+<font color="red"> 381.     mode = 'r'</font>
+<font color="black"> 382. </font>
+<font color="red"> 383.     def __init__(self,cmd,mode='r',bufsize=None):</font>
+<font color="black"> 384. </font>
+<font color="red"> 385.         if mode != 'r':</font>
+<font color="red"> 386.             raise ValueError,'popen()-emulation only supports read mode'</font>
+<font color="red"> 387.         import tempfile</font>
+<font color="red"> 388.         self.tmpfile = tmpfile = tempfile.mktemp()</font>
+<font color="red"> 389.         os.system(cmd + ' &gt; %s' % tmpfile)</font>
+<font color="red"> 390.         self.pipe = open(tmpfile,'rb')</font>
+<font color="red"> 391.         self.bufsize = bufsize</font>
+<font color="red"> 392.         self.mode = mode</font>
+<font color="black"> 393. </font>
+<font color="red"> 394.     def read(self):</font>
+<font color="black"> 395. </font>
+<font color="red"> 396.         return self.pipe.read()</font>
+<font color="black"> 397. </font>
+<font color="red"> 398.     def readlines(self):</font>
+<font color="black"> 399. </font>
+<font color="red"> 400.         if self.bufsize is not None:</font>
+<font color="red"> 401.             return self.pipe.readlines()</font>
+<font color="black"> 402. </font>
+<font color="black"> 403.     def close(self,</font>
+<font color="black"> 404. </font>
+<font color="red"> 405.               remove=os.unlink,error=os.error):</font>
+<font color="black"> 406. </font>
+<font color="red"> 407.         if self.pipe:</font>
+<font color="red"> 408.             rc = self.pipe.close()</font>
+<font color="black"> 409.         else:</font>
+<font color="red"> 410.             rc = 255</font>
+<font color="red"> 411.         if self.tmpfile:</font>
+<font color="red"> 412.             try:</font>
+<font color="red"> 413.                 remove(self.tmpfile)</font>
+<font color="red"> 414.             except error:</font>
+<font color="red"> 415.                 pass</font>
+<font color="red"> 416.         return rc</font>
+<font color="black"> 417. </font>
+<font color="black"> 418.     # Alias</font>
+<font color="red"> 419.     __del__ = close</font>
+<font color="black"> 420. </font>
+<font color="red"> 421. def popen(cmd, mode='r', bufsize=None):</font>
+<font color="black"> 422. </font>
+<font color="black"> 423.     &quot;&quot;&quot; Portable popen() interface.</font>
+<font color="black"> 424.     &quot;&quot;&quot;</font>
+<font color="black"> 425.     # Find a working popen implementation preferring win32pipe.popen</font>
+<font color="black"> 426.     # over os.popen over _popen</font>
+<font color="red"> 427.     popen = None</font>
+<font color="red"> 428.     if os.environ.get('OS','') == 'Windows_NT':</font>
+<font color="black"> 429.         # On NT win32pipe should work; on Win9x it hangs due to bugs</font>
+<font color="black"> 430.         # in the MS C lib (see MS KnowledgeBase article Q150956)</font>
+<font color="red"> 431.         try:</font>
+<font color="red"> 432.             import win32pipe</font>
+<font color="red"> 433.         except ImportError:</font>
+<font color="red"> 434.             pass</font>
+<font color="black"> 435.         else:</font>
+<font color="red"> 436.             popen = win32pipe.popen</font>
+<font color="red"> 437.     if popen is None:</font>
+<font color="red"> 438.         if hasattr(os,'popen'):</font>
+<font color="red"> 439.             popen = os.popen</font>
+<font color="black"> 440.             # Check whether it works... it doesn't in GUI programs</font>
+<font color="black"> 441.             # on Windows platforms</font>
+<font color="red"> 442.             if sys.platform == 'win32': # XXX Others too ?</font>
+<font color="red"> 443.                 try:</font>
+<font color="red"> 444.                     popen('')</font>
+<font color="red"> 445.                 except os.error:</font>
+<font color="red"> 446.                     popen = _popen</font>
+<font color="black"> 447.         else:</font>
+<font color="red"> 448.             popen = _popen</font>
+<font color="red"> 449.     if bufsize is None:</font>
+<font color="red"> 450.         return popen(cmd,mode)</font>
+<font color="black"> 451.     else:</font>
+<font color="red"> 452.         return popen(cmd,mode,bufsize)</font>
+<font color="black"> 453. </font>
+<font color="red"> 454. def _norm_version(version, build=''):</font>
+<font color="black"> 455. </font>
+<font color="black"> 456.     &quot;&quot;&quot; Normalize the version and build strings and return a single</font>
+<font color="black"> 457.         version string using the format major.minor.build (or patchlevel).</font>
+<font color="black"> 458.     &quot;&quot;&quot;</font>
+<font color="red"> 459.     l = string.split(version,'.')</font>
+<font color="red"> 460.     if build:</font>
+<font color="red"> 461.         l.append(build)</font>
+<font color="red"> 462.     try:</font>
+<font color="red"> 463.         ints = map(int,l)</font>
+<font color="red"> 464.     except ValueError:</font>
+<font color="red"> 465.         strings = l</font>
+<font color="black"> 466.     else:</font>
+<font color="red"> 467.         strings = map(str,ints)</font>
+<font color="red"> 468.     version = string.join(strings[:3],'.')</font>
+<font color="red"> 469.     return version</font>
+<font color="black"> 470. </font>
+<font color="red"> 471. _ver_output = re.compile(r'(?:([\w ]+) ([\w.]+) '</font>
+<font color="black"> 472.                          '.*'</font>
+<font color="black"> 473.                          '\[.* ([\d.]+)\])')</font>
+<font color="black"> 474. </font>
+<font color="black"> 475. # Examples of VER command output:</font>
+<font color="black"> 476. #</font>
+<font color="black"> 477. #   Windows 2000:  Microsoft Windows 2000 [Version 5.00.2195]</font>
+<font color="black"> 478. #   Windows XP:    Microsoft Windows XP [Version 5.1.2600]</font>
+<font color="black"> 479. #   Windows Vista: Microsoft Windows [Version 6.0.6002]</font>
+<font color="black"> 480. #</font>
+<font color="black"> 481. # Note that the &quot;Version&quot; string gets localized on different</font>
+<font color="black"> 482. # Windows versions.</font>
+<font color="black"> 483. </font>
+<font color="red"> 484. def _syscmd_ver(system='', release='', version='',</font>
+<font color="black"> 485. </font>
+<font color="red"> 486.                supported_platforms=('win32','win16','dos','os2')):</font>
+<font color="black"> 487. </font>
+<font color="black"> 488.     &quot;&quot;&quot; Tries to figure out the OS version used and returns</font>
+<font color="black"> 489.         a tuple (system,release,version).</font>
+<font color="black"> 490. </font>
+<font color="black"> 491.         It uses the &quot;ver&quot; shell command for this which is known</font>
+<font color="black"> 492.         to exists on Windows, DOS and OS/2. XXX Others too ?</font>
+<font color="black"> 493. </font>
+<font color="black"> 494.         In case this fails, the given parameters are used as</font>
+<font color="black"> 495.         defaults.</font>
+<font color="black"> 496. </font>
+<font color="black"> 497.     &quot;&quot;&quot;</font>
+<font color="red"> 498.     if sys.platform not in supported_platforms:</font>
+<font color="red"> 499.         return system,release,version</font>
+<font color="black"> 500. </font>
+<font color="black"> 501.     # Try some common cmd strings</font>
+<font color="red"> 502.     for cmd in ('ver','command /c ver','cmd /c ver'):</font>
+<font color="red"> 503.         try:</font>
+<font color="red"> 504.             pipe = popen(cmd)</font>
+<font color="red"> 505.             info = pipe.read()</font>
+<font color="red"> 506.             if pipe.close():</font>
+<font color="red"> 507.                 raise os.error,'command failed'</font>
+<font color="black"> 508.             # XXX How can I suppress shell errors from being written</font>
+<font color="black"> 509.             #     to stderr ?</font>
+<font color="red"> 510.         except os.error,why:</font>
+<font color="black"> 511.             #print 'Command %s failed: %s' % (cmd,why)</font>
+<font color="red"> 512.             continue</font>
+<font color="red"> 513.         except IOError,why:</font>
+<font color="black"> 514.             #print 'Command %s failed: %s' % (cmd,why)</font>
+<font color="red"> 515.             continue</font>
+<font color="black"> 516.         else:</font>
+<font color="red"> 517.             break</font>
+<font color="black"> 518.     else:</font>
+<font color="red"> 519.         return system,release,version</font>
+<font color="black"> 520. </font>
+<font color="black"> 521.     # Parse the output</font>
+<font color="red"> 522.     info = string.strip(info)</font>
+<font color="red"> 523.     m = _ver_output.match(info)</font>
+<font color="red"> 524.     if m is not None:</font>
+<font color="red"> 525.         system,release,version = m.groups()</font>
+<font color="black"> 526.         # Strip trailing dots from version and release</font>
+<font color="red"> 527.         if release[-1] == '.':</font>
+<font color="red"> 528.             release = release[:-1]</font>
+<font color="red"> 529.         if version[-1] == '.':</font>
+<font color="red"> 530.             version = version[:-1]</font>
+<font color="black"> 531.         # Normalize the version and build strings (eliminating additional</font>
+<font color="black"> 532.         # zeros)</font>
+<font color="red"> 533.         version = _norm_version(version)</font>
+<font color="red"> 534.     return system,release,version</font>
+<font color="black"> 535. </font>
+<font color="red"> 536. _WIN32_CLIENT_RELEASES = {</font>
+<font color="red"> 537.     (5, 0): &quot;2000&quot;,</font>
+<font color="red"> 538.     (5, 1): &quot;XP&quot;,</font>
+<font color="black"> 539.     # Strictly, 5.2 client is XP 64-bit, but platform.py historically</font>
+<font color="black"> 540.     # has always called it 2003 Server</font>
+<font color="red"> 541.     (5, 2): &quot;2003Server&quot;,</font>
+<font color="red"> 542.     (5, None): &quot;post2003&quot;,</font>
+<font color="black"> 543. </font>
+<font color="red"> 544.     (6, 0): &quot;Vista&quot;,</font>
+<font color="red"> 545.     (6, 1): &quot;7&quot;,</font>
+<font color="red"> 546.     (6, 2): &quot;8&quot;,</font>
+<font color="red"> 547.     (6, 3): &quot;8.1&quot;,</font>
+<font color="red"> 548.     (6, None): &quot;post8.1&quot;,</font>
+<font color="black"> 549. </font>
+<font color="red"> 550.     (10, 0): &quot;10&quot;,</font>
+<font color="red"> 551.     (10, None): &quot;post10&quot;,</font>
+<font color="black"> 552. }</font>
+<font color="black"> 553. </font>
+<font color="black"> 554. # Server release name lookup will default to client names if necessary</font>
+<font color="red"> 555. _WIN32_SERVER_RELEASES = {</font>
+<font color="red"> 556.     (5, 2): &quot;2003Server&quot;,</font>
+<font color="black"> 557. </font>
+<font color="red"> 558.     (6, 0): &quot;2008Server&quot;,</font>
+<font color="red"> 559.     (6, 1): &quot;2008ServerR2&quot;,</font>
+<font color="red"> 560.     (6, 2): &quot;2012Server&quot;,</font>
+<font color="red"> 561.     (6, 3): &quot;2012ServerR2&quot;,</font>
+<font color="red"> 562.     (6, None): &quot;post2012ServerR2&quot;,</font>
+<font color="black"> 563. }</font>
+<font color="black"> 564. </font>
+<font color="red"> 565. def _get_real_winver(maj, min, build):</font>
+<font color="red"> 566.     if maj &lt; 6 or (maj == 6 and min &lt; 2):</font>
+<font color="red"> 567.         return maj, min, build</font>
+<font color="black"> 568. </font>
+<font color="red"> 569.     from ctypes import (c_buffer, POINTER, byref, create_unicode_buffer,</font>
+<font color="black"> 570.                         Structure, WinDLL, _Pointer)</font>
+<font color="red"> 571.     from ctypes.wintypes import DWORD, HANDLE</font>
+<font color="black"> 572. </font>
+<font color="red"> 573.     class VS_FIXEDFILEINFO(Structure):</font>
+<font color="black"> 574.         _fields_ = [</font>
+<font color="red"> 575.             (&quot;dwSignature&quot;, DWORD),</font>
+<font color="red"> 576.             (&quot;dwStrucVersion&quot;, DWORD),</font>
+<font color="red"> 577.             (&quot;dwFileVersionMS&quot;, DWORD),</font>
+<font color="red"> 578.             (&quot;dwFileVersionLS&quot;, DWORD),</font>
+<font color="red"> 579.             (&quot;dwProductVersionMS&quot;, DWORD),</font>
+<font color="red"> 580.             (&quot;dwProductVersionLS&quot;, DWORD),</font>
+<font color="red"> 581.             (&quot;dwFileFlagsMask&quot;, DWORD),</font>
+<font color="red"> 582.             (&quot;dwFileFlags&quot;, DWORD),</font>
+<font color="red"> 583.             (&quot;dwFileOS&quot;, DWORD),</font>
+<font color="red"> 584.             (&quot;dwFileType&quot;, DWORD),</font>
+<font color="red"> 585.             (&quot;dwFileSubtype&quot;, DWORD),</font>
+<font color="red"> 586.             (&quot;dwFileDateMS&quot;, DWORD),</font>
+<font color="red"> 587.             (&quot;dwFileDateLS&quot;, DWORD),</font>
+<font color="black"> 588.         ]</font>
+<font color="red"> 589.     class PVS_FIXEDFILEINFO(_Pointer):</font>
+<font color="red"> 590.         _type_ = VS_FIXEDFILEINFO</font>
+<font color="black"> 591. </font>
+<font color="red"> 592.     kernel32 = WinDLL('kernel32')</font>
+<font color="red"> 593.     version = WinDLL('version')</font>
+<font color="black"> 594. </font>
+<font color="black"> 595.     # We will immediately double the length up to MAX_PATH, but the</font>
+<font color="black"> 596.     # path may be longer, so we retry until the returned string is</font>
+<font color="black"> 597.     # shorter than our buffer.</font>
+<font color="red"> 598.     name_len = actual_len = 130</font>
+<font color="red"> 599.     while actual_len == name_len:</font>
+<font color="red"> 600.         name_len *= 2</font>
+<font color="red"> 601.         name = create_unicode_buffer(name_len)</font>
+<font color="red"> 602.         actual_len = kernel32.GetModuleFileNameW(HANDLE(kernel32._handle),</font>
+<font color="red"> 603.                                                  name, len(name))</font>
+<font color="red"> 604.         if not actual_len:</font>
+<font color="red"> 605.             return maj, min, build</font>
+<font color="black"> 606. </font>
+<font color="red"> 607.     size = version.GetFileVersionInfoSizeW(name, None)</font>
+<font color="red"> 608.     if not size:</font>
+<font color="red"> 609.         return maj, min, build</font>
+<font color="black"> 610. </font>
+<font color="red"> 611.     ver_block = c_buffer(size)</font>
+<font color="red"> 612.     if (not version.GetFileVersionInfoW(name, None, size, ver_block) or</font>
+<font color="red"> 613.         not ver_block):</font>
+<font color="red"> 614.         return maj, min, build</font>
+<font color="black"> 615. </font>
+<font color="red"> 616.     pvi = PVS_FIXEDFILEINFO()</font>
+<font color="red"> 617.     if not version.VerQueryValueW(ver_block, &quot;&quot;, byref(pvi), byref(DWORD())):</font>
+<font color="red"> 618.         return maj, min, build</font>
+<font color="black"> 619. </font>
+<font color="red"> 620.     maj = pvi.contents.dwProductVersionMS &gt;&gt; 16</font>
+<font color="red"> 621.     min = pvi.contents.dwProductVersionMS &amp; 0xFFFF</font>
+<font color="red"> 622.     build = pvi.contents.dwProductVersionLS &gt;&gt; 16</font>
+<font color="black"> 623. </font>
+<font color="red"> 624.     return maj, min, build</font>
+<font color="black"> 625. </font>
+<font color="red"> 626. def win32_ver(release='', version='', csd='', ptype=''):</font>
+<font color="red"> 627.     try:</font>
+<font color="red"> 628.         from sys import getwindowsversion</font>
+<font color="red"> 629.     except ImportError:</font>
+<font color="red"> 630.         return release, version, csd, ptype</font>
+<font color="red"> 631.     try:</font>
+<font color="red"> 632.         from winreg import OpenKeyEx, QueryValueEx, CloseKey, HKEY_LOCAL_MACHINE</font>
+<font color="red"> 633.     except ImportError:</font>
+<font color="red"> 634.         from _winreg import OpenKeyEx, QueryValueEx, CloseKey, HKEY_LOCAL_MACHINE</font>
+<font color="black"> 635. </font>
+<font color="red"> 636.     winver = getwindowsversion()</font>
+<font color="red"> 637.     maj, min, build = _get_real_winver(*winver[:3])</font>
+<font color="red"> 638.     version = '{0}.{1}.{2}'.format(maj, min, build)</font>
+<font color="black"> 639. </font>
+<font color="red"> 640.     release = (_WIN32_CLIENT_RELEASES.get((maj, min)) or</font>
+<font color="red"> 641.                _WIN32_CLIENT_RELEASES.get((maj, None)) or</font>
+<font color="red"> 642.                release)</font>
+<font color="black"> 643. </font>
+<font color="black"> 644.     # getwindowsversion() reflect the compatibility mode Python is</font>
+<font color="black"> 645.     # running under, and so the service pack value is only going to be</font>
+<font color="black"> 646.     # valid if the versions match.</font>
+<font color="red"> 647.     if winver[:2] == (maj, min):</font>
+<font color="red"> 648.         try:</font>
+<font color="red"> 649.             csd = 'SP{}'.format(winver.service_pack_major)</font>
+<font color="red"> 650.         except AttributeError:</font>
+<font color="red"> 651.             if csd[:13] == 'Service Pack ':</font>
+<font color="red"> 652.                 csd = 'SP' + csd[13:]</font>
+<font color="black"> 653. </font>
+<font color="black"> 654.     # VER_NT_SERVER = 3</font>
+<font color="red"> 655.     if getattr(winver, 'product_type', None) == 3:</font>
+<font color="red"> 656.         release = (_WIN32_SERVER_RELEASES.get((maj, min)) or</font>
+<font color="red"> 657.                    _WIN32_SERVER_RELEASES.get((maj, None)) or</font>
+<font color="red"> 658.                    release)</font>
+<font color="black"> 659. </font>
+<font color="red"> 660.     key = None</font>
+<font color="red"> 661.     try:</font>
+<font color="red"> 662.         key = OpenKeyEx(HKEY_LOCAL_MACHINE,</font>
+<font color="red"> 663.                         r'SOFTWARE\Microsoft\Windows NT\CurrentVersion')</font>
+<font color="red"> 664.         ptype = QueryValueEx(key, 'CurrentType')[0]</font>
+<font color="red"> 665.     except:</font>
+<font color="red"> 666.         pass</font>
+<font color="black"> 667.     finally:</font>
+<font color="red"> 668.         if key:</font>
+<font color="red"> 669.             CloseKey(key)</font>
+<font color="black"> 670. </font>
+<font color="red"> 671.     return release, version, csd, ptype</font>
+<font color="black"> 672. </font>
+<font color="red"> 673. def _mac_ver_lookup(selectors,default=None):</font>
+<font color="black"> 674. </font>
+<font color="red"> 675.     from gestalt import gestalt</font>
+<font color="red"> 676.     import MacOS</font>
+<font color="red"> 677.     l = []</font>
+<font color="red"> 678.     append = l.append</font>
+<font color="red"> 679.     for selector in selectors:</font>
+<font color="red"> 680.         try:</font>
+<font color="red"> 681.             append(gestalt(selector))</font>
+<font color="red"> 682.         except (RuntimeError, MacOS.Error):</font>
+<font color="red"> 683.             append(default)</font>
+<font color="red"> 684.     return l</font>
+<font color="black"> 685. </font>
+<font color="red"> 686. def _bcd2str(bcd):</font>
+<font color="black"> 687. </font>
+<font color="red"> 688.     return hex(bcd)[2:]</font>
+<font color="black"> 689. </font>
+<font color="red"> 690. def _mac_ver_gestalt():</font>
+<font color="black"> 691.     &quot;&quot;&quot;</font>
+<font color="black"> 692.         Thanks to Mark R. Levinson for mailing documentation links and</font>
+<font color="black"> 693.         code examples for this function. Documentation for the</font>
+<font color="black"> 694.         gestalt() API is available online at:</font>
+<font color="black"> 695. </font>
+<font color="black"> 696.            http://www.rgaros.nl/gestalt/</font>
+<font color="black"> 697.     &quot;&quot;&quot;</font>
+<font color="black"> 698.     # Check whether the version info module is available</font>
+<font color="red"> 699.     try:</font>
+<font color="red"> 700.         import gestalt</font>
+<font color="red"> 701.         import MacOS</font>
+<font color="red"> 702.     except ImportError:</font>
+<font color="red"> 703.         return None</font>
+<font color="black"> 704.     # Get the infos</font>
+<font color="red"> 705.     sysv,sysa = _mac_ver_lookup(('sysv','sysa'))</font>
+<font color="black"> 706.     # Decode the infos</font>
+<font color="red"> 707.     if sysv:</font>
+<font color="red"> 708.         major = (sysv &amp; 0xFF00) &gt;&gt; 8</font>
+<font color="red"> 709.         minor = (sysv &amp; 0x00F0) &gt;&gt; 4</font>
+<font color="red"> 710.         patch = (sysv &amp; 0x000F)</font>
+<font color="black"> 711. </font>
+<font color="red"> 712.         if (major, minor) &gt;= (10, 4):</font>
+<font color="black"> 713.             # the 'sysv' gestald cannot return patchlevels</font>
+<font color="black"> 714.             # higher than 9. Apple introduced 3 new</font>
+<font color="black"> 715.             # gestalt codes in 10.4 to deal with this</font>
+<font color="black"> 716.             # issue (needed because patch levels can</font>
+<font color="black"> 717.             # run higher than 9, such as 10.4.11)</font>
+<font color="red"> 718.             major,minor,patch = _mac_ver_lookup(('sys1','sys2','sys3'))</font>
+<font color="red"> 719.             release = '%i.%i.%i' %(major, minor, patch)</font>
+<font color="black"> 720.         else:</font>
+<font color="red"> 721.             release = '%s.%i.%i' % (_bcd2str(major),minor,patch)</font>
+<font color="black"> 722. </font>
+<font color="red"> 723.     if sysa:</font>
+<font color="red"> 724.         machine = {0x1: '68k',</font>
+<font color="red"> 725.                    0x2: 'PowerPC',</font>
+<font color="red"> 726.                    0xa: 'i386'}.get(sysa,'')</font>
+<font color="black"> 727. </font>
+<font color="red"> 728.     versioninfo=('', '', '')</font>
+<font color="red"> 729.     return release,versioninfo,machine</font>
+<font color="black"> 730. </font>
+<font color="red"> 731. def _mac_ver_xml():</font>
+<font color="red"> 732.     fn = '/System/Library/CoreServices/SystemVersion.plist'</font>
+<font color="red"> 733.     if not os.path.exists(fn):</font>
+<font color="red"> 734.         return None</font>
+<font color="black"> 735. </font>
+<font color="red"> 736.     try:</font>
+<font color="red"> 737.         import plistlib</font>
+<font color="red"> 738.     except ImportError:</font>
+<font color="red"> 739.         return None</font>
+<font color="black"> 740. </font>
+<font color="red"> 741.     pl = plistlib.readPlist(fn)</font>
+<font color="red"> 742.     release = pl['ProductVersion']</font>
+<font color="red"> 743.     versioninfo=('', '', '')</font>
+<font color="red"> 744.     machine = os.uname()[4]</font>
+<font color="red"> 745.     if machine in ('ppc', 'Power Macintosh'):</font>
+<font color="black"> 746.         # for compatibility with the gestalt based code</font>
+<font color="red"> 747.         machine = 'PowerPC'</font>
+<font color="black"> 748. </font>
+<font color="red"> 749.     return release,versioninfo,machine</font>
+<font color="black"> 750. </font>
+<font color="black"> 751. </font>
+<font color="red"> 752. def mac_ver(release='',versioninfo=('','',''),machine=''):</font>
+<font color="black"> 753. </font>
+<font color="black"> 754.     &quot;&quot;&quot; Get MacOS version information and return it as tuple (release,</font>
+<font color="black"> 755.         versioninfo, machine) with versioninfo being a tuple (version,</font>
+<font color="black"> 756.         dev_stage, non_release_version).</font>
+<font color="black"> 757. </font>
+<font color="black"> 758.         Entries which cannot be determined are set to the parameter values</font>
+<font color="black"> 759.         which default to ''. All tuple entries are strings.</font>
+<font color="black"> 760.     &quot;&quot;&quot;</font>
+<font color="black"> 761. </font>
+<font color="black"> 762.     # First try reading the information from an XML file which should</font>
+<font color="black"> 763.     # always be present</font>
+<font color="red"> 764.     info = _mac_ver_xml()</font>
+<font color="red"> 765.     if info is not None:</font>
+<font color="red"> 766.         return info</font>
+<font color="black"> 767. </font>
+<font color="black"> 768.     # If that doesn't work for some reason fall back to reading the</font>
+<font color="black"> 769.     # information using gestalt calls.</font>
+<font color="red"> 770.     info = _mac_ver_gestalt()</font>
+<font color="red"> 771.     if info is not None:</font>
+<font color="red"> 772.         return info</font>
+<font color="black"> 773. </font>
+<font color="black"> 774.     # If that also doesn't work return the default values</font>
+<font color="red"> 775.     return release,versioninfo,machine</font>
+<font color="black"> 776. </font>
+<font color="red"> 777. def _java_getprop(name,default):</font>
+<font color="black"> 778. </font>
+<font color="red"> 779.     from java.lang import System</font>
+<font color="red"> 780.     try:</font>
+<font color="red"> 781.         value = System.getProperty(name)</font>
+<font color="red"> 782.         if value is None:</font>
+<font color="red"> 783.             return default</font>
+<font color="red"> 784.         return value</font>
+<font color="red"> 785.     except AttributeError:</font>
+<font color="red"> 786.         return default</font>
+<font color="black"> 787. </font>
+<font color="red"> 788. def java_ver(release='',vendor='',vminfo=('','',''),osinfo=('','','')):</font>
+<font color="black"> 789. </font>
+<font color="black"> 790.     &quot;&quot;&quot; Version interface for Jython.</font>
+<font color="black"> 791. </font>
+<font color="black"> 792.         Returns a tuple (release,vendor,vminfo,osinfo) with vminfo being</font>
+<font color="black"> 793.         a tuple (vm_name,vm_release,vm_vendor) and osinfo being a</font>
+<font color="black"> 794.         tuple (os_name,os_version,os_arch).</font>
+<font color="black"> 795. </font>
+<font color="black"> 796.         Values which cannot be determined are set to the defaults</font>
+<font color="black"> 797.         given as parameters (which all default to '').</font>
+<font color="black"> 798. </font>
+<font color="black"> 799.     &quot;&quot;&quot;</font>
+<font color="black"> 800.     # Import the needed APIs</font>
+<font color="red"> 801.     try:</font>
+<font color="red"> 802.         import java.lang</font>
+<font color="red"> 803.     except ImportError:</font>
+<font color="red"> 804.         return release,vendor,vminfo,osinfo</font>
+<font color="black"> 805. </font>
+<font color="red"> 806.     vendor = _java_getprop('java.vendor', vendor)</font>
+<font color="red"> 807.     release = _java_getprop('java.version', release)</font>
+<font color="red"> 808.     vm_name, vm_release, vm_vendor = vminfo</font>
+<font color="red"> 809.     vm_name = _java_getprop('java.vm.name', vm_name)</font>
+<font color="red"> 810.     vm_vendor = _java_getprop('java.vm.vendor', vm_vendor)</font>
+<font color="red"> 811.     vm_release = _java_getprop('java.vm.version', vm_release)</font>
+<font color="red"> 812.     vminfo = vm_name, vm_release, vm_vendor</font>
+<font color="red"> 813.     os_name, os_version, os_arch = osinfo</font>
+<font color="red"> 814.     os_arch = _java_getprop('java.os.arch', os_arch)</font>
+<font color="red"> 815.     os_name = _java_getprop('java.os.name', os_name)</font>
+<font color="red"> 816.     os_version = _java_getprop('java.os.version', os_version)</font>
+<font color="red"> 817.     osinfo = os_name, os_version, os_arch</font>
+<font color="black"> 818. </font>
+<font color="red"> 819.     return release, vendor, vminfo, osinfo</font>
+<font color="black"> 820. </font>
+<font color="black"> 821. ### System name aliasing</font>
+<font color="black"> 822. </font>
+<font color="red"> 823. def system_alias(system,release,version):</font>
+<font color="black"> 824. </font>
+<font color="black"> 825.     &quot;&quot;&quot; Returns (system,release,version) aliased to common</font>
+<font color="black"> 826.         marketing names used for some systems.</font>
+<font color="black"> 827. </font>
+<font color="black"> 828.         It also does some reordering of the information in some cases</font>
+<font color="black"> 829.         where it would otherwise cause confusion.</font>
+<font color="black"> 830. </font>
+<font color="black"> 831.     &quot;&quot;&quot;</font>
+<font color="red"> 832.     if system == 'Rhapsody':</font>
+<font color="black"> 833.         # Apple's BSD derivative</font>
+<font color="black"> 834.         # XXX How can we determine the marketing release number ?</font>
+<font color="red"> 835.         return 'MacOS X Server',system+release,version</font>
+<font color="black"> 836. </font>
+<font color="red"> 837.     elif system == 'SunOS':</font>
+<font color="black"> 838.         # Sun's OS</font>
+<font color="red"> 839.         if release &lt; '5':</font>
+<font color="black"> 840.             # These releases use the old name SunOS</font>
+<font color="red"> 841.             return system,release,version</font>
+<font color="black"> 842.         # Modify release (marketing release = SunOS release - 3)</font>
+<font color="red"> 843.         l = string.split(release,'.')</font>
+<font color="red"> 844.         if l:</font>
+<font color="red"> 845.             try:</font>
+<font color="red"> 846.                 major = int(l[0])</font>
+<font color="red"> 847.             except ValueError:</font>
+<font color="red"> 848.                 pass</font>
+<font color="black"> 849.             else:</font>
+<font color="red"> 850.                 major = major - 3</font>
+<font color="red"> 851.                 l[0] = str(major)</font>
+<font color="red"> 852.                 release = string.join(l,'.')</font>
+<font color="red"> 853.         if release &lt; '6':</font>
+<font color="red"> 854.             system = 'Solaris'</font>
+<font color="black"> 855.         else:</font>
+<font color="black"> 856.             # XXX Whatever the new SunOS marketing name is...</font>
+<font color="red"> 857.             system = 'Solaris'</font>
+<font color="black"> 858. </font>
+<font color="red"> 859.     elif system == 'IRIX64':</font>
+<font color="black"> 860.         # IRIX reports IRIX64 on platforms with 64-bit support; yet it</font>
+<font color="black"> 861.         # is really a version and not a different platform, since 32-bit</font>
+<font color="black"> 862.         # apps are also supported..</font>
+<font color="red"> 863.         system = 'IRIX'</font>
+<font color="red"> 864.         if version:</font>
+<font color="red"> 865.             version = version + ' (64bit)'</font>
+<font color="black"> 866.         else:</font>
+<font color="red"> 867.             version = '64bit'</font>
+<font color="black"> 868. </font>
+<font color="red"> 869.     elif system in ('win32','win16'):</font>
+<font color="black"> 870.         # In case one of the other tricks</font>
+<font color="red"> 871.         system = 'Windows'</font>
+<font color="black"> 872. </font>
+<font color="red"> 873.     return system,release,version</font>
+<font color="black"> 874. </font>
+<font color="black"> 875. ### Various internal helpers</font>
+<font color="black"> 876. </font>
+<font color="red"> 877. def _platform(*args):</font>
+<font color="black"> 878. </font>
+<font color="black"> 879.     &quot;&quot;&quot; Helper to format the platform string in a filename</font>
+<font color="black"> 880.         compatible format e.g. &quot;system-version-machine&quot;.</font>
+<font color="black"> 881.     &quot;&quot;&quot;</font>
+<font color="black"> 882.     # Format the platform string</font>
+<font color="red"> 883.     platform = string.join(</font>
+<font color="red"> 884.         map(string.strip,</font>
+<font color="red"> 885.             filter(len, args)),</font>
+<font color="red"> 886.         '-')</font>
+<font color="black"> 887. </font>
+<font color="black"> 888.     # Cleanup some possible filename obstacles...</font>
+<font color="red"> 889.     replace = string.replace</font>
+<font color="red"> 890.     platform = replace(platform,' ','_')</font>
+<font color="red"> 891.     platform = replace(platform,'/','-')</font>
+<font color="red"> 892.     platform = replace(platform,'\\','-')</font>
+<font color="red"> 893.     platform = replace(platform,':','-')</font>
+<font color="red"> 894.     platform = replace(platform,';','-')</font>
+<font color="red"> 895.     platform = replace(platform,'&quot;','-')</font>
+<font color="red"> 896.     platform = replace(platform,'(','-')</font>
+<font color="red"> 897.     platform = replace(platform,')','-')</font>
+<font color="black"> 898. </font>
+<font color="black"> 899.     # No need to report 'unknown' information...</font>
+<font color="red"> 900.     platform = replace(platform,'unknown','')</font>
+<font color="black"> 901. </font>
+<font color="black"> 902.     # Fold '--'s and remove trailing '-'</font>
+<font color="red"> 903.     while 1:</font>
+<font color="red"> 904.         cleaned = replace(platform,'--','-')</font>
+<font color="red"> 905.         if cleaned == platform:</font>
+<font color="red"> 906.             break</font>
+<font color="red"> 907.         platform = cleaned</font>
+<font color="red"> 908.     while platform[-1] == '-':</font>
+<font color="red"> 909.         platform = platform[:-1]</font>
+<font color="black"> 910. </font>
+<font color="red"> 911.     return platform</font>
+<font color="black"> 912. </font>
+<font color="red"> 913. def _node(default=''):</font>
+<font color="black"> 914. </font>
+<font color="black"> 915.     &quot;&quot;&quot; Helper to determine the node name of this machine.</font>
+<font color="black"> 916.     &quot;&quot;&quot;</font>
+<font color="red"> 917.     try:</font>
+<font color="red"> 918.         import socket</font>
+<font color="red"> 919.     except ImportError:</font>
+<font color="black"> 920.         # No sockets...</font>
+<font color="red"> 921.         return default</font>
+<font color="red"> 922.     try:</font>
+<font color="red"> 923.         return socket.gethostname()</font>
+<font color="red"> 924.     except socket.error:</font>
+<font color="black"> 925.         # Still not working...</font>
+<font color="red"> 926.         return default</font>
+<font color="black"> 927. </font>
+<font color="black"> 928. # os.path.abspath is new in Python 1.5.2:</font>
+<font color="red"> 929. if not hasattr(os.path,'abspath'):</font>
+<font color="black"> 930. </font>
+<font color="black"> 931.     def _abspath(path,</font>
+<font color="black"> 932. </font>
+<font color="red"> 933.                  isabs=os.path.isabs,join=os.path.join,getcwd=os.getcwd,</font>
+<font color="red"> 934.                  normpath=os.path.normpath):</font>
+<font color="black"> 935. </font>
+<font color="red"> 936.         if not isabs(path):</font>
+<font color="red"> 937.             path = join(getcwd(), path)</font>
+<font color="red"> 938.         return normpath(path)</font>
+<font color="black"> 939. </font>
+<font color="black"> 940. else:</font>
+<font color="black"> 941. </font>
+<font color="red"> 942.     _abspath = os.path.abspath</font>
+<font color="black"> 943. </font>
+<font color="red"> 944. def _follow_symlinks(filepath):</font>
+<font color="black"> 945. </font>
+<font color="black"> 946.     &quot;&quot;&quot; In case filepath is a symlink, follow it until a</font>
+<font color="black"> 947.         real file is reached.</font>
+<font color="black"> 948.     &quot;&quot;&quot;</font>
+<font color="red"> 949.     filepath = _abspath(filepath)</font>
+<font color="red"> 950.     while os.path.islink(filepath):</font>
+<font color="red"> 951.         filepath = os.path.normpath(</font>
+<font color="red"> 952.             os.path.join(os.path.dirname(filepath),os.readlink(filepath)))</font>
+<font color="red"> 953.     return filepath</font>
+<font color="black"> 954. </font>
+<font color="red"> 955. def _syscmd_uname(option,default=''):</font>
+<font color="black"> 956. </font>
+<font color="black"> 957.     &quot;&quot;&quot; Interface to the system's uname command.</font>
+<font color="black"> 958.     &quot;&quot;&quot;</font>
+<font color="green"> 959.     if sys.platform in ('dos','win32','win16','os2'):</font>
+<font color="black"> 960.         # XXX Others too ?</font>
+<font color="red"> 961.         return default</font>
+<font color="green"> 962.     try:</font>
+<font color="green"> 963.         f = os.popen('uname %s 2&gt; %s' % (option, DEV_NULL))</font>
+<font color="red"> 964.     except (AttributeError,os.error):</font>
+<font color="red"> 965.         return default</font>
+<font color="green"> 966.     output = string.strip(f.read())</font>
+<font color="green"> 967.     rc = f.close()</font>
+<font color="green"> 968.     if not output or rc:</font>
+<font color="red"> 969.         return default</font>
+<font color="black"> 970.     else:</font>
+<font color="green"> 971.         return output</font>
+<font color="black"> 972. </font>
+<font color="red"> 973. def _syscmd_file(target,default=''):</font>
+<font color="black"> 974. </font>
+<font color="black"> 975.     &quot;&quot;&quot; Interface to the system's file command.</font>
+<font color="black"> 976. </font>
+<font color="black"> 977.         The function uses the -b option of the file command to have it</font>
+<font color="black"> 978.         ommit the filename in its output and if possible the -L option</font>
+<font color="black"> 979.         to have the command follow symlinks. It returns default in</font>
+<font color="black"> 980.         case the command should fail.</font>
+<font color="black"> 981. </font>
+<font color="black"> 982.     &quot;&quot;&quot;</font>
+<font color="black"> 983. </font>
+<font color="black"> 984.     # We do the import here to avoid a bootstrap issue.</font>
+<font color="black"> 985.     # See c73b90b6dadd changeset.</font>
+<font color="black"> 986.     #</font>
+<font color="black"> 987.     # [..]</font>
+<font color="black"> 988.     # ranlib libpython2.7.a</font>
+<font color="black"> 989.     # gcc   -o python \</font>
+<font color="black"> 990.     #        Modules/python.o \</font>
+<font color="black"> 991.     #        libpython2.7.a -lsocket -lnsl -ldl    -lm</font>
+<font color="black"> 992.     # Traceback (most recent call last):</font>
+<font color="black"> 993.     #  File &quot;./setup.py&quot;, line 8, in &lt;module&gt;</font>
+<font color="black"> 994.     #    from platform import machine as platform_machine</font>
+<font color="black"> 995.     #  File &quot;[..]/build/Lib/platform.py&quot;, line 116, in &lt;module&gt;</font>
+<font color="black"> 996.     #    import sys,string,os,re,subprocess</font>
+<font color="black"> 997.     #  File &quot;[..]/build/Lib/subprocess.py&quot;, line 429, in &lt;module&gt;</font>
+<font color="black"> 998.     #    import select</font>
+<font color="black"> 999.     # ImportError: No module named select</font>
+<font color="black">1000. </font>
+<font color="red">1001.     import subprocess</font>
+<font color="black">1002. </font>
+<font color="red">1003.     if sys.platform in ('dos','win32','win16','os2'):</font>
+<font color="black">1004.         # XXX Others too ?</font>
+<font color="red">1005.         return default</font>
+<font color="red">1006.     target = _follow_symlinks(target)</font>
+<font color="red">1007.     try:</font>
+<font color="red">1008.         proc = subprocess.Popen(['file', target],</font>
+<font color="red">1009.                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT)</font>
+<font color="black">1010. </font>
+<font color="red">1011.     except (AttributeError,os.error):</font>
+<font color="red">1012.         return default</font>
+<font color="red">1013.     output = proc.communicate()[0]</font>
+<font color="red">1014.     rc = proc.wait()</font>
+<font color="red">1015.     if not output or rc:</font>
+<font color="red">1016.         return default</font>
+<font color="black">1017.     else:</font>
+<font color="red">1018.         return output</font>
+<font color="black">1019. </font>
+<font color="black">1020. ### Information about the used architecture</font>
+<font color="black">1021. </font>
+<font color="black">1022. # Default values for architecture; non-empty strings override the</font>
+<font color="black">1023. # defaults given as parameters</font>
+<font color="red">1024. _default_architecture = {</font>
+<font color="red">1025.     'win32': ('','WindowsPE'),</font>
+<font color="red">1026.     'win16': ('','Windows'),</font>
+<font color="red">1027.     'dos': ('','MSDOS'),</font>
+<font color="black">1028. }</font>
+<font color="black">1029. </font>
+<font color="red">1030. _architecture_split = re.compile(r'[\s,]').split</font>
+<font color="black">1031. </font>
+<font color="red">1032. def architecture(executable=sys.executable,bits='',linkage=''):</font>
+<font color="black">1033. </font>
+<font color="black">1034.     &quot;&quot;&quot; Queries the given executable (defaults to the Python interpreter</font>
+<font color="black">1035.         binary) for various architecture information.</font>
+<font color="black">1036. </font>
+<font color="black">1037.         Returns a tuple (bits,linkage) which contains information about</font>
+<font color="black">1038.         the bit architecture and the linkage format used for the</font>
+<font color="black">1039.         executable. Both values are returned as strings.</font>
+<font color="black">1040. </font>
+<font color="black">1041.         Values that cannot be determined are returned as given by the</font>
+<font color="black">1042.         parameter presets. If bits is given as '', the sizeof(pointer)</font>
+<font color="black">1043.         (or sizeof(long) on Python version &lt; 1.5.2) is used as</font>
+<font color="black">1044.         indicator for the supported pointer size.</font>
+<font color="black">1045. </font>
+<font color="black">1046.         The function relies on the system's &quot;file&quot; command to do the</font>
+<font color="black">1047.         actual work. This is available on most if not all Unix</font>
+<font color="black">1048.         platforms. On some non-Unix platforms where the &quot;file&quot; command</font>
+<font color="black">1049.         does not exist and the executable is set to the Python interpreter</font>
+<font color="black">1050.         binary defaults from _default_architecture are used.</font>
+<font color="black">1051. </font>
+<font color="black">1052.     &quot;&quot;&quot;</font>
+<font color="black">1053.     # Use the sizeof(pointer) as default number of bits if nothing</font>
+<font color="black">1054.     # else is given as default.</font>
+<font color="red">1055.     if not bits:</font>
+<font color="red">1056.         import struct</font>
+<font color="red">1057.         try:</font>
+<font color="red">1058.             size = struct.calcsize('P')</font>
+<font color="red">1059.         except struct.error:</font>
+<font color="black">1060.             # Older installations can only query longs</font>
+<font color="red">1061.             size = struct.calcsize('l')</font>
+<font color="red">1062.         bits = str(size*8) + 'bit'</font>
+<font color="black">1063. </font>
+<font color="black">1064.     # Get data from the 'file' system command</font>
+<font color="red">1065.     if executable:</font>
+<font color="red">1066.         output = _syscmd_file(executable, '')</font>
+<font color="black">1067.     else:</font>
+<font color="red">1068.         output = ''</font>
+<font color="black">1069. </font>
+<font color="red">1070.     if not output and \</font>
+<font color="red">1071.        executable == sys.executable:</font>
+<font color="black">1072.         # &quot;file&quot; command did not return anything; we'll try to provide</font>
+<font color="black">1073.         # some sensible defaults then...</font>
+<font color="red">1074.         if sys.platform in _default_architecture:</font>
+<font color="red">1075.             b, l = _default_architecture[sys.platform]</font>
+<font color="red">1076.             if b:</font>
+<font color="red">1077.                 bits = b</font>
+<font color="red">1078.             if l:</font>
+<font color="red">1079.                 linkage = l</font>
+<font color="red">1080.         return bits, linkage</font>
+<font color="black">1081. </font>
+<font color="black">1082.     # Split the output into a list of strings omitting the filename</font>
+<font color="red">1083.     fileout = _architecture_split(output)[1:]</font>
+<font color="black">1084. </font>
+<font color="red">1085.     if 'executable' not in fileout:</font>
+<font color="black">1086.         # Format not supported</font>
+<font color="red">1087.         return bits,linkage</font>
+<font color="black">1088. </font>
+<font color="black">1089.     # Bits</font>
+<font color="red">1090.     if '32-bit' in fileout:</font>
+<font color="red">1091.         bits = '32bit'</font>
+<font color="red">1092.     elif 'N32' in fileout:</font>
+<font color="black">1093.         # On Irix only</font>
+<font color="red">1094.         bits = 'n32bit'</font>
+<font color="red">1095.     elif '64-bit' in fileout:</font>
+<font color="red">1096.         bits = '64bit'</font>
+<font color="black">1097. </font>
+<font color="black">1098.     # Linkage</font>
+<font color="red">1099.     if 'ELF' in fileout:</font>
+<font color="red">1100.         linkage = 'ELF'</font>
+<font color="red">1101.     elif 'PE' in fileout:</font>
+<font color="black">1102.         # E.g. Windows uses this format</font>
+<font color="red">1103.         if 'Windows' in fileout:</font>
+<font color="red">1104.             linkage = 'WindowsPE'</font>
+<font color="black">1105.         else:</font>
+<font color="red">1106.             linkage = 'PE'</font>
+<font color="red">1107.     elif 'COFF' in fileout:</font>
+<font color="red">1108.         linkage = 'COFF'</font>
+<font color="red">1109.     elif 'MS-DOS' in fileout:</font>
+<font color="red">1110.         linkage = 'MSDOS'</font>
+<font color="black">1111.     else:</font>
+<font color="black">1112.         # XXX the A.OUT format also falls under this class...</font>
+<font color="black">1113.         pass</font>
+<font color="black">1114. </font>
+<font color="red">1115.     return bits,linkage</font>
+<font color="black">1116. </font>
+<font color="black">1117. ### Portable uname() interface</font>
+<font color="black">1118. </font>
+<font color="red">1119. _uname_cache = None</font>
+<font color="black">1120. </font>
+<font color="red">1121. def uname():</font>
+<font color="black">1122. </font>
+<font color="black">1123.     &quot;&quot;&quot; Fairly portable uname interface. Returns a tuple</font>
+<font color="black">1124.         of strings (system,node,release,version,machine,processor)</font>
+<font color="black">1125.         identifying the underlying platform.</font>
+<font color="black">1126. </font>
+<font color="black">1127.         Note that unlike the os.uname function this also returns</font>
+<font color="black">1128.         possible processor information as an additional tuple entry.</font>
+<font color="black">1129. </font>
+<font color="black">1130.         Entries which cannot be determined are set to ''.</font>
+<font color="black">1131. </font>
+<font color="black">1132.     &quot;&quot;&quot;</font>
+<font color="black">1133.     global _uname_cache</font>
+<font color="green">1134.     no_os_uname = 0</font>
+<font color="black">1135. </font>
+<font color="green">1136.     if _uname_cache is not None:</font>
+<font color="green">1137.         return _uname_cache</font>
+<font color="black">1138. </font>
+<font color="green">1139.     processor = ''</font>
+<font color="black">1140. </font>
+<font color="black">1141.     # Get some infos from the builtin os.uname API...</font>
+<font color="green">1142.     try:</font>
+<font color="green">1143.         system,node,release,version,machine = os.uname()</font>
+<font color="red">1144.     except AttributeError:</font>
+<font color="red">1145.         no_os_uname = 1</font>
+<font color="black">1146. </font>
+<font color="green">1147.     if no_os_uname or not filter(None, (system, node, release, version, machine)):</font>
+<font color="black">1148.         # Hmm, no there is either no uname or uname has returned</font>
+<font color="black">1149.         #'unknowns'... we'll have to poke around the system then.</font>
+<font color="red">1150.         if no_os_uname:</font>
+<font color="red">1151.             system = sys.platform</font>
+<font color="red">1152.             release = ''</font>
+<font color="red">1153.             version = ''</font>
+<font color="red">1154.             node = _node()</font>
+<font color="red">1155.             machine = ''</font>
+<font color="black">1156. </font>
+<font color="red">1157.         use_syscmd_ver = 1</font>
+<font color="black">1158. </font>
+<font color="black">1159.         # Try win32_ver() on win32 platforms</font>
+<font color="red">1160.         if system == 'win32':</font>
+<font color="red">1161.             release,version,csd,ptype = win32_ver()</font>
+<font color="red">1162.             if release and version:</font>
+<font color="red">1163.                 use_syscmd_ver = 0</font>
+<font color="black">1164.             # Try to use the PROCESSOR_* environment variables</font>
+<font color="black">1165.             # available on Win XP and later; see</font>
+<font color="black">1166.             # http://support.microsoft.com/kb/888731 and</font>
+<font color="black">1167.             # http://www.geocities.com/rick_lively/MANUALS/ENV/MSWIN/PROCESSI.HTM</font>
+<font color="red">1168.             if not machine:</font>
+<font color="black">1169.                 # WOW64 processes mask the native architecture</font>
+<font color="red">1170.                 if &quot;PROCESSOR_ARCHITEW6432&quot; in os.environ:</font>
+<font color="red">1171.                     machine = os.environ.get(&quot;PROCESSOR_ARCHITEW6432&quot;, '')</font>
+<font color="black">1172.                 else:</font>
+<font color="red">1173.                     machine = os.environ.get('PROCESSOR_ARCHITECTURE', '')</font>
+<font color="red">1174.             if not processor:</font>
+<font color="red">1175.                 processor = os.environ.get('PROCESSOR_IDENTIFIER', machine)</font>
+<font color="black">1176. </font>
+<font color="black">1177.         # Try the 'ver' system command available on some</font>
+<font color="black">1178.         # platforms</font>
+<font color="red">1179.         if use_syscmd_ver:</font>
+<font color="red">1180.             system,release,version = _syscmd_ver(system)</font>
+<font color="black">1181.             # Normalize system to what win32_ver() normally returns</font>
+<font color="black">1182.             # (_syscmd_ver() tends to return the vendor name as well)</font>
+<font color="red">1183.             if system == 'Microsoft Windows':</font>
+<font color="red">1184.                 system = 'Windows'</font>
+<font color="red">1185.             elif system == 'Microsoft' and release == 'Windows':</font>
+<font color="black">1186.                 # Under Windows Vista and Windows Server 2008,</font>
+<font color="black">1187.                 # Microsoft changed the output of the ver command. The</font>
+<font color="black">1188.                 # release is no longer printed.  This causes the</font>
+<font color="black">1189.                 # system and release to be misidentified.</font>
+<font color="red">1190.                 system = 'Windows'</font>
+<font color="red">1191.                 if '6.0' == version[:3]:</font>
+<font color="red">1192.                     release = 'Vista'</font>
+<font color="black">1193.                 else:</font>
+<font color="red">1194.                     release = ''</font>
+<font color="black">1195. </font>
+<font color="black">1196.         # In case we still don't know anything useful, we'll try to</font>
+<font color="black">1197.         # help ourselves</font>
+<font color="red">1198.         if system in ('win32','win16'):</font>
+<font color="red">1199.             if not version:</font>
+<font color="red">1200.                 if system == 'win32':</font>
+<font color="red">1201.                     version = '32bit'</font>
+<font color="black">1202.                 else:</font>
+<font color="red">1203.                     version = '16bit'</font>
+<font color="red">1204.             system = 'Windows'</font>
+<font color="black">1205. </font>
+<font color="red">1206.         elif system[:4] == 'java':</font>
+<font color="red">1207.             release,vendor,vminfo,osinfo = java_ver()</font>
+<font color="red">1208.             system = 'Java'</font>
+<font color="red">1209.             version = string.join(vminfo,', ')</font>
+<font color="red">1210.             if not version:</font>
+<font color="red">1211.                 version = vendor</font>
+<font color="black">1212. </font>
+<font color="black">1213.     # System specific extensions</font>
+<font color="green">1214.     if system == 'OpenVMS':</font>
+<font color="black">1215.         # OpenVMS seems to have release and version mixed up</font>
+<font color="red">1216.         if not release or release == '0':</font>
+<font color="red">1217.             release = version</font>
+<font color="red">1218.             version = ''</font>
+<font color="black">1219.         # Get processor information</font>
+<font color="red">1220.         try:</font>
+<font color="red">1221.             import vms_lib</font>
+<font color="red">1222.         except ImportError:</font>
+<font color="red">1223.             pass</font>
+<font color="black">1224.         else:</font>
+<font color="red">1225.             csid, cpu_number = vms_lib.getsyi('SYI$_CPU',0)</font>
+<font color="red">1226.             if (cpu_number &gt;= 128):</font>
+<font color="red">1227.                 processor = 'Alpha'</font>
+<font color="black">1228.             else:</font>
+<font color="red">1229.                 processor = 'VAX'</font>
+<font color="green">1230.     if not processor:</font>
+<font color="black">1231.         # Get processor information from the uname system command</font>
+<font color="green">1232.         processor = _syscmd_uname('-p','')</font>
+<font color="black">1233. </font>
+<font color="black">1234.     #If any unknowns still exist, replace them with ''s, which are more portable</font>
+<font color="green">1235.     if system == 'unknown':</font>
+<font color="red">1236.         system = ''</font>
+<font color="green">1237.     if node == 'unknown':</font>
+<font color="red">1238.         node = ''</font>
+<font color="green">1239.     if release == 'unknown':</font>
+<font color="red">1240.         release = ''</font>
+<font color="green">1241.     if version == 'unknown':</font>
+<font color="red">1242.         version = ''</font>
+<font color="green">1243.     if machine == 'unknown':</font>
+<font color="red">1244.         machine = ''</font>
+<font color="green">1245.     if processor == 'unknown':</font>
+<font color="red">1246.         processor = ''</font>
+<font color="black">1247. </font>
+<font color="black">1248.     #  normalize name</font>
+<font color="green">1249.     if system == 'Microsoft' and release == 'Windows':</font>
+<font color="red">1250.         system = 'Windows'</font>
+<font color="red">1251.         release = 'Vista'</font>
+<font color="black">1252. </font>
+<font color="green">1253.     _uname_cache = system,node,release,version,machine,processor</font>
+<font color="green">1254.     return _uname_cache</font>
+<font color="black">1255. </font>
+<font color="black">1256. ### Direct interfaces to some of the uname() return values</font>
+<font color="black">1257. </font>
+<font color="red">1258. def system():</font>
+<font color="black">1259. </font>
+<font color="black">1260.     &quot;&quot;&quot; Returns the system/OS name, e.g. 'Linux', 'Windows' or 'Java'.</font>
+<font color="black">1261. </font>
+<font color="black">1262.         An empty string is returned if the value cannot be determined.</font>
+<font color="black">1263. </font>
+<font color="black">1264.     &quot;&quot;&quot;</font>
+<font color="green">1265.     return uname()[0]</font>
+<font color="black">1266. </font>
+<font color="red">1267. def node():</font>
+<font color="black">1268. </font>
+<font color="black">1269.     &quot;&quot;&quot; Returns the computer's network name (which may not be fully</font>
+<font color="black">1270.         qualified)</font>
+<font color="black">1271. </font>
+<font color="black">1272.         An empty string is returned if the value cannot be determined.</font>
+<font color="black">1273. </font>
+<font color="black">1274.     &quot;&quot;&quot;</font>
+<font color="red">1275.     return uname()[1]</font>
+<font color="black">1276. </font>
+<font color="red">1277. def release():</font>
+<font color="black">1278. </font>
+<font color="black">1279.     &quot;&quot;&quot; Returns the system's release, e.g. '2.2.0' or 'NT'</font>
+<font color="black">1280. </font>
+<font color="black">1281.         An empty string is returned if the value cannot be determined.</font>
+<font color="black">1282. </font>
+<font color="black">1283.     &quot;&quot;&quot;</font>
+<font color="green">1284.     return uname()[2]</font>
+<font color="black">1285. </font>
+<font color="red">1286. def version():</font>
+<font color="black">1287. </font>
+<font color="black">1288.     &quot;&quot;&quot; Returns the system's release version, e.g. '#3 on degas'</font>
+<font color="black">1289. </font>
+<font color="black">1290.         An empty string is returned if the value cannot be determined.</font>
+<font color="black">1291. </font>
+<font color="black">1292.     &quot;&quot;&quot;</font>
+<font color="red">1293.     return uname()[3]</font>
+<font color="black">1294. </font>
+<font color="red">1295. def machine():</font>
+<font color="black">1296. </font>
+<font color="black">1297.     &quot;&quot;&quot; Returns the machine type, e.g. 'i386'</font>
+<font color="black">1298. </font>
+<font color="black">1299.         An empty string is returned if the value cannot be determined.</font>
+<font color="black">1300. </font>
+<font color="black">1301.     &quot;&quot;&quot;</font>
+<font color="red">1302.     return uname()[4]</font>
+<font color="black">1303. </font>
+<font color="red">1304. def processor():</font>
+<font color="black">1305. </font>
+<font color="black">1306.     &quot;&quot;&quot; Returns the (true) processor name, e.g. 'amdk6'</font>
+<font color="black">1307. </font>
+<font color="black">1308.         An empty string is returned if the value cannot be</font>
+<font color="black">1309.         determined. Note that many platforms do not provide this</font>
+<font color="black">1310.         information or simply return the same value as for machine(),</font>
+<font color="black">1311.         e.g.  NetBSD does this.</font>
+<font color="black">1312. </font>
+<font color="black">1313.     &quot;&quot;&quot;</font>
+<font color="red">1314.     return uname()[5]</font>
+<font color="black">1315. </font>
+<font color="black">1316. ### Various APIs for extracting information from sys.version</font>
+<font color="black">1317. </font>
+<font color="red">1318. _sys_version_parser = re.compile(</font>
+<font color="red">1319.     r'([\w.+]+)\s*'  # &quot;version&lt;space&gt;&quot;</font>
+<font color="black">1320.     r'\(#?([^,]+)'  # &quot;(#buildno&quot;</font>
+<font color="black">1321.     r'(?:,\s*([\w ]*)'  # &quot;, builddate&quot;</font>
+<font color="black">1322.     r'(?:,\s*([\w :]*))?)?\)\s*'  # &quot;, buildtime)&lt;space&gt;&quot;</font>
+<font color="black">1323.     r'\[([^\]]+)\]?')  # &quot;[compiler]&quot;</font>
+<font color="black">1324. </font>
+<font color="red">1325. _ironpython_sys_version_parser = re.compile(</font>
+<font color="red">1326.     r'IronPython\s*'</font>
+<font color="black">1327.     '([\d\.]+)'</font>
+<font color="black">1328.     '(?: \(([\d\.]+)\))?'</font>
+<font color="black">1329.     ' on (.NET [\d\.]+)')</font>
+<font color="black">1330. </font>
+<font color="black">1331. # IronPython covering 2.6 and 2.7</font>
+<font color="red">1332. _ironpython26_sys_version_parser = re.compile(</font>
+<font color="red">1333.     r'([\d.]+)\s*'</font>
+<font color="black">1334.     '\(IronPython\s*'</font>
+<font color="black">1335.     '[\d.]+\s*'</font>
+<font color="black">1336.     '\(([\d.]+)\) on ([\w.]+ [\d.]+(?: \(\d+-bit\))?)\)'</font>
+<font color="black">1337. )</font>
+<font color="black">1338. </font>
+<font color="red">1339. _pypy_sys_version_parser = re.compile(</font>
+<font color="red">1340.     r'([\w.+]+)\s*'</font>
+<font color="black">1341.     '\(#?([^,]+),\s*([\w ]+),\s*([\w :]+)\)\s*'</font>
+<font color="black">1342.     '\[PyPy [^\]]+\]?')</font>
+<font color="black">1343. </font>
+<font color="red">1344. _sys_version_cache = {}</font>
+<font color="black">1345. </font>
+<font color="red">1346. def _sys_version(sys_version=None):</font>
+<font color="black">1347. </font>
+<font color="black">1348.     &quot;&quot;&quot; Returns a parsed version of Python's sys.version as tuple</font>
+<font color="black">1349.         (name, version, branch, revision, buildno, builddate, compiler)</font>
+<font color="black">1350.         referring to the Python implementation name, version, branch,</font>
+<font color="black">1351.         revision, build number, build date/time as string and the compiler</font>
+<font color="black">1352.         identification string.</font>
+<font color="black">1353. </font>
+<font color="black">1354.         Note that unlike the Python sys.version, the returned value</font>
+<font color="black">1355.         for the Python version will always include the patchlevel (it</font>
+<font color="black">1356.         defaults to '.0').</font>
+<font color="black">1357. </font>
+<font color="black">1358.         The function returns empty strings for tuple entries that</font>
+<font color="black">1359.         cannot be determined.</font>
+<font color="black">1360. </font>
+<font color="black">1361.         sys_version may be given to parse an alternative version</font>
+<font color="black">1362.         string, e.g. if the version was read from a different Python</font>
+<font color="black">1363.         interpreter.</font>
+<font color="black">1364. </font>
+<font color="black">1365.     &quot;&quot;&quot;</font>
+<font color="black">1366.     # Get the Python version</font>
+<font color="green">1367.     if sys_version is None:</font>
+<font color="green">1368.         sys_version = sys.version</font>
+<font color="black">1369. </font>
+<font color="black">1370.     # Try the cache first</font>
+<font color="green">1371.     result = _sys_version_cache.get(sys_version, None)</font>
+<font color="green">1372.     if result is not None:</font>
+<font color="green">1373.         return result</font>
+<font color="black">1374. </font>
+<font color="black">1375.     # Parse it</font>
+<font color="green">1376.     if 'IronPython' in sys_version:</font>
+<font color="black">1377.         # IronPython</font>
+<font color="red">1378.         name = 'IronPython'</font>
+<font color="red">1379.         if sys_version.startswith('IronPython'):</font>
+<font color="red">1380.             match = _ironpython_sys_version_parser.match(sys_version)</font>
+<font color="black">1381.         else:</font>
+<font color="red">1382.             match = _ironpython26_sys_version_parser.match(sys_version)</font>
+<font color="black">1383. </font>
+<font color="red">1384.         if match is None:</font>
+<font color="red">1385.             raise ValueError(</font>
+<font color="red">1386.                 'failed to parse IronPython sys.version: %s' %</font>
+<font color="red">1387.                 repr(sys_version))</font>
+<font color="black">1388. </font>
+<font color="red">1389.         version, alt_version, compiler = match.groups()</font>
+<font color="red">1390.         buildno = ''</font>
+<font color="red">1391.         builddate = ''</font>
+<font color="black">1392. </font>
+<font color="green">1393.     elif sys.platform.startswith('java'):</font>
+<font color="black">1394.         # Jython</font>
+<font color="red">1395.         name = 'Jython'</font>
+<font color="red">1396.         match = _sys_version_parser.match(sys_version)</font>
+<font color="red">1397.         if match is None:</font>
+<font color="red">1398.             raise ValueError(</font>
+<font color="red">1399.                 'failed to parse Jython sys.version: %s' %</font>
+<font color="red">1400.                 repr(sys_version))</font>
+<font color="red">1401.         version, buildno, builddate, buildtime, _ = match.groups()</font>
+<font color="red">1402.         if builddate is None:</font>
+<font color="red">1403.             builddate = ''</font>
+<font color="red">1404.         compiler = sys.platform</font>
+<font color="black">1405. </font>
+<font color="green">1406.     elif &quot;PyPy&quot; in sys_version:</font>
+<font color="black">1407.         # PyPy</font>
+<font color="red">1408.         name = &quot;PyPy&quot;</font>
+<font color="red">1409.         match = _pypy_sys_version_parser.match(sys_version)</font>
+<font color="red">1410.         if match is None:</font>
+<font color="red">1411.             raise ValueError(&quot;failed to parse PyPy sys.version: %s&quot; %</font>
+<font color="red">1412.                              repr(sys_version))</font>
+<font color="red">1413.         version, buildno, builddate, buildtime = match.groups()</font>
+<font color="red">1414.         compiler = &quot;&quot;</font>
+<font color="black">1415. </font>
+<font color="black">1416.     else:</font>
+<font color="black">1417.         # CPython</font>
+<font color="green">1418.         match = _sys_version_parser.match(sys_version)</font>
+<font color="green">1419.         if match is None:</font>
+<font color="red">1420.             raise ValueError(</font>
+<font color="red">1421.                 'failed to parse CPython sys.version: %s' %</font>
+<font color="red">1422.                 repr(sys_version))</font>
+<font color="black">1423.         version, buildno, builddate, buildtime, compiler = \</font>
+<font color="green">1424.               match.groups()</font>
+<font color="green">1425.         name = 'CPython'</font>
+<font color="green">1426.         if builddate is None:</font>
+<font color="red">1427.             builddate = ''</font>
+<font color="green">1428.         elif buildtime:</font>
+<font color="green">1429.             builddate = builddate + ' ' + buildtime</font>
+<font color="black">1430. </font>
+<font color="green">1431.     if hasattr(sys, 'subversion'):</font>
+<font color="black">1432.         # sys.subversion was added in Python 2.5</font>
+<font color="green">1433.         _, branch, revision = sys.subversion</font>
+<font color="black">1434.     else:</font>
+<font color="red">1435.         branch = ''</font>
+<font color="red">1436.         revision = ''</font>
+<font color="black">1437. </font>
+<font color="black">1438.     # Add the patchlevel version if missing</font>
+<font color="green">1439.     l = string.split(version, '.')</font>
+<font color="green">1440.     if len(l) == 2:</font>
+<font color="red">1441.         l.append('0')</font>
+<font color="red">1442.         version = string.join(l, '.')</font>
+<font color="black">1443. </font>
+<font color="black">1444.     # Build and cache the result</font>
+<font color="green">1445.     result = (name, version, branch, revision, buildno, builddate, compiler)</font>
+<font color="green">1446.     _sys_version_cache[sys_version] = result</font>
+<font color="green">1447.     return result</font>
+<font color="black">1448. </font>
+<font color="red">1449. def python_implementation():</font>
+<font color="black">1450. </font>
+<font color="black">1451.     &quot;&quot;&quot; Returns a string identifying the Python implementation.</font>
+<font color="black">1452. </font>
+<font color="black">1453.         Currently, the following implementations are identified:</font>
+<font color="black">1454.           'CPython' (C implementation of Python),</font>
+<font color="black">1455.           'IronPython' (.NET implementation of Python),</font>
+<font color="black">1456.           'Jython' (Java implementation of Python),</font>
+<font color="black">1457.           'PyPy' (Python implementation of Python).</font>
+<font color="black">1458. </font>
+<font color="black">1459.     &quot;&quot;&quot;</font>
+<font color="green">1460.     return _sys_version()[0]</font>
+<font color="black">1461. </font>
+<font color="red">1462. def python_version():</font>
+<font color="black">1463. </font>
+<font color="black">1464.     &quot;&quot;&quot; Returns the Python version as string 'major.minor.patchlevel'</font>
+<font color="black">1465. </font>
+<font color="black">1466.         Note that unlike the Python sys.version, the returned value</font>
+<font color="black">1467.         will always include the patchlevel (it defaults to 0).</font>
+<font color="black">1468. </font>
+<font color="black">1469.     &quot;&quot;&quot;</font>
+<font color="green">1470.     return _sys_version()[1]</font>
+<font color="black">1471. </font>
+<font color="red">1472. def python_version_tuple():</font>
+<font color="black">1473. </font>
+<font color="black">1474.     &quot;&quot;&quot; Returns the Python version as tuple (major, minor, patchlevel)</font>
+<font color="black">1475.         of strings.</font>
+<font color="black">1476. </font>
+<font color="black">1477.         Note that unlike the Python sys.version, the returned value</font>
+<font color="black">1478.         will always include the patchlevel (it defaults to 0).</font>
+<font color="black">1479. </font>
+<font color="black">1480.     &quot;&quot;&quot;</font>
+<font color="red">1481.     return tuple(string.split(_sys_version()[1], '.'))</font>
+<font color="black">1482. </font>
+<font color="red">1483. def python_branch():</font>
+<font color="black">1484. </font>
+<font color="black">1485.     &quot;&quot;&quot; Returns a string identifying the Python implementation</font>
+<font color="black">1486.         branch.</font>
+<font color="black">1487. </font>
+<font color="black">1488.         For CPython this is the Subversion branch from which the</font>
+<font color="black">1489.         Python binary was built.</font>
+<font color="black">1490. </font>
+<font color="black">1491.         If not available, an empty string is returned.</font>
+<font color="black">1492. </font>
+<font color="black">1493.     &quot;&quot;&quot;</font>
+<font color="black">1494. </font>
+<font color="red">1495.     return _sys_version()[2]</font>
+<font color="black">1496. </font>
+<font color="red">1497. def python_revision():</font>
+<font color="black">1498. </font>
+<font color="black">1499.     &quot;&quot;&quot; Returns a string identifying the Python implementation</font>
+<font color="black">1500.         revision.</font>
+<font color="black">1501. </font>
+<font color="black">1502.         For CPython this is the Subversion revision from which the</font>
+<font color="black">1503.         Python binary was built.</font>
+<font color="black">1504. </font>
+<font color="black">1505.         If not available, an empty string is returned.</font>
+<font color="black">1506. </font>
+<font color="black">1507.     &quot;&quot;&quot;</font>
+<font color="red">1508.     return _sys_version()[3]</font>
+<font color="black">1509. </font>
+<font color="red">1510. def python_build():</font>
+<font color="black">1511. </font>
+<font color="black">1512.     &quot;&quot;&quot; Returns a tuple (buildno, builddate) stating the Python</font>
+<font color="black">1513.         build number and date as strings.</font>
+<font color="black">1514. </font>
+<font color="black">1515.     &quot;&quot;&quot;</font>
+<font color="red">1516.     return _sys_version()[4:6]</font>
+<font color="black">1517. </font>
+<font color="red">1518. def python_compiler():</font>
+<font color="black">1519. </font>
+<font color="black">1520.     &quot;&quot;&quot; Returns a string identifying the compiler used for compiling</font>
+<font color="black">1521.         Python.</font>
+<font color="black">1522. </font>
+<font color="black">1523.     &quot;&quot;&quot;</font>
+<font color="red">1524.     return _sys_version()[6]</font>
+<font color="black">1525. </font>
+<font color="black">1526. ### The Opus Magnum of platform strings :-)</font>
+<font color="black">1527. </font>
+<font color="red">1528. _platform_cache = {}</font>
+<font color="black">1529. </font>
+<font color="red">1530. def platform(aliased=0, terse=0):</font>
+<font color="black">1531. </font>
+<font color="black">1532.     &quot;&quot;&quot; Returns a single string identifying the underlying platform</font>
+<font color="black">1533.         with as much useful information as possible (but no more :).</font>
+<font color="black">1534. </font>
+<font color="black">1535.         The output is intended to be human readable rather than</font>
+<font color="black">1536.         machine parseable. It may look different on different</font>
+<font color="black">1537.         platforms and this is intended.</font>
+<font color="black">1538. </font>
+<font color="black">1539.         If &quot;aliased&quot; is true, the function will use aliases for</font>
+<font color="black">1540.         various platforms that report system names which differ from</font>
+<font color="black">1541.         their common names, e.g. SunOS will be reported as</font>
+<font color="black">1542.         Solaris. The system_alias() function is used to implement</font>
+<font color="black">1543.         this.</font>
+<font color="black">1544. </font>
+<font color="black">1545.         Setting terse to true causes the function to return only the</font>
+<font color="black">1546.         absolute minimum information needed to identify the platform.</font>
+<font color="black">1547. </font>
+<font color="black">1548.     &quot;&quot;&quot;</font>
+<font color="red">1549.     result = _platform_cache.get((aliased, terse), None)</font>
+<font color="red">1550.     if result is not None:</font>
+<font color="red">1551.         return result</font>
+<font color="black">1552. </font>
+<font color="black">1553.     # Get uname information and then apply platform specific cosmetics</font>
+<font color="black">1554.     # to it...</font>
+<font color="red">1555.     system,node,release,version,machine,processor = uname()</font>
+<font color="red">1556.     if machine == processor:</font>
+<font color="red">1557.         processor = ''</font>
+<font color="red">1558.     if aliased:</font>
+<font color="red">1559.         system,release,version = system_alias(system,release,version)</font>
+<font color="black">1560. </font>
+<font color="red">1561.     if system == 'Windows':</font>
+<font color="black">1562.         # MS platforms</font>
+<font color="red">1563.         rel,vers,csd,ptype = win32_ver(version)</font>
+<font color="red">1564.         if terse:</font>
+<font color="red">1565.             platform = _platform(system,release)</font>
+<font color="black">1566.         else:</font>
+<font color="red">1567.             platform = _platform(system,release,version,csd)</font>
+<font color="black">1568. </font>
+<font color="red">1569.     elif system in ('Linux',):</font>
+<font color="black">1570.         # Linux based systems</font>
+<font color="red">1571.         distname,distversion,distid = dist('')</font>
+<font color="red">1572.         if distname and not terse:</font>
+<font color="red">1573.             platform = _platform(system,release,machine,processor,</font>
+<font color="red">1574.                                  'with',</font>
+<font color="red">1575.                                  distname,distversion,distid)</font>
+<font color="black">1576.         else:</font>
+<font color="black">1577.             # If the distribution name is unknown check for libc vs. glibc</font>
+<font color="red">1578.             libcname,libcversion = libc_ver(sys.executable)</font>
+<font color="red">1579.             platform = _platform(system,release,machine,processor,</font>
+<font color="red">1580.                                  'with',</font>
+<font color="red">1581.                                  libcname+libcversion)</font>
+<font color="red">1582.     elif system == 'Java':</font>
+<font color="black">1583.         # Java platforms</font>
+<font color="red">1584.         r,v,vminfo,(os_name,os_version,os_arch) = java_ver()</font>
+<font color="red">1585.         if terse or not os_name:</font>
+<font color="red">1586.             platform = _platform(system,release,version)</font>
+<font color="black">1587.         else:</font>
+<font color="red">1588.             platform = _platform(system,release,version,</font>
+<font color="red">1589.                                  'on',</font>
+<font color="red">1590.                                  os_name,os_version,os_arch)</font>
+<font color="black">1591. </font>
+<font color="red">1592.     elif system == 'MacOS':</font>
+<font color="black">1593.         # MacOS platforms</font>
+<font color="red">1594.         if terse:</font>
+<font color="red">1595.             platform = _platform(system,release)</font>
+<font color="black">1596.         else:</font>
+<font color="red">1597.             platform = _platform(system,release,machine)</font>
+<font color="black">1598. </font>
+<font color="black">1599.     else:</font>
+<font color="black">1600.         # Generic handler</font>
+<font color="red">1601.         if terse:</font>
+<font color="red">1602.             platform = _platform(system,release)</font>
+<font color="black">1603.         else:</font>
+<font color="red">1604.             bits,linkage = architecture(sys.executable)</font>
+<font color="red">1605.             platform = _platform(system,release,machine,processor,bits,linkage)</font>
+<font color="black">1606. </font>
+<font color="red">1607.     _platform_cache[(aliased, terse)] = platform</font>
+<font color="red">1608.     return platform</font>
+<font color="black">1609. </font>
+<font color="black">1610. ### Command line interface</font>
+<font color="black">1611. </font>
+<font color="red">1612. if __name__ == '__main__':</font>
+<font color="black">1613.     # Default is to print the aliased verbose platform string</font>
+<font color="red">1614.     terse = ('terse' in sys.argv or '--terse' in sys.argv)</font>
+<font color="red">1615.     aliased = (not 'nonaliased' in sys.argv and not '--nonaliased' in sys.argv)</font>
+<font color="red">1616.     print platform(aliased,terse)</font>
+<font color="red">1617.     sys.exit(0)</font>
+</pre>
+

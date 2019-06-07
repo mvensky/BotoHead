@@ -1,0 +1,360 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/multiprocessing/util.py</b><br>
+
+
+file stats: <b>181 lines, 53 executed: 29.3% covered</b>
+<pre>
+<font color="black">   1. #</font>
+<font color="black">   2. # Module providing various facilities to other parts of the package</font>
+<font color="black">   3. #</font>
+<font color="black">   4. # multiprocessing/util.py</font>
+<font color="black">   5. #</font>
+<font color="black">   6. # Copyright (c) 2006-2008, R Oudkerk</font>
+<font color="black">   7. # All rights reserved.</font>
+<font color="black">   8. #</font>
+<font color="black">   9. # Redistribution and use in source and binary forms, with or without</font>
+<font color="black">  10. # modification, are permitted provided that the following conditions</font>
+<font color="black">  11. # are met:</font>
+<font color="black">  12. #</font>
+<font color="black">  13. # 1. Redistributions of source code must retain the above copyright</font>
+<font color="black">  14. #    notice, this list of conditions and the following disclaimer.</font>
+<font color="black">  15. # 2. Redistributions in binary form must reproduce the above copyright</font>
+<font color="black">  16. #    notice, this list of conditions and the following disclaimer in the</font>
+<font color="black">  17. #    documentation and/or other materials provided with the distribution.</font>
+<font color="black">  18. # 3. Neither the name of author nor the names of any contributors may be</font>
+<font color="black">  19. #    used to endorse or promote products derived from this software</font>
+<font color="black">  20. #    without specific prior written permission.</font>
+<font color="black">  21. #</font>
+<font color="black">  22. # THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS &quot;AS IS&quot; AND</font>
+<font color="black">  23. # ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE</font>
+<font color="black">  24. # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE</font>
+<font color="black">  25. # ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE</font>
+<font color="black">  26. # FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL</font>
+<font color="black">  27. # DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS</font>
+<font color="black">  28. # OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)</font>
+<font color="black">  29. # HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT</font>
+<font color="black">  30. # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY</font>
+<font color="black">  31. # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</font>
+<font color="black">  32. # SUCH DAMAGE.</font>
+<font color="black">  33. #</font>
+<font color="black">  34. </font>
+<font color="green">  35. import os</font>
+<font color="green">  36. import itertools</font>
+<font color="green">  37. import weakref</font>
+<font color="green">  38. import atexit</font>
+<font color="green">  39. import threading        # we want threading to install it's</font>
+<font color="black">  40.                         # cleanup function before multiprocessing does</font>
+<font color="green">  41. from subprocess import _args_from_interpreter_flags</font>
+<font color="black">  42. </font>
+<font color="green">  43. from multiprocessing.process import current_process, active_children</font>
+<font color="black">  44. </font>
+<font color="black">  45. __all__ = [</font>
+<font color="green">  46.     'sub_debug', 'debug', 'info', 'sub_warning', 'get_logger',</font>
+<font color="green">  47.     'log_to_stderr', 'get_temp_dir', 'register_after_fork',</font>
+<font color="green">  48.     'is_exiting', 'Finalize', 'ForkAwareThreadLock', 'ForkAwareLocal',</font>
+<font color="green">  49.     'SUBDEBUG', 'SUBWARNING',</font>
+<font color="black">  50.     ]</font>
+<font color="black">  51. </font>
+<font color="black">  52. #</font>
+<font color="black">  53. # Logging</font>
+<font color="black">  54. #</font>
+<font color="black">  55. </font>
+<font color="green">  56. NOTSET = 0</font>
+<font color="green">  57. SUBDEBUG = 5</font>
+<font color="green">  58. DEBUG = 10</font>
+<font color="green">  59. INFO = 20</font>
+<font color="green">  60. SUBWARNING = 25</font>
+<font color="black">  61. </font>
+<font color="green">  62. LOGGER_NAME = 'multiprocessing'</font>
+<font color="green">  63. DEFAULT_LOGGING_FORMAT = '[%(levelname)s/%(processName)s] %(message)s'</font>
+<font color="black">  64. </font>
+<font color="green">  65. _logger = None</font>
+<font color="green">  66. _log_to_stderr = False</font>
+<font color="black">  67. </font>
+<font color="green">  68. def sub_debug(msg, *args):</font>
+<font color="red">  69.     if _logger:</font>
+<font color="red">  70.         _logger.log(SUBDEBUG, msg, *args)</font>
+<font color="black">  71. </font>
+<font color="green">  72. def debug(msg, *args):</font>
+<font color="red">  73.     if _logger:</font>
+<font color="red">  74.         _logger.log(DEBUG, msg, *args)</font>
+<font color="black">  75. </font>
+<font color="green">  76. def info(msg, *args):</font>
+<font color="red">  77.     if _logger:</font>
+<font color="red">  78.         _logger.log(INFO, msg, *args)</font>
+<font color="black">  79. </font>
+<font color="green">  80. def sub_warning(msg, *args):</font>
+<font color="red">  81.     if _logger:</font>
+<font color="red">  82.         _logger.log(SUBWARNING, msg, *args)</font>
+<font color="black">  83. </font>
+<font color="green">  84. def get_logger():</font>
+<font color="black">  85.     '''</font>
+<font color="black">  86.     Returns logger used by multiprocessing</font>
+<font color="black">  87.     '''</font>
+<font color="black">  88.     global _logger</font>
+<font color="red">  89.     import logging, atexit</font>
+<font color="black">  90. </font>
+<font color="red">  91.     logging._acquireLock()</font>
+<font color="red">  92.     try:</font>
+<font color="red">  93.         if not _logger:</font>
+<font color="black">  94. </font>
+<font color="red">  95.             _logger = logging.getLogger(LOGGER_NAME)</font>
+<font color="red">  96.             _logger.propagate = 0</font>
+<font color="red">  97.             logging.addLevelName(SUBDEBUG, 'SUBDEBUG')</font>
+<font color="red">  98.             logging.addLevelName(SUBWARNING, 'SUBWARNING')</font>
+<font color="black">  99. </font>
+<font color="black"> 100.             # XXX multiprocessing should cleanup before logging</font>
+<font color="red"> 101.             if hasattr(atexit, 'unregister'):</font>
+<font color="red"> 102.                 atexit.unregister(_exit_function)</font>
+<font color="red"> 103.                 atexit.register(_exit_function)</font>
+<font color="black"> 104.             else:</font>
+<font color="red"> 105.                 atexit._exithandlers.remove((_exit_function, (), {}))</font>
+<font color="red"> 106.                 atexit._exithandlers.append((_exit_function, (), {}))</font>
+<font color="black"> 107. </font>
+<font color="black"> 108.     finally:</font>
+<font color="red"> 109.         logging._releaseLock()</font>
+<font color="black"> 110. </font>
+<font color="red"> 111.     return _logger</font>
+<font color="black"> 112. </font>
+<font color="green"> 113. def log_to_stderr(level=None):</font>
+<font color="black"> 114.     '''</font>
+<font color="black"> 115.     Turn on logging and add a handler which prints to stderr</font>
+<font color="black"> 116.     '''</font>
+<font color="black"> 117.     global _log_to_stderr</font>
+<font color="red"> 118.     import logging</font>
+<font color="black"> 119. </font>
+<font color="red"> 120.     logger = get_logger()</font>
+<font color="red"> 121.     formatter = logging.Formatter(DEFAULT_LOGGING_FORMAT)</font>
+<font color="red"> 122.     handler = logging.StreamHandler()</font>
+<font color="red"> 123.     handler.setFormatter(formatter)</font>
+<font color="red"> 124.     logger.addHandler(handler)</font>
+<font color="black"> 125. </font>
+<font color="red"> 126.     if level:</font>
+<font color="red"> 127.         logger.setLevel(level)</font>
+<font color="red"> 128.     _log_to_stderr = True</font>
+<font color="red"> 129.     return _logger</font>
+<font color="black"> 130. </font>
+<font color="black"> 131. #</font>
+<font color="black"> 132. # Function returning a temp directory which will be removed on exit</font>
+<font color="black"> 133. #</font>
+<font color="black"> 134. </font>
+<font color="green"> 135. def get_temp_dir():</font>
+<font color="black"> 136.     # get name of a temp directory which will be automatically cleaned up</font>
+<font color="red"> 137.     if current_process()._tempdir is None:</font>
+<font color="red"> 138.         import shutil, tempfile</font>
+<font color="red"> 139.         tempdir = tempfile.mkdtemp(prefix='pymp-')</font>
+<font color="red"> 140.         info('created temp directory %s', tempdir)</font>
+<font color="red"> 141.         Finalize(None, shutil.rmtree, args=[tempdir], exitpriority=-100)</font>
+<font color="red"> 142.         current_process()._tempdir = tempdir</font>
+<font color="red"> 143.     return current_process()._tempdir</font>
+<font color="black"> 144. </font>
+<font color="black"> 145. #</font>
+<font color="black"> 146. # Support for reinitialization of objects when bootstrapping a child process</font>
+<font color="black"> 147. #</font>
+<font color="black"> 148. </font>
+<font color="green"> 149. _afterfork_registry = weakref.WeakValueDictionary()</font>
+<font color="green"> 150. _afterfork_counter = itertools.count()</font>
+<font color="black"> 151. </font>
+<font color="green"> 152. def _run_after_forkers():</font>
+<font color="red"> 153.     items = list(_afterfork_registry.items())</font>
+<font color="red"> 154.     items.sort()</font>
+<font color="red"> 155.     for (index, ident, func), obj in items:</font>
+<font color="red"> 156.         try:</font>
+<font color="red"> 157.             func(obj)</font>
+<font color="red"> 158.         except Exception, e:</font>
+<font color="red"> 159.             info('after forker raised exception %s', e)</font>
+<font color="black"> 160. </font>
+<font color="green"> 161. def register_after_fork(obj, func):</font>
+<font color="red"> 162.     _afterfork_registry[(_afterfork_counter.next(), id(obj), func)] = obj</font>
+<font color="black"> 163. </font>
+<font color="black"> 164. #</font>
+<font color="black"> 165. # Finalization using weakrefs</font>
+<font color="black"> 166. #</font>
+<font color="black"> 167. </font>
+<font color="green"> 168. _finalizer_registry = {}</font>
+<font color="green"> 169. _finalizer_counter = itertools.count()</font>
+<font color="black"> 170. </font>
+<font color="black"> 171. </font>
+<font color="green"> 172. class Finalize(object):</font>
+<font color="black"> 173.     '''</font>
+<font color="black"> 174.     Class which supports object finalization using weakrefs</font>
+<font color="green"> 175.     '''</font>
+<font color="green"> 176.     def __init__(self, obj, callback, args=(), kwargs=None, exitpriority=None):</font>
+<font color="red"> 177.         assert exitpriority is None or type(exitpriority) in (int, long)</font>
+<font color="black"> 178. </font>
+<font color="red"> 179.         if obj is not None:</font>
+<font color="red"> 180.             self._weakref = weakref.ref(obj, self)</font>
+<font color="black"> 181.         else:</font>
+<font color="red"> 182.             assert exitpriority is not None</font>
+<font color="black"> 183. </font>
+<font color="red"> 184.         self._callback = callback</font>
+<font color="red"> 185.         self._args = args</font>
+<font color="red"> 186.         self._kwargs = kwargs or {}</font>
+<font color="red"> 187.         self._key = (exitpriority, _finalizer_counter.next())</font>
+<font color="red"> 188.         self._pid = os.getpid()</font>
+<font color="black"> 189. </font>
+<font color="red"> 190.         _finalizer_registry[self._key] = self</font>
+<font color="black"> 191. </font>
+<font color="green"> 192.     def __call__(self, wr=None):</font>
+<font color="black"> 193.         '''</font>
+<font color="black"> 194.         Run the callback unless it has already been called or cancelled</font>
+<font color="black"> 195.         '''</font>
+<font color="red"> 196.         try:</font>
+<font color="red"> 197.             del _finalizer_registry[self._key]</font>
+<font color="red"> 198.         except KeyError:</font>
+<font color="red"> 199.             sub_debug('finalizer no longer registered')</font>
+<font color="black"> 200.         else:</font>
+<font color="red"> 201.             if self._pid != os.getpid():</font>
+<font color="red"> 202.                 sub_debug('finalizer ignored because different process')</font>
+<font color="red"> 203.                 res = None</font>
+<font color="black"> 204.             else:</font>
+<font color="red"> 205.                 sub_debug('finalizer calling %s with args %s and kwargs %s',</font>
+<font color="red"> 206.                           self._callback, self._args, self._kwargs)</font>
+<font color="red"> 207.                 res = self._callback(*self._args, **self._kwargs)</font>
+<font color="black"> 208.             self._weakref = self._callback = self._args = \</font>
+<font color="red"> 209.                             self._kwargs = self._key = None</font>
+<font color="red"> 210.             return res</font>
+<font color="black"> 211. </font>
+<font color="green"> 212.     def cancel(self):</font>
+<font color="black"> 213.         '''</font>
+<font color="black"> 214.         Cancel finalization of the object</font>
+<font color="black"> 215.         '''</font>
+<font color="red"> 216.         try:</font>
+<font color="red"> 217.             del _finalizer_registry[self._key]</font>
+<font color="red"> 218.         except KeyError:</font>
+<font color="red"> 219.             pass</font>
+<font color="black"> 220.         else:</font>
+<font color="black"> 221.             self._weakref = self._callback = self._args = \</font>
+<font color="red"> 222.                             self._kwargs = self._key = None</font>
+<font color="black"> 223. </font>
+<font color="green"> 224.     def still_active(self):</font>
+<font color="black"> 225.         '''</font>
+<font color="black"> 226.         Return whether this finalizer is still waiting to invoke callback</font>
+<font color="black"> 227.         '''</font>
+<font color="red"> 228.         return self._key in _finalizer_registry</font>
+<font color="black"> 229. </font>
+<font color="green"> 230.     def __repr__(self):</font>
+<font color="red"> 231.         try:</font>
+<font color="red"> 232.             obj = self._weakref()</font>
+<font color="red"> 233.         except (AttributeError, TypeError):</font>
+<font color="red"> 234.             obj = None</font>
+<font color="black"> 235. </font>
+<font color="red"> 236.         if obj is None:</font>
+<font color="red"> 237.             return '&lt;Finalize object, dead&gt;'</font>
+<font color="black"> 238. </font>
+<font color="red"> 239.         x = '&lt;Finalize object, callback=%s' % \</font>
+<font color="red"> 240.             getattr(self._callback, '__name__', self._callback)</font>
+<font color="red"> 241.         if self._args:</font>
+<font color="red"> 242.             x += ', args=' + str(self._args)</font>
+<font color="red"> 243.         if self._kwargs:</font>
+<font color="red"> 244.             x += ', kwargs=' + str(self._kwargs)</font>
+<font color="red"> 245.         if self._key[0] is not None:</font>
+<font color="red"> 246.             x += ', exitprority=' + str(self._key[0])</font>
+<font color="red"> 247.         return x + '&gt;'</font>
+<font color="black"> 248. </font>
+<font color="black"> 249. </font>
+<font color="green"> 250. def _run_finalizers(minpriority=None):</font>
+<font color="black"> 251.     '''</font>
+<font color="black"> 252.     Run all finalizers whose exit priority is not None and at least minpriority</font>
+<font color="black"> 253. </font>
+<font color="black"> 254.     Finalizers with highest priority are called first; finalizers with</font>
+<font color="black"> 255.     the same priority will be called in reverse order of creation.</font>
+<font color="black"> 256.     '''</font>
+<font color="red"> 257.     if _finalizer_registry is None:</font>
+<font color="black"> 258.         # This function may be called after this module's globals are</font>
+<font color="black"> 259.         # destroyed.  See the _exit_function function in this module for more</font>
+<font color="black"> 260.         # notes.</font>
+<font color="red"> 261.         return</font>
+<font color="black"> 262. </font>
+<font color="red"> 263.     if minpriority is None:</font>
+<font color="red"> 264.         f = lambda p : p[0][0] is not None</font>
+<font color="black"> 265.     else:</font>
+<font color="red"> 266.         f = lambda p : p[0][0] is not None and p[0][0] &gt;= minpriority</font>
+<font color="black"> 267. </font>
+<font color="black"> 268.     # Careful: _finalizer_registry may be mutated while this function</font>
+<font color="black"> 269.     # is running (either by a GC run or by another thread).</font>
+<font color="black"> 270. </font>
+<font color="red"> 271.     items = [x for x in _finalizer_registry.items() if f(x)]</font>
+<font color="red"> 272.     items.sort(reverse=True)</font>
+<font color="black"> 273. </font>
+<font color="red"> 274.     for key, finalizer in items:</font>
+<font color="red"> 275.         sub_debug('calling %s', finalizer)</font>
+<font color="red"> 276.         try:</font>
+<font color="red"> 277.             finalizer()</font>
+<font color="red"> 278.         except Exception:</font>
+<font color="red"> 279.             import traceback</font>
+<font color="red"> 280.             traceback.print_exc()</font>
+<font color="black"> 281. </font>
+<font color="red"> 282.     if minpriority is None:</font>
+<font color="red"> 283.         _finalizer_registry.clear()</font>
+<font color="black"> 284. </font>
+<font color="black"> 285. #</font>
+<font color="black"> 286. # Clean up on exit</font>
+<font color="black"> 287. #</font>
+<font color="black"> 288. </font>
+<font color="green"> 289. def is_exiting():</font>
+<font color="black"> 290.     '''</font>
+<font color="black"> 291.     Returns true if the process is shutting down</font>
+<font color="black"> 292.     '''</font>
+<font color="red"> 293.     return _exiting or _exiting is None</font>
+<font color="black"> 294. </font>
+<font color="green"> 295. _exiting = False</font>
+<font color="black"> 296. </font>
+<font color="green"> 297. def _exit_function(info=info, debug=debug, _run_finalizers=_run_finalizers,</font>
+<font color="green"> 298.                    active_children=active_children,</font>
+<font color="green"> 299.                    current_process=current_process):</font>
+<font color="black"> 300.     # NB: we hold on to references to functions in the arglist due to the</font>
+<font color="black"> 301.     # situation described below, where this function is called after this</font>
+<font color="black"> 302.     # module's globals are destroyed.</font>
+<font color="black"> 303. </font>
+<font color="black"> 304.     global _exiting</font>
+<font color="black"> 305. </font>
+<font color="red"> 306.     info('process shutting down')</font>
+<font color="red"> 307.     debug('running all &quot;atexit&quot; finalizers with priority &gt;= 0')</font>
+<font color="red"> 308.     _run_finalizers(0)</font>
+<font color="black"> 309. </font>
+<font color="red"> 310.     if current_process() is not None:</font>
+<font color="black"> 311.         # NB: we check if the current process is None here because if</font>
+<font color="black"> 312.         # it's None, any call to ``active_children()`` will throw an</font>
+<font color="black"> 313.         # AttributeError (active_children winds up trying to get</font>
+<font color="black"> 314.         # attributes from util._current_process).  This happens in a</font>
+<font color="black"> 315.         # variety of shutdown circumstances that are not well-understood</font>
+<font color="black"> 316.         # because module-scope variables are not apparently supposed to</font>
+<font color="black"> 317.         # be destroyed until after this function is called.  However,</font>
+<font color="black"> 318.         # they are indeed destroyed before this function is called.  See</font>
+<font color="black"> 319.         # issues 9775 and 15881.  Also related: 4106, 9205, and 9207.</font>
+<font color="black"> 320. </font>
+<font color="red"> 321.         for p in active_children():</font>
+<font color="red"> 322.             if p._daemonic:</font>
+<font color="red"> 323.                 info('calling terminate() for daemon %s', p.name)</font>
+<font color="red"> 324.                 p._popen.terminate()</font>
+<font color="black"> 325. </font>
+<font color="red"> 326.         for p in active_children():</font>
+<font color="red"> 327.             info('calling join() for process %s', p.name)</font>
+<font color="red"> 328.             p.join()</font>
+<font color="black"> 329. </font>
+<font color="red"> 330.     debug('running the remaining &quot;atexit&quot; finalizers')</font>
+<font color="red"> 331.     _run_finalizers()</font>
+<font color="black"> 332. </font>
+<font color="green"> 333. atexit.register(_exit_function)</font>
+<font color="black"> 334. </font>
+<font color="black"> 335. #</font>
+<font color="black"> 336. # Some fork aware types</font>
+<font color="black"> 337. #</font>
+<font color="black"> 338. </font>
+<font color="green"> 339. class ForkAwareThreadLock(object):</font>
+<font color="green"> 340.     def __init__(self):</font>
+<font color="red"> 341.         self._reset()</font>
+<font color="red"> 342.         register_after_fork(self, ForkAwareThreadLock._reset)</font>
+<font color="black"> 343. </font>
+<font color="green"> 344.     def _reset(self):</font>
+<font color="red"> 345.         self._lock = threading.Lock()</font>
+<font color="red"> 346.         self.acquire = self._lock.acquire</font>
+<font color="red"> 347.         self.release = self._lock.release</font>
+<font color="black"> 348. </font>
+<font color="green"> 349. class ForkAwareLocal(threading.local):</font>
+<font color="green"> 350.     def __init__(self):</font>
+<font color="red"> 351.         register_after_fork(self, lambda obj : obj.__dict__.clear())</font>
+<font color="green"> 352.     def __reduce__(self):</font>
+<font color="red"> 353.         return type(self), ()</font>
+</pre>
+

@@ -1,0 +1,130 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/email/__init__.py</b><br>
+
+
+file stats: <b>78 lines, 4 executed: 5.1% covered</b>
+<pre>
+<font color="black">   1. # Copyright (C) 2001-2006 Python Software Foundation</font>
+<font color="black">   2. # Author: Barry Warsaw</font>
+<font color="black">   3. # Contact: email-sig@python.org</font>
+<font color="black">   4. </font>
+<font color="red">   5. &quot;&quot;&quot;A package for parsing, handling, and generating email messages.&quot;&quot;&quot;</font>
+<font color="black">   6. </font>
+<font color="red">   7. __version__ = '4.0.3'</font>
+<font color="black">   8. </font>
+<font color="black">   9. __all__ = [</font>
+<font color="black">  10.     # Old names</font>
+<font color="red">  11.     'base64MIME',</font>
+<font color="red">  12.     'Charset',</font>
+<font color="red">  13.     'Encoders',</font>
+<font color="red">  14.     'Errors',</font>
+<font color="red">  15.     'Generator',</font>
+<font color="red">  16.     'Header',</font>
+<font color="red">  17.     'Iterators',</font>
+<font color="red">  18.     'Message',</font>
+<font color="red">  19.     'MIMEAudio',</font>
+<font color="red">  20.     'MIMEBase',</font>
+<font color="red">  21.     'MIMEImage',</font>
+<font color="red">  22.     'MIMEMessage',</font>
+<font color="red">  23.     'MIMEMultipart',</font>
+<font color="red">  24.     'MIMENonMultipart',</font>
+<font color="red">  25.     'MIMEText',</font>
+<font color="red">  26.     'Parser',</font>
+<font color="red">  27.     'quopriMIME',</font>
+<font color="red">  28.     'Utils',</font>
+<font color="red">  29.     'message_from_string',</font>
+<font color="red">  30.     'message_from_file',</font>
+<font color="black">  31.     # new names</font>
+<font color="red">  32.     'base64mime',</font>
+<font color="red">  33.     'charset',</font>
+<font color="red">  34.     'encoders',</font>
+<font color="red">  35.     'errors',</font>
+<font color="red">  36.     'generator',</font>
+<font color="red">  37.     'header',</font>
+<font color="red">  38.     'iterators',</font>
+<font color="red">  39.     'message',</font>
+<font color="red">  40.     'mime',</font>
+<font color="red">  41.     'parser',</font>
+<font color="red">  42.     'quoprimime',</font>
+<font color="red">  43.     'utils',</font>
+<font color="black">  44.     ]</font>
+<font color="black">  45. </font>
+<font color="black">  46. </font>
+<font color="black">  47. </font>
+<font color="black">  48. # Some convenience routines.  Don't import Parser and Message as side-effects</font>
+<font color="black">  49. # of importing email since those cascadingly import most of the rest of the</font>
+<font color="black">  50. # email package.</font>
+<font color="red">  51. def message_from_string(s, *args, **kws):</font>
+<font color="black">  52.     &quot;&quot;&quot;Parse a string into a Message object model.</font>
+<font color="black">  53. </font>
+<font color="black">  54.     Optional _class and strict are passed to the Parser constructor.</font>
+<font color="black">  55.     &quot;&quot;&quot;</font>
+<font color="red">  56.     from email.parser import Parser</font>
+<font color="red">  57.     return Parser(*args, **kws).parsestr(s)</font>
+<font color="black">  58. </font>
+<font color="black">  59. </font>
+<font color="red">  60. def message_from_file(fp, *args, **kws):</font>
+<font color="black">  61.     &quot;&quot;&quot;Read a file and parse its contents into a Message object model.</font>
+<font color="black">  62. </font>
+<font color="black">  63.     Optional _class and strict are passed to the Parser constructor.</font>
+<font color="black">  64.     &quot;&quot;&quot;</font>
+<font color="red">  65.     from email.parser import Parser</font>
+<font color="red">  66.     return Parser(*args, **kws).parse(fp)</font>
+<font color="black">  67. </font>
+<font color="black">  68. </font>
+<font color="black">  69. </font>
+<font color="black">  70. # Lazy loading to provide name mapping from new-style names (PEP 8 compatible</font>
+<font color="black">  71. # email 4.0 module names), to old-style names (email 3.0 module names).</font>
+<font color="red">  72. import sys</font>
+<font color="black">  73. </font>
+<font color="red">  74. class LazyImporter(object):</font>
+<font color="red">  75.     def __init__(self, module_name):</font>
+<font color="red">  76.         self.__name__ = 'email.' + module_name</font>
+<font color="black">  77. </font>
+<font color="red">  78.     def __getattr__(self, name):</font>
+<font color="green">  79.         __import__(self.__name__)</font>
+<font color="green">  80.         mod = sys.modules[self.__name__]</font>
+<font color="green">  81.         self.__dict__.update(mod.__dict__)</font>
+<font color="green">  82.         return getattr(mod, name)</font>
+<font color="black">  83. </font>
+<font color="black">  84. </font>
+<font color="black">  85. _LOWERNAMES = [</font>
+<font color="black">  86.     # email.&lt;old name&gt; -&gt; email.&lt;new name is lowercased old name&gt;</font>
+<font color="red">  87.     'Charset',</font>
+<font color="red">  88.     'Encoders',</font>
+<font color="red">  89.     'Errors',</font>
+<font color="red">  90.     'FeedParser',</font>
+<font color="red">  91.     'Generator',</font>
+<font color="red">  92.     'Header',</font>
+<font color="red">  93.     'Iterators',</font>
+<font color="red">  94.     'Message',</font>
+<font color="red">  95.     'Parser',</font>
+<font color="red">  96.     'Utils',</font>
+<font color="red">  97.     'base64MIME',</font>
+<font color="red">  98.     'quopriMIME',</font>
+<font color="black">  99.     ]</font>
+<font color="black"> 100. </font>
+<font color="black"> 101. _MIMENAMES = [</font>
+<font color="black"> 102.     # email.MIME&lt;old name&gt; -&gt; email.mime.&lt;new name is lowercased old name&gt;</font>
+<font color="red"> 103.     'Audio',</font>
+<font color="red"> 104.     'Base',</font>
+<font color="red"> 105.     'Image',</font>
+<font color="red"> 106.     'Message',</font>
+<font color="red"> 107.     'Multipart',</font>
+<font color="red"> 108.     'NonMultipart',</font>
+<font color="red"> 109.     'Text',</font>
+<font color="black"> 110.     ]</font>
+<font color="black"> 111. </font>
+<font color="red"> 112. for _name in _LOWERNAMES:</font>
+<font color="red"> 113.     importer = LazyImporter(_name.lower())</font>
+<font color="red"> 114.     sys.modules['email.' + _name] = importer</font>
+<font color="red"> 115.     setattr(sys.modules['email'], _name, importer)</font>
+<font color="black"> 116. </font>
+<font color="black"> 117. </font>
+<font color="red"> 118. import email.mime</font>
+<font color="red"> 119. for _name in _MIMENAMES:</font>
+<font color="red"> 120.     importer = LazyImporter('mime.' + _name.lower())</font>
+<font color="red"> 121.     sys.modules['email.MIME' + _name] = importer</font>
+<font color="red"> 122.     setattr(sys.modules['email'], 'MIME' + _name, importer)</font>
+<font color="red"> 123.     setattr(sys.modules['email.mime'], _name, importer)</font>
+</pre>
+

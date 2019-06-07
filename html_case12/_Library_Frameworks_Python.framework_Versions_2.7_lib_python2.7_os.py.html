@@ -1,0 +1,749 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/os.py</b><br>
+
+
+file stats: <b>387 lines, 2 executed: 0.5% covered</b>
+<pre>
+<font color="black">   1. r&quot;&quot;&quot;OS routines for NT or Posix depending on what system we're on.</font>
+<font color="black">   2. </font>
+<font color="black">   3. This exports:</font>
+<font color="black">   4.   - all functions from posix, nt, os2, or ce, e.g. unlink, stat, etc.</font>
+<font color="black">   5.   - os.path is one of the modules posixpath, or ntpath</font>
+<font color="black">   6.   - os.name is 'posix', 'nt', 'os2', 'ce' or 'riscos'</font>
+<font color="black">   7.   - os.curdir is a string representing the current directory ('.' or ':')</font>
+<font color="black">   8.   - os.pardir is a string representing the parent directory ('..' or '::')</font>
+<font color="black">   9.   - os.sep is the (or a most common) pathname separator ('/' or ':' or '\\')</font>
+<font color="black">  10.   - os.extsep is the extension separator ('.' or '/')</font>
+<font color="black">  11.   - os.altsep is the alternate pathname separator (None or '/')</font>
+<font color="black">  12.   - os.pathsep is the component separator used in $PATH etc</font>
+<font color="black">  13.   - os.linesep is the line separator in text files ('\r' or '\n' or '\r\n')</font>
+<font color="black">  14.   - os.defpath is the default search path for executables</font>
+<font color="black">  15.   - os.devnull is the file path of the null device ('/dev/null', etc.)</font>
+<font color="black">  16. </font>
+<font color="black">  17. Programs that import and use 'os' stand a better chance of being</font>
+<font color="black">  18. portable between different platforms.  Of course, they must then</font>
+<font color="black">  19. only use functions that are defined by all platforms (e.g., unlink</font>
+<font color="black">  20. and opendir), and leave all pathname manipulation to os.path</font>
+<font color="black">  21. (e.g., split and join).</font>
+<font color="red">  22. &quot;&quot;&quot;</font>
+<font color="black">  23. </font>
+<font color="black">  24. #'</font>
+<font color="black">  25. </font>
+<font color="red">  26. import sys, errno</font>
+<font color="black">  27. </font>
+<font color="red">  28. _names = sys.builtin_module_names</font>
+<font color="black">  29. </font>
+<font color="black">  30. # Note:  more names are added to __all__ later.</font>
+<font color="red">  31. __all__ = [&quot;altsep&quot;, &quot;curdir&quot;, &quot;pardir&quot;, &quot;sep&quot;, &quot;extsep&quot;, &quot;pathsep&quot;, &quot;linesep&quot;,</font>
+<font color="red">  32.            &quot;defpath&quot;, &quot;name&quot;, &quot;path&quot;, &quot;devnull&quot;,</font>
+<font color="red">  33.            &quot;SEEK_SET&quot;, &quot;SEEK_CUR&quot;, &quot;SEEK_END&quot;]</font>
+<font color="black">  34. </font>
+<font color="red">  35. def _get_exports_list(module):</font>
+<font color="red">  36.     try:</font>
+<font color="red">  37.         return list(module.__all__)</font>
+<font color="red">  38.     except AttributeError:</font>
+<font color="red">  39.         return [n for n in dir(module) if n[0] != '_']</font>
+<font color="black">  40. </font>
+<font color="red">  41. if 'posix' in _names:</font>
+<font color="red">  42.     name = 'posix'</font>
+<font color="red">  43.     linesep = '\n'</font>
+<font color="red">  44.     from posix import *</font>
+<font color="red">  45.     try:</font>
+<font color="red">  46.         from posix import _exit</font>
+<font color="red">  47.     except ImportError:</font>
+<font color="red">  48.         pass</font>
+<font color="red">  49.     import posixpath as path</font>
+<font color="black">  50. </font>
+<font color="red">  51.     import posix</font>
+<font color="red">  52.     __all__.extend(_get_exports_list(posix))</font>
+<font color="red">  53.     del posix</font>
+<font color="black">  54. </font>
+<font color="red">  55. elif 'nt' in _names:</font>
+<font color="red">  56.     name = 'nt'</font>
+<font color="red">  57.     linesep = '\r\n'</font>
+<font color="red">  58.     from nt import *</font>
+<font color="red">  59.     try:</font>
+<font color="red">  60.         from nt import _exit</font>
+<font color="red">  61.     except ImportError:</font>
+<font color="red">  62.         pass</font>
+<font color="red">  63.     import ntpath as path</font>
+<font color="black">  64. </font>
+<font color="red">  65.     import nt</font>
+<font color="red">  66.     __all__.extend(_get_exports_list(nt))</font>
+<font color="red">  67.     del nt</font>
+<font color="black">  68. </font>
+<font color="red">  69. elif 'os2' in _names:</font>
+<font color="red">  70.     name = 'os2'</font>
+<font color="red">  71.     linesep = '\r\n'</font>
+<font color="red">  72.     from os2 import *</font>
+<font color="red">  73.     try:</font>
+<font color="red">  74.         from os2 import _exit</font>
+<font color="red">  75.     except ImportError:</font>
+<font color="red">  76.         pass</font>
+<font color="red">  77.     if sys.version.find('EMX GCC') == -1:</font>
+<font color="red">  78.         import ntpath as path</font>
+<font color="black">  79.     else:</font>
+<font color="red">  80.         import os2emxpath as path</font>
+<font color="red">  81.         from _emx_link import link</font>
+<font color="black">  82. </font>
+<font color="red">  83.     import os2</font>
+<font color="red">  84.     __all__.extend(_get_exports_list(os2))</font>
+<font color="red">  85.     del os2</font>
+<font color="black">  86. </font>
+<font color="red">  87. elif 'ce' in _names:</font>
+<font color="red">  88.     name = 'ce'</font>
+<font color="red">  89.     linesep = '\r\n'</font>
+<font color="red">  90.     from ce import *</font>
+<font color="red">  91.     try:</font>
+<font color="red">  92.         from ce import _exit</font>
+<font color="red">  93.     except ImportError:</font>
+<font color="red">  94.         pass</font>
+<font color="black">  95.     # We can use the standard Windows path.</font>
+<font color="red">  96.     import ntpath as path</font>
+<font color="black">  97. </font>
+<font color="red">  98.     import ce</font>
+<font color="red">  99.     __all__.extend(_get_exports_list(ce))</font>
+<font color="red"> 100.     del ce</font>
+<font color="black"> 101. </font>
+<font color="red"> 102. elif 'riscos' in _names:</font>
+<font color="red"> 103.     name = 'riscos'</font>
+<font color="red"> 104.     linesep = '\n'</font>
+<font color="red"> 105.     from riscos import *</font>
+<font color="red"> 106.     try:</font>
+<font color="red"> 107.         from riscos import _exit</font>
+<font color="red"> 108.     except ImportError:</font>
+<font color="red"> 109.         pass</font>
+<font color="red"> 110.     import riscospath as path</font>
+<font color="black"> 111. </font>
+<font color="red"> 112.     import riscos</font>
+<font color="red"> 113.     __all__.extend(_get_exports_list(riscos))</font>
+<font color="red"> 114.     del riscos</font>
+<font color="black"> 115. </font>
+<font color="black"> 116. else:</font>
+<font color="red"> 117.     raise ImportError, 'no os specific module found'</font>
+<font color="black"> 118. </font>
+<font color="red"> 119. sys.modules['os.path'] = path</font>
+<font color="red"> 120. from os.path import (curdir, pardir, sep, pathsep, defpath, extsep, altsep,</font>
+<font color="black"> 121.     devnull)</font>
+<font color="black"> 122. </font>
+<font color="red"> 123. del _names</font>
+<font color="black"> 124. </font>
+<font color="black"> 125. # Python uses fixed values for the SEEK_ constants; they are mapped</font>
+<font color="black"> 126. # to native constants if necessary in posixmodule.c</font>
+<font color="red"> 127. SEEK_SET = 0</font>
+<font color="red"> 128. SEEK_CUR = 1</font>
+<font color="red"> 129. SEEK_END = 2</font>
+<font color="black"> 130. </font>
+<font color="black"> 131. #'</font>
+<font color="black"> 132. </font>
+<font color="black"> 133. # Super directory utilities.</font>
+<font color="black"> 134. # (Inspired by Eric Raymond; the doc strings are mostly his)</font>
+<font color="black"> 135. </font>
+<font color="red"> 136. def makedirs(name, mode=0777):</font>
+<font color="black"> 137.     &quot;&quot;&quot;makedirs(path [, mode=0777])</font>
+<font color="black"> 138. </font>
+<font color="black"> 139.     Super-mkdir; create a leaf directory and all intermediate ones.</font>
+<font color="black"> 140.     Works like mkdir, except that any intermediate path segment (not</font>
+<font color="black"> 141.     just the rightmost) will be created if it does not exist.  This is</font>
+<font color="black"> 142.     recursive.</font>
+<font color="black"> 143. </font>
+<font color="black"> 144.     &quot;&quot;&quot;</font>
+<font color="red"> 145.     head, tail = path.split(name)</font>
+<font color="red"> 146.     if not tail:</font>
+<font color="red"> 147.         head, tail = path.split(head)</font>
+<font color="red"> 148.     if head and tail and not path.exists(head):</font>
+<font color="red"> 149.         try:</font>
+<font color="red"> 150.             makedirs(head, mode)</font>
+<font color="red"> 151.         except OSError, e:</font>
+<font color="black"> 152.             # be happy if someone already created the path</font>
+<font color="red"> 153.             if e.errno != errno.EEXIST:</font>
+<font color="red"> 154.                 raise</font>
+<font color="red"> 155.         if tail == curdir:           # xxx/newdir/. exists if xxx/newdir exists</font>
+<font color="red"> 156.             return</font>
+<font color="red"> 157.     mkdir(name, mode)</font>
+<font color="black"> 158. </font>
+<font color="red"> 159. def removedirs(name):</font>
+<font color="black"> 160.     &quot;&quot;&quot;removedirs(path)</font>
+<font color="black"> 161. </font>
+<font color="black"> 162.     Super-rmdir; remove a leaf directory and all empty intermediate</font>
+<font color="black"> 163.     ones.  Works like rmdir except that, if the leaf directory is</font>
+<font color="black"> 164.     successfully removed, directories corresponding to rightmost path</font>
+<font color="black"> 165.     segments will be pruned away until either the whole path is</font>
+<font color="black"> 166.     consumed or an error occurs.  Errors during this latter phase are</font>
+<font color="black"> 167.     ignored -- they generally mean that a directory was not empty.</font>
+<font color="black"> 168. </font>
+<font color="black"> 169.     &quot;&quot;&quot;</font>
+<font color="red"> 170.     rmdir(name)</font>
+<font color="red"> 171.     head, tail = path.split(name)</font>
+<font color="red"> 172.     if not tail:</font>
+<font color="red"> 173.         head, tail = path.split(head)</font>
+<font color="red"> 174.     while head and tail:</font>
+<font color="red"> 175.         try:</font>
+<font color="red"> 176.             rmdir(head)</font>
+<font color="red"> 177.         except error:</font>
+<font color="red"> 178.             break</font>
+<font color="red"> 179.         head, tail = path.split(head)</font>
+<font color="black"> 180. </font>
+<font color="red"> 181. def renames(old, new):</font>
+<font color="black"> 182.     &quot;&quot;&quot;renames(old, new)</font>
+<font color="black"> 183. </font>
+<font color="black"> 184.     Super-rename; create directories as necessary and delete any left</font>
+<font color="black"> 185.     empty.  Works like rename, except creation of any intermediate</font>
+<font color="black"> 186.     directories needed to make the new pathname good is attempted</font>
+<font color="black"> 187.     first.  After the rename, directories corresponding to rightmost</font>
+<font color="black"> 188.     path segments of the old name will be pruned until either the</font>
+<font color="black"> 189.     whole path is consumed or a nonempty directory is found.</font>
+<font color="black"> 190. </font>
+<font color="black"> 191.     Note: this function can fail with the new directory structure made</font>
+<font color="black"> 192.     if you lack permissions needed to unlink the leaf directory or</font>
+<font color="black"> 193.     file.</font>
+<font color="black"> 194. </font>
+<font color="black"> 195.     &quot;&quot;&quot;</font>
+<font color="red"> 196.     head, tail = path.split(new)</font>
+<font color="red"> 197.     if head and tail and not path.exists(head):</font>
+<font color="red"> 198.         makedirs(head)</font>
+<font color="red"> 199.     rename(old, new)</font>
+<font color="red"> 200.     head, tail = path.split(old)</font>
+<font color="red"> 201.     if head and tail:</font>
+<font color="red"> 202.         try:</font>
+<font color="red"> 203.             removedirs(head)</font>
+<font color="red"> 204.         except error:</font>
+<font color="red"> 205.             pass</font>
+<font color="black"> 206. </font>
+<font color="red"> 207. __all__.extend([&quot;makedirs&quot;, &quot;removedirs&quot;, &quot;renames&quot;])</font>
+<font color="black"> 208. </font>
+<font color="red"> 209. def walk(top, topdown=True, onerror=None, followlinks=False):</font>
+<font color="black"> 210.     &quot;&quot;&quot;Directory tree generator.</font>
+<font color="black"> 211. </font>
+<font color="black"> 212.     For each directory in the directory tree rooted at top (including top</font>
+<font color="black"> 213.     itself, but excluding '.' and '..'), yields a 3-tuple</font>
+<font color="black"> 214. </font>
+<font color="black"> 215.         dirpath, dirnames, filenames</font>
+<font color="black"> 216. </font>
+<font color="black"> 217.     dirpath is a string, the path to the directory.  dirnames is a list of</font>
+<font color="black"> 218.     the names of the subdirectories in dirpath (excluding '.' and '..').</font>
+<font color="black"> 219.     filenames is a list of the names of the non-directory files in dirpath.</font>
+<font color="black"> 220.     Note that the names in the lists are just names, with no path components.</font>
+<font color="black"> 221.     To get a full path (which begins with top) to a file or directory in</font>
+<font color="black"> 222.     dirpath, do os.path.join(dirpath, name).</font>
+<font color="black"> 223. </font>
+<font color="black"> 224.     If optional arg 'topdown' is true or not specified, the triple for a</font>
+<font color="black"> 225.     directory is generated before the triples for any of its subdirectories</font>
+<font color="black"> 226.     (directories are generated top down).  If topdown is false, the triple</font>
+<font color="black"> 227.     for a directory is generated after the triples for all of its</font>
+<font color="black"> 228.     subdirectories (directories are generated bottom up).</font>
+<font color="black"> 229. </font>
+<font color="black"> 230.     When topdown is true, the caller can modify the dirnames list in-place</font>
+<font color="black"> 231.     (e.g., via del or slice assignment), and walk will only recurse into the</font>
+<font color="black"> 232.     subdirectories whose names remain in dirnames; this can be used to prune the</font>
+<font color="black"> 233.     search, or to impose a specific order of visiting.  Modifying dirnames when</font>
+<font color="black"> 234.     topdown is false is ineffective, since the directories in dirnames have</font>
+<font color="black"> 235.     already been generated by the time dirnames itself is generated. No matter</font>
+<font color="black"> 236.     the value of topdown, the list of subdirectories is retrieved before the</font>
+<font color="black"> 237.     tuples for the directory and its subdirectories are generated.</font>
+<font color="black"> 238. </font>
+<font color="black"> 239.     By default errors from the os.listdir() call are ignored.  If</font>
+<font color="black"> 240.     optional arg 'onerror' is specified, it should be a function; it</font>
+<font color="black"> 241.     will be called with one argument, an os.error instance.  It can</font>
+<font color="black"> 242.     report the error to continue with the walk, or raise the exception</font>
+<font color="black"> 243.     to abort the walk.  Note that the filename is available as the</font>
+<font color="black"> 244.     filename attribute of the exception object.</font>
+<font color="black"> 245. </font>
+<font color="black"> 246.     By default, os.walk does not follow symbolic links to subdirectories on</font>
+<font color="black"> 247.     systems that support them.  In order to get this functionality, set the</font>
+<font color="black"> 248.     optional argument 'followlinks' to true.</font>
+<font color="black"> 249. </font>
+<font color="black"> 250.     Caution:  if you pass a relative pathname for top, don't change the</font>
+<font color="black"> 251.     current working directory between resumptions of walk.  walk never</font>
+<font color="black"> 252.     changes the current directory, and assumes that the client doesn't</font>
+<font color="black"> 253.     either.</font>
+<font color="black"> 254. </font>
+<font color="black"> 255.     Example:</font>
+<font color="black"> 256. </font>
+<font color="black"> 257.     import os</font>
+<font color="black"> 258.     from os.path import join, getsize</font>
+<font color="black"> 259.     for root, dirs, files in os.walk('python/Lib/email'):</font>
+<font color="black"> 260.         print root, &quot;consumes&quot;,</font>
+<font color="black"> 261.         print sum([getsize(join(root, name)) for name in files]),</font>
+<font color="black"> 262.         print &quot;bytes in&quot;, len(files), &quot;non-directory files&quot;</font>
+<font color="black"> 263.         if 'CVS' in dirs:</font>
+<font color="black"> 264.             dirs.remove('CVS')  # don't visit CVS directories</font>
+<font color="black"> 265. </font>
+<font color="black"> 266.     &quot;&quot;&quot;</font>
+<font color="black"> 267. </font>
+<font color="red"> 268.     islink, join, isdir = path.islink, path.join, path.isdir</font>
+<font color="black"> 269. </font>
+<font color="black"> 270.     # We may not have read permission for top, in which case we can't</font>
+<font color="black"> 271.     # get a list of the files the directory contains.  os.path.walk</font>
+<font color="black"> 272.     # always suppressed the exception then, rather than blow up for a</font>
+<font color="black"> 273.     # minor reason when (say) a thousand readable directories are still</font>
+<font color="black"> 274.     # left to visit.  That logic is copied here.</font>
+<font color="red"> 275.     try:</font>
+<font color="black"> 276.         # Note that listdir and error are globals in this module due</font>
+<font color="black"> 277.         # to earlier import-*.</font>
+<font color="red"> 278.         names = listdir(top)</font>
+<font color="red"> 279.     except error, err:</font>
+<font color="red"> 280.         if onerror is not None:</font>
+<font color="red"> 281.             onerror(err)</font>
+<font color="red"> 282.         return</font>
+<font color="black"> 283. </font>
+<font color="red"> 284.     dirs, nondirs = [], []</font>
+<font color="red"> 285.     for name in names:</font>
+<font color="red"> 286.         if isdir(join(top, name)):</font>
+<font color="red"> 287.             dirs.append(name)</font>
+<font color="black"> 288.         else:</font>
+<font color="red"> 289.             nondirs.append(name)</font>
+<font color="black"> 290. </font>
+<font color="red"> 291.     if topdown:</font>
+<font color="red"> 292.         yield top, dirs, nondirs</font>
+<font color="red"> 293.     for name in dirs:</font>
+<font color="red"> 294.         new_path = join(top, name)</font>
+<font color="red"> 295.         if followlinks or not islink(new_path):</font>
+<font color="red"> 296.             for x in walk(new_path, topdown, onerror, followlinks):</font>
+<font color="red"> 297.                 yield x</font>
+<font color="red"> 298.     if not topdown:</font>
+<font color="red"> 299.         yield top, dirs, nondirs</font>
+<font color="black"> 300. </font>
+<font color="red"> 301. __all__.append(&quot;walk&quot;)</font>
+<font color="black"> 302. </font>
+<font color="black"> 303. # Make sure os.environ exists, at least</font>
+<font color="red"> 304. try:</font>
+<font color="red"> 305.     environ</font>
+<font color="red"> 306. except NameError:</font>
+<font color="red"> 307.     environ = {}</font>
+<font color="black"> 308. </font>
+<font color="red"> 309. def execl(file, *args):</font>
+<font color="black"> 310.     &quot;&quot;&quot;execl(file, *args)</font>
+<font color="black"> 311. </font>
+<font color="black"> 312.     Execute the executable file with argument list args, replacing the</font>
+<font color="black"> 313.     current process. &quot;&quot;&quot;</font>
+<font color="red"> 314.     execv(file, args)</font>
+<font color="black"> 315. </font>
+<font color="red"> 316. def execle(file, *args):</font>
+<font color="black"> 317.     &quot;&quot;&quot;execle(file, *args, env)</font>
+<font color="black"> 318. </font>
+<font color="black"> 319.     Execute the executable file with argument list args and</font>
+<font color="black"> 320.     environment env, replacing the current process. &quot;&quot;&quot;</font>
+<font color="red"> 321.     env = args[-1]</font>
+<font color="red"> 322.     execve(file, args[:-1], env)</font>
+<font color="black"> 323. </font>
+<font color="red"> 324. def execlp(file, *args):</font>
+<font color="black"> 325.     &quot;&quot;&quot;execlp(file, *args)</font>
+<font color="black"> 326. </font>
+<font color="black"> 327.     Execute the executable file (which is searched for along $PATH)</font>
+<font color="black"> 328.     with argument list args, replacing the current process. &quot;&quot;&quot;</font>
+<font color="red"> 329.     execvp(file, args)</font>
+<font color="black"> 330. </font>
+<font color="red"> 331. def execlpe(file, *args):</font>
+<font color="black"> 332.     &quot;&quot;&quot;execlpe(file, *args, env)</font>
+<font color="black"> 333. </font>
+<font color="black"> 334.     Execute the executable file (which is searched for along $PATH)</font>
+<font color="black"> 335.     with argument list args and environment env, replacing the current</font>
+<font color="black"> 336.     process. &quot;&quot;&quot;</font>
+<font color="red"> 337.     env = args[-1]</font>
+<font color="red"> 338.     execvpe(file, args[:-1], env)</font>
+<font color="black"> 339. </font>
+<font color="red"> 340. def execvp(file, args):</font>
+<font color="black"> 341.     &quot;&quot;&quot;execvp(file, args)</font>
+<font color="black"> 342. </font>
+<font color="black"> 343.     Execute the executable file (which is searched for along $PATH)</font>
+<font color="black"> 344.     with argument list args, replacing the current process.</font>
+<font color="black"> 345.     args may be a list or tuple of strings. &quot;&quot;&quot;</font>
+<font color="red"> 346.     _execvpe(file, args)</font>
+<font color="black"> 347. </font>
+<font color="red"> 348. def execvpe(file, args, env):</font>
+<font color="black"> 349.     &quot;&quot;&quot;execvpe(file, args, env)</font>
+<font color="black"> 350. </font>
+<font color="black"> 351.     Execute the executable file (which is searched for along $PATH)</font>
+<font color="black"> 352.     with argument list args and environment env , replacing the</font>
+<font color="black"> 353.     current process.</font>
+<font color="black"> 354.     args may be a list or tuple of strings. &quot;&quot;&quot;</font>
+<font color="red"> 355.     _execvpe(file, args, env)</font>
+<font color="black"> 356. </font>
+<font color="red"> 357. __all__.extend([&quot;execl&quot;,&quot;execle&quot;,&quot;execlp&quot;,&quot;execlpe&quot;,&quot;execvp&quot;,&quot;execvpe&quot;])</font>
+<font color="black"> 358. </font>
+<font color="red"> 359. def _execvpe(file, args, env=None):</font>
+<font color="red"> 360.     if env is not None:</font>
+<font color="red"> 361.         func = execve</font>
+<font color="red"> 362.         argrest = (args, env)</font>
+<font color="black"> 363.     else:</font>
+<font color="red"> 364.         func = execv</font>
+<font color="red"> 365.         argrest = (args,)</font>
+<font color="red"> 366.         env = environ</font>
+<font color="black"> 367. </font>
+<font color="red"> 368.     head, tail = path.split(file)</font>
+<font color="red"> 369.     if head:</font>
+<font color="red"> 370.         func(file, *argrest)</font>
+<font color="red"> 371.         return</font>
+<font color="red"> 372.     if 'PATH' in env:</font>
+<font color="red"> 373.         envpath = env['PATH']</font>
+<font color="black"> 374.     else:</font>
+<font color="red"> 375.         envpath = defpath</font>
+<font color="red"> 376.     PATH = envpath.split(pathsep)</font>
+<font color="red"> 377.     saved_exc = None</font>
+<font color="red"> 378.     saved_tb = None</font>
+<font color="red"> 379.     for dir in PATH:</font>
+<font color="red"> 380.         fullname = path.join(dir, file)</font>
+<font color="red"> 381.         try:</font>
+<font color="red"> 382.             func(fullname, *argrest)</font>
+<font color="red"> 383.         except error, e:</font>
+<font color="red"> 384.             tb = sys.exc_info()[2]</font>
+<font color="red"> 385.             if (e.errno != errno.ENOENT and e.errno != errno.ENOTDIR</font>
+<font color="red"> 386.                 and saved_exc is None):</font>
+<font color="red"> 387.                 saved_exc = e</font>
+<font color="red"> 388.                 saved_tb = tb</font>
+<font color="red"> 389.     if saved_exc:</font>
+<font color="red"> 390.         raise error, saved_exc, saved_tb</font>
+<font color="red"> 391.     raise error, e, tb</font>
+<font color="black"> 392. </font>
+<font color="black"> 393. # Change environ to automatically call putenv() if it exists</font>
+<font color="red"> 394. try:</font>
+<font color="black"> 395.     # This will fail if there's no putenv</font>
+<font color="red"> 396.     putenv</font>
+<font color="red"> 397. except NameError:</font>
+<font color="red"> 398.     pass</font>
+<font color="black"> 399. else:</font>
+<font color="red"> 400.     import UserDict</font>
+<font color="black"> 401. </font>
+<font color="black"> 402.     # Fake unsetenv() for Windows</font>
+<font color="black"> 403.     # not sure about os2 here but</font>
+<font color="black"> 404.     # I'm guessing they are the same.</font>
+<font color="black"> 405. </font>
+<font color="red"> 406.     if name in ('os2', 'nt'):</font>
+<font color="red"> 407.         def unsetenv(key):</font>
+<font color="red"> 408.             putenv(key, &quot;&quot;)</font>
+<font color="black"> 409. </font>
+<font color="red"> 410.     if name == &quot;riscos&quot;:</font>
+<font color="black"> 411.         # On RISC OS, all env access goes through getenv and putenv</font>
+<font color="red"> 412.         from riscosenviron import _Environ</font>
+<font color="red"> 413.     elif name in ('os2', 'nt'):  # Where Env Var Names Must Be UPPERCASE</font>
+<font color="black"> 414.         # But we store them as upper case</font>
+<font color="red"> 415.         class _Environ(UserDict.IterableUserDict):</font>
+<font color="red"> 416.             def __init__(self, environ):</font>
+<font color="red"> 417.                 UserDict.UserDict.__init__(self)</font>
+<font color="red"> 418.                 data = self.data</font>
+<font color="red"> 419.                 for k, v in environ.items():</font>
+<font color="red"> 420.                     data[k.upper()] = v</font>
+<font color="red"> 421.             def __setitem__(self, key, item):</font>
+<font color="red"> 422.                 putenv(key, item)</font>
+<font color="red"> 423.                 self.data[key.upper()] = item</font>
+<font color="red"> 424.             def __getitem__(self, key):</font>
+<font color="red"> 425.                 return self.data[key.upper()]</font>
+<font color="red"> 426.             try:</font>
+<font color="red"> 427.                 unsetenv</font>
+<font color="red"> 428.             except NameError:</font>
+<font color="red"> 429.                 def __delitem__(self, key):</font>
+<font color="red"> 430.                     del self.data[key.upper()]</font>
+<font color="black"> 431.             else:</font>
+<font color="red"> 432.                 def __delitem__(self, key):</font>
+<font color="red"> 433.                     unsetenv(key)</font>
+<font color="red"> 434.                     del self.data[key.upper()]</font>
+<font color="red"> 435.                 def clear(self):</font>
+<font color="red"> 436.                     for key in self.data.keys():</font>
+<font color="red"> 437.                         unsetenv(key)</font>
+<font color="red"> 438.                         del self.data[key]</font>
+<font color="red"> 439.                 def pop(self, key, *args):</font>
+<font color="red"> 440.                     unsetenv(key)</font>
+<font color="red"> 441.                     return self.data.pop(key.upper(), *args)</font>
+<font color="red"> 442.             def has_key(self, key):</font>
+<font color="red"> 443.                 return key.upper() in self.data</font>
+<font color="red"> 444.             def __contains__(self, key):</font>
+<font color="red"> 445.                 return key.upper() in self.data</font>
+<font color="red"> 446.             def get(self, key, failobj=None):</font>
+<font color="red"> 447.                 return self.data.get(key.upper(), failobj)</font>
+<font color="red"> 448.             def update(self, dict=None, **kwargs):</font>
+<font color="red"> 449.                 if dict:</font>
+<font color="red"> 450.                     try:</font>
+<font color="red"> 451.                         keys = dict.keys()</font>
+<font color="red"> 452.                     except AttributeError:</font>
+<font color="black"> 453.                         # List of (key, value)</font>
+<font color="red"> 454.                         for k, v in dict:</font>
+<font color="red"> 455.                             self[k] = v</font>
+<font color="black"> 456.                     else:</font>
+<font color="black"> 457.                         # got keys</font>
+<font color="black"> 458.                         # cannot use items(), since mappings</font>
+<font color="black"> 459.                         # may not have them.</font>
+<font color="red"> 460.                         for k in keys:</font>
+<font color="red"> 461.                             self[k] = dict[k]</font>
+<font color="red"> 462.                 if kwargs:</font>
+<font color="red"> 463.                     self.update(kwargs)</font>
+<font color="red"> 464.             def copy(self):</font>
+<font color="red"> 465.                 return dict(self)</font>
+<font color="black"> 466. </font>
+<font color="black"> 467.     else:  # Where Env Var Names Can Be Mixed Case</font>
+<font color="red"> 468.         class _Environ(UserDict.IterableUserDict):</font>
+<font color="red"> 469.             def __init__(self, environ):</font>
+<font color="red"> 470.                 UserDict.UserDict.__init__(self)</font>
+<font color="red"> 471.                 self.data = environ</font>
+<font color="red"> 472.             def __setitem__(self, key, item):</font>
+<font color="red"> 473.                 putenv(key, item)</font>
+<font color="red"> 474.                 self.data[key] = item</font>
+<font color="red"> 475.             def update(self,  dict=None, **kwargs):</font>
+<font color="red"> 476.                 if dict:</font>
+<font color="red"> 477.                     try:</font>
+<font color="red"> 478.                         keys = dict.keys()</font>
+<font color="red"> 479.                     except AttributeError:</font>
+<font color="black"> 480.                         # List of (key, value)</font>
+<font color="red"> 481.                         for k, v in dict:</font>
+<font color="red"> 482.                             self[k] = v</font>
+<font color="black"> 483.                     else:</font>
+<font color="black"> 484.                         # got keys</font>
+<font color="black"> 485.                         # cannot use items(), since mappings</font>
+<font color="black"> 486.                         # may not have them.</font>
+<font color="red"> 487.                         for k in keys:</font>
+<font color="red"> 488.                             self[k] = dict[k]</font>
+<font color="red"> 489.                 if kwargs:</font>
+<font color="red"> 490.                     self.update(kwargs)</font>
+<font color="red"> 491.             try:</font>
+<font color="red"> 492.                 unsetenv</font>
+<font color="red"> 493.             except NameError:</font>
+<font color="red"> 494.                 pass</font>
+<font color="black"> 495.             else:</font>
+<font color="red"> 496.                 def __delitem__(self, key):</font>
+<font color="red"> 497.                     unsetenv(key)</font>
+<font color="red"> 498.                     del self.data[key]</font>
+<font color="red"> 499.                 def clear(self):</font>
+<font color="red"> 500.                     for key in self.data.keys():</font>
+<font color="red"> 501.                         unsetenv(key)</font>
+<font color="red"> 502.                         del self.data[key]</font>
+<font color="red"> 503.                 def pop(self, key, *args):</font>
+<font color="red"> 504.                     unsetenv(key)</font>
+<font color="red"> 505.                     return self.data.pop(key, *args)</font>
+<font color="red"> 506.             def copy(self):</font>
+<font color="green"> 507.                 return dict(self)</font>
+<font color="black"> 508. </font>
+<font color="black"> 509. </font>
+<font color="red"> 510.     environ = _Environ(environ)</font>
+<font color="black"> 511. </font>
+<font color="red"> 512. def getenv(key, default=None):</font>
+<font color="black"> 513.     &quot;&quot;&quot;Get an environment variable, return None if it doesn't exist.</font>
+<font color="black"> 514.     The optional second argument can specify an alternate default.&quot;&quot;&quot;</font>
+<font color="green"> 515.     return environ.get(key, default)</font>
+<font color="red"> 516. __all__.append(&quot;getenv&quot;)</font>
+<font color="black"> 517. </font>
+<font color="red"> 518. def _exists(name):</font>
+<font color="red"> 519.     return name in globals()</font>
+<font color="black"> 520. </font>
+<font color="black"> 521. # Supply spawn*() (probably only for Unix)</font>
+<font color="red"> 522. if _exists(&quot;fork&quot;) and not _exists(&quot;spawnv&quot;) and _exists(&quot;execv&quot;):</font>
+<font color="black"> 523. </font>
+<font color="red"> 524.     P_WAIT = 0</font>
+<font color="red"> 525.     P_NOWAIT = P_NOWAITO = 1</font>
+<font color="black"> 526. </font>
+<font color="black"> 527.     # XXX Should we support P_DETACH?  I suppose it could fork()**2</font>
+<font color="black"> 528.     # and close the std I/O streams.  Also, P_OVERLAY is the same</font>
+<font color="black"> 529.     # as execv*()?</font>
+<font color="black"> 530. </font>
+<font color="red"> 531.     def _spawnvef(mode, file, args, env, func):</font>
+<font color="black"> 532.         # Internal helper; func is the exec*() function to use</font>
+<font color="red"> 533.         pid = fork()</font>
+<font color="red"> 534.         if not pid:</font>
+<font color="black"> 535.             # Child</font>
+<font color="red"> 536.             try:</font>
+<font color="red"> 537.                 if env is None:</font>
+<font color="red"> 538.                     func(file, args)</font>
+<font color="black"> 539.                 else:</font>
+<font color="red"> 540.                     func(file, args, env)</font>
+<font color="red"> 541.             except:</font>
+<font color="red"> 542.                 _exit(127)</font>
+<font color="black"> 543.         else:</font>
+<font color="black"> 544.             # Parent</font>
+<font color="red"> 545.             if mode == P_NOWAIT:</font>
+<font color="red"> 546.                 return pid # Caller is responsible for waiting!</font>
+<font color="red"> 547.             while 1:</font>
+<font color="red"> 548.                 wpid, sts = waitpid(pid, 0)</font>
+<font color="red"> 549.                 if WIFSTOPPED(sts):</font>
+<font color="red"> 550.                     continue</font>
+<font color="red"> 551.                 elif WIFSIGNALED(sts):</font>
+<font color="red"> 552.                     return -WTERMSIG(sts)</font>
+<font color="red"> 553.                 elif WIFEXITED(sts):</font>
+<font color="red"> 554.                     return WEXITSTATUS(sts)</font>
+<font color="black"> 555.                 else:</font>
+<font color="red"> 556.                     raise error, &quot;Not stopped, signaled or exited???&quot;</font>
+<font color="black"> 557. </font>
+<font color="red"> 558.     def spawnv(mode, file, args):</font>
+<font color="black"> 559.         &quot;&quot;&quot;spawnv(mode, file, args) -&gt; integer</font>
+<font color="black"> 560. </font>
+<font color="black"> 561. Execute file with arguments from args in a subprocess.</font>
+<font color="black"> 562. If mode == P_NOWAIT return the pid of the process.</font>
+<font color="black"> 563. If mode == P_WAIT return the process's exit code if it exits normally;</font>
+<font color="black"> 564. otherwise return -SIG, where SIG is the signal that killed it. &quot;&quot;&quot;</font>
+<font color="red"> 565.         return _spawnvef(mode, file, args, None, execv)</font>
+<font color="black"> 566. </font>
+<font color="red"> 567.     def spawnve(mode, file, args, env):</font>
+<font color="black"> 568.         &quot;&quot;&quot;spawnve(mode, file, args, env) -&gt; integer</font>
+<font color="black"> 569. </font>
+<font color="black"> 570. Execute file with arguments from args in a subprocess with the</font>
+<font color="black"> 571. specified environment.</font>
+<font color="black"> 572. If mode == P_NOWAIT return the pid of the process.</font>
+<font color="black"> 573. If mode == P_WAIT return the process's exit code if it exits normally;</font>
+<font color="black"> 574. otherwise return -SIG, where SIG is the signal that killed it. &quot;&quot;&quot;</font>
+<font color="red"> 575.         return _spawnvef(mode, file, args, env, execve)</font>
+<font color="black"> 576. </font>
+<font color="black"> 577.     # Note: spawnvp[e] is't currently supported on Windows</font>
+<font color="black"> 578. </font>
+<font color="red"> 579.     def spawnvp(mode, file, args):</font>
+<font color="black"> 580.         &quot;&quot;&quot;spawnvp(mode, file, args) -&gt; integer</font>
+<font color="black"> 581. </font>
+<font color="black"> 582. Execute file (which is looked for along $PATH) with arguments from</font>
+<font color="black"> 583. args in a subprocess.</font>
+<font color="black"> 584. If mode == P_NOWAIT return the pid of the process.</font>
+<font color="black"> 585. If mode == P_WAIT return the process's exit code if it exits normally;</font>
+<font color="black"> 586. otherwise return -SIG, where SIG is the signal that killed it. &quot;&quot;&quot;</font>
+<font color="red"> 587.         return _spawnvef(mode, file, args, None, execvp)</font>
+<font color="black"> 588. </font>
+<font color="red"> 589.     def spawnvpe(mode, file, args, env):</font>
+<font color="black"> 590.         &quot;&quot;&quot;spawnvpe(mode, file, args, env) -&gt; integer</font>
+<font color="black"> 591. </font>
+<font color="black"> 592. Execute file (which is looked for along $PATH) with arguments from</font>
+<font color="black"> 593. args in a subprocess with the supplied environment.</font>
+<font color="black"> 594. If mode == P_NOWAIT return the pid of the process.</font>
+<font color="black"> 595. If mode == P_WAIT return the process's exit code if it exits normally;</font>
+<font color="black"> 596. otherwise return -SIG, where SIG is the signal that killed it. &quot;&quot;&quot;</font>
+<font color="red"> 597.         return _spawnvef(mode, file, args, env, execvpe)</font>
+<font color="black"> 598. </font>
+<font color="red"> 599. if _exists(&quot;spawnv&quot;):</font>
+<font color="black"> 600.     # These aren't supplied by the basic Windows code</font>
+<font color="black"> 601.     # but can be easily implemented in Python</font>
+<font color="black"> 602. </font>
+<font color="red"> 603.     def spawnl(mode, file, *args):</font>
+<font color="black"> 604.         &quot;&quot;&quot;spawnl(mode, file, *args) -&gt; integer</font>
+<font color="black"> 605. </font>
+<font color="black"> 606. Execute file with arguments from args in a subprocess.</font>
+<font color="black"> 607. If mode == P_NOWAIT return the pid of the process.</font>
+<font color="black"> 608. If mode == P_WAIT return the process's exit code if it exits normally;</font>
+<font color="black"> 609. otherwise return -SIG, where SIG is the signal that killed it. &quot;&quot;&quot;</font>
+<font color="red"> 610.         return spawnv(mode, file, args)</font>
+<font color="black"> 611. </font>
+<font color="red"> 612.     def spawnle(mode, file, *args):</font>
+<font color="black"> 613.         &quot;&quot;&quot;spawnle(mode, file, *args, env) -&gt; integer</font>
+<font color="black"> 614. </font>
+<font color="black"> 615. Execute file with arguments from args in a subprocess with the</font>
+<font color="black"> 616. supplied environment.</font>
+<font color="black"> 617. If mode == P_NOWAIT return the pid of the process.</font>
+<font color="black"> 618. If mode == P_WAIT return the process's exit code if it exits normally;</font>
+<font color="black"> 619. otherwise return -SIG, where SIG is the signal that killed it. &quot;&quot;&quot;</font>
+<font color="red"> 620.         env = args[-1]</font>
+<font color="red"> 621.         return spawnve(mode, file, args[:-1], env)</font>
+<font color="black"> 622. </font>
+<font color="black"> 623. </font>
+<font color="red"> 624.     __all__.extend([&quot;spawnv&quot;, &quot;spawnve&quot;, &quot;spawnl&quot;, &quot;spawnle&quot;,])</font>
+<font color="black"> 625. </font>
+<font color="black"> 626. </font>
+<font color="red"> 627. if _exists(&quot;spawnvp&quot;):</font>
+<font color="black"> 628.     # At the moment, Windows doesn't implement spawnvp[e],</font>
+<font color="black"> 629.     # so it won't have spawnlp[e] either.</font>
+<font color="red"> 630.     def spawnlp(mode, file, *args):</font>
+<font color="black"> 631.         &quot;&quot;&quot;spawnlp(mode, file, *args) -&gt; integer</font>
+<font color="black"> 632. </font>
+<font color="black"> 633. Execute file (which is looked for along $PATH) with arguments from</font>
+<font color="black"> 634. args in a subprocess with the supplied environment.</font>
+<font color="black"> 635. If mode == P_NOWAIT return the pid of the process.</font>
+<font color="black"> 636. If mode == P_WAIT return the process's exit code if it exits normally;</font>
+<font color="black"> 637. otherwise return -SIG, where SIG is the signal that killed it. &quot;&quot;&quot;</font>
+<font color="red"> 638.         return spawnvp(mode, file, args)</font>
+<font color="black"> 639. </font>
+<font color="red"> 640.     def spawnlpe(mode, file, *args):</font>
+<font color="black"> 641.         &quot;&quot;&quot;spawnlpe(mode, file, *args, env) -&gt; integer</font>
+<font color="black"> 642. </font>
+<font color="black"> 643. Execute file (which is looked for along $PATH) with arguments from</font>
+<font color="black"> 644. args in a subprocess with the supplied environment.</font>
+<font color="black"> 645. If mode == P_NOWAIT return the pid of the process.</font>
+<font color="black"> 646. If mode == P_WAIT return the process's exit code if it exits normally;</font>
+<font color="black"> 647. otherwise return -SIG, where SIG is the signal that killed it. &quot;&quot;&quot;</font>
+<font color="red"> 648.         env = args[-1]</font>
+<font color="red"> 649.         return spawnvpe(mode, file, args[:-1], env)</font>
+<font color="black"> 650. </font>
+<font color="black"> 651. </font>
+<font color="red"> 652.     __all__.extend([&quot;spawnvp&quot;, &quot;spawnvpe&quot;, &quot;spawnlp&quot;, &quot;spawnlpe&quot;,])</font>
+<font color="black"> 653. </font>
+<font color="black"> 654. </font>
+<font color="black"> 655. # Supply popen2 etc. (for Unix)</font>
+<font color="red"> 656. if _exists(&quot;fork&quot;):</font>
+<font color="red"> 657.     if not _exists(&quot;popen2&quot;):</font>
+<font color="red"> 658.         def popen2(cmd, mode=&quot;t&quot;, bufsize=-1):</font>
+<font color="black"> 659.             &quot;&quot;&quot;Execute the shell command 'cmd' in a sub-process.  On UNIX, 'cmd'</font>
+<font color="black"> 660.             may be a sequence, in which case arguments will be passed directly to</font>
+<font color="black"> 661.             the program without shell intervention (as with os.spawnv()).  If 'cmd'</font>
+<font color="black"> 662.             is a string it will be passed to the shell (as with os.system()). If</font>
+<font color="black"> 663.             'bufsize' is specified, it sets the buffer size for the I/O pipes.  The</font>
+<font color="black"> 664.             file objects (child_stdin, child_stdout) are returned.&quot;&quot;&quot;</font>
+<font color="red"> 665.             import warnings</font>
+<font color="red"> 666.             msg = &quot;os.popen2 is deprecated.  Use the subprocess module.&quot;</font>
+<font color="red"> 667.             warnings.warn(msg, DeprecationWarning, stacklevel=2)</font>
+<font color="black"> 668. </font>
+<font color="red"> 669.             import subprocess</font>
+<font color="red"> 670.             PIPE = subprocess.PIPE</font>
+<font color="red"> 671.             p = subprocess.Popen(cmd, shell=isinstance(cmd, basestring),</font>
+<font color="red"> 672.                                  bufsize=bufsize, stdin=PIPE, stdout=PIPE,</font>
+<font color="red"> 673.                                  close_fds=True)</font>
+<font color="red"> 674.             return p.stdin, p.stdout</font>
+<font color="red"> 675.         __all__.append(&quot;popen2&quot;)</font>
+<font color="black"> 676. </font>
+<font color="red"> 677.     if not _exists(&quot;popen3&quot;):</font>
+<font color="red"> 678.         def popen3(cmd, mode=&quot;t&quot;, bufsize=-1):</font>
+<font color="black"> 679.             &quot;&quot;&quot;Execute the shell command 'cmd' in a sub-process.  On UNIX, 'cmd'</font>
+<font color="black"> 680.             may be a sequence, in which case arguments will be passed directly to</font>
+<font color="black"> 681.             the program without shell intervention (as with os.spawnv()).  If 'cmd'</font>
+<font color="black"> 682.             is a string it will be passed to the shell (as with os.system()). If</font>
+<font color="black"> 683.             'bufsize' is specified, it sets the buffer size for the I/O pipes.  The</font>
+<font color="black"> 684.             file objects (child_stdin, child_stdout, child_stderr) are returned.&quot;&quot;&quot;</font>
+<font color="red"> 685.             import warnings</font>
+<font color="red"> 686.             msg = &quot;os.popen3 is deprecated.  Use the subprocess module.&quot;</font>
+<font color="red"> 687.             warnings.warn(msg, DeprecationWarning, stacklevel=2)</font>
+<font color="black"> 688. </font>
+<font color="red"> 689.             import subprocess</font>
+<font color="red"> 690.             PIPE = subprocess.PIPE</font>
+<font color="red"> 691.             p = subprocess.Popen(cmd, shell=isinstance(cmd, basestring),</font>
+<font color="red"> 692.                                  bufsize=bufsize, stdin=PIPE, stdout=PIPE,</font>
+<font color="red"> 693.                                  stderr=PIPE, close_fds=True)</font>
+<font color="red"> 694.             return p.stdin, p.stdout, p.stderr</font>
+<font color="red"> 695.         __all__.append(&quot;popen3&quot;)</font>
+<font color="black"> 696. </font>
+<font color="red"> 697.     if not _exists(&quot;popen4&quot;):</font>
+<font color="red"> 698.         def popen4(cmd, mode=&quot;t&quot;, bufsize=-1):</font>
+<font color="black"> 699.             &quot;&quot;&quot;Execute the shell command 'cmd' in a sub-process.  On UNIX, 'cmd'</font>
+<font color="black"> 700.             may be a sequence, in which case arguments will be passed directly to</font>
+<font color="black"> 701.             the program without shell intervention (as with os.spawnv()).  If 'cmd'</font>
+<font color="black"> 702.             is a string it will be passed to the shell (as with os.system()). If</font>
+<font color="black"> 703.             'bufsize' is specified, it sets the buffer size for the I/O pipes.  The</font>
+<font color="black"> 704.             file objects (child_stdin, child_stdout_stderr) are returned.&quot;&quot;&quot;</font>
+<font color="red"> 705.             import warnings</font>
+<font color="red"> 706.             msg = &quot;os.popen4 is deprecated.  Use the subprocess module.&quot;</font>
+<font color="red"> 707.             warnings.warn(msg, DeprecationWarning, stacklevel=2)</font>
+<font color="black"> 708. </font>
+<font color="red"> 709.             import subprocess</font>
+<font color="red"> 710.             PIPE = subprocess.PIPE</font>
+<font color="red"> 711.             p = subprocess.Popen(cmd, shell=isinstance(cmd, basestring),</font>
+<font color="red"> 712.                                  bufsize=bufsize, stdin=PIPE, stdout=PIPE,</font>
+<font color="red"> 713.                                  stderr=subprocess.STDOUT, close_fds=True)</font>
+<font color="red"> 714.             return p.stdin, p.stdout</font>
+<font color="red"> 715.         __all__.append(&quot;popen4&quot;)</font>
+<font color="black"> 716. </font>
+<font color="red"> 717. import copy_reg as _copy_reg</font>
+<font color="black"> 718. </font>
+<font color="red"> 719. def _make_stat_result(tup, dict):</font>
+<font color="red"> 720.     return stat_result(tup, dict)</font>
+<font color="black"> 721. </font>
+<font color="red"> 722. def _pickle_stat_result(sr):</font>
+<font color="red"> 723.     (type, args) = sr.__reduce__()</font>
+<font color="red"> 724.     return (_make_stat_result, args)</font>
+<font color="black"> 725. </font>
+<font color="red"> 726. try:</font>
+<font color="red"> 727.     _copy_reg.pickle(stat_result, _pickle_stat_result, _make_stat_result)</font>
+<font color="red"> 728. except NameError: # stat_result may not exist</font>
+<font color="red"> 729.     pass</font>
+<font color="black"> 730. </font>
+<font color="red"> 731. def _make_statvfs_result(tup, dict):</font>
+<font color="red"> 732.     return statvfs_result(tup, dict)</font>
+<font color="black"> 733. </font>
+<font color="red"> 734. def _pickle_statvfs_result(sr):</font>
+<font color="red"> 735.     (type, args) = sr.__reduce__()</font>
+<font color="red"> 736.     return (_make_statvfs_result, args)</font>
+<font color="black"> 737. </font>
+<font color="red"> 738. try:</font>
+<font color="red"> 739.     _copy_reg.pickle(statvfs_result, _pickle_statvfs_result,</font>
+<font color="red"> 740.                      _make_statvfs_result)</font>
+<font color="red"> 741. except NameError: # statvfs_result may not exist</font>
+<font color="red"> 742.     pass</font>
+</pre>
+

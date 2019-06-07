@@ -1,0 +1,186 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/getpass.py</b><br>
+
+
+file stats: <b>105 lines, 13 executed: 12.4% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Utilities to get a password and/or the current user name.</font>
+<font color="black">   2. </font>
+<font color="black">   3. getpass(prompt[, stream]) - Prompt for a password, with echo turned off.</font>
+<font color="black">   4. getuser() - Get the user name from the environment or password database.</font>
+<font color="black">   5. </font>
+<font color="black">   6. GetPassWarning - This UserWarning is issued when getpass() cannot prevent</font>
+<font color="black">   7.                  echoing of the password contents while reading.</font>
+<font color="black">   8. </font>
+<font color="black">   9. On Windows, the msvcrt module will be used.</font>
+<font color="black">  10. On the Mac EasyDialogs.AskPassword is used, if available.</font>
+<font color="black">  11. </font>
+<font color="green">  12. &quot;&quot;&quot;</font>
+<font color="black">  13. </font>
+<font color="black">  14. # Authors: Piers Lauder (original)</font>
+<font color="black">  15. #          Guido van Rossum (Windows support and cleanup)</font>
+<font color="black">  16. #          Gregory P. Smith (tty support &amp; GetPassWarning)</font>
+<font color="black">  17. </font>
+<font color="green">  18. import os, sys, warnings</font>
+<font color="black">  19. </font>
+<font color="green">  20. __all__ = [&quot;getpass&quot;,&quot;getuser&quot;,&quot;GetPassWarning&quot;]</font>
+<font color="black">  21. </font>
+<font color="black">  22. </font>
+<font color="green">  23. class GetPassWarning(UserWarning): pass</font>
+<font color="black">  24. </font>
+<font color="black">  25. </font>
+<font color="green">  26. def unix_getpass(prompt='Password: ', stream=None):</font>
+<font color="black">  27.     &quot;&quot;&quot;Prompt for a password, with echo turned off.</font>
+<font color="black">  28. </font>
+<font color="black">  29.     Args:</font>
+<font color="black">  30.       prompt: Written on stream to ask for the input.  Default: 'Password: '</font>
+<font color="black">  31.       stream: A writable file object to display the prompt.  Defaults to</font>
+<font color="black">  32.               the tty.  If no tty is available defaults to sys.stderr.</font>
+<font color="black">  33.     Returns:</font>
+<font color="black">  34.       The seKr3t input.</font>
+<font color="black">  35.     Raises:</font>
+<font color="black">  36.       EOFError: If our input tty or stdin was closed.</font>
+<font color="black">  37.       GetPassWarning: When we were unable to turn echo off on the input.</font>
+<font color="black">  38. </font>
+<font color="black">  39.     Always restores terminal settings before returning.</font>
+<font color="black">  40.     &quot;&quot;&quot;</font>
+<font color="red">  41.     fd = None</font>
+<font color="red">  42.     tty = None</font>
+<font color="red">  43.     try:</font>
+<font color="black">  44.         # Always try reading and writing directly on the tty first.</font>
+<font color="red">  45.         fd = os.open('/dev/tty', os.O_RDWR|os.O_NOCTTY)</font>
+<font color="red">  46.         tty = os.fdopen(fd, 'w+', 1)</font>
+<font color="red">  47.         input = tty</font>
+<font color="red">  48.         if not stream:</font>
+<font color="red">  49.             stream = tty</font>
+<font color="red">  50.     except EnvironmentError, e:</font>
+<font color="black">  51.         # If that fails, see if stdin can be controlled.</font>
+<font color="red">  52.         try:</font>
+<font color="red">  53.             fd = sys.stdin.fileno()</font>
+<font color="red">  54.         except (AttributeError, ValueError):</font>
+<font color="red">  55.             passwd = fallback_getpass(prompt, stream)</font>
+<font color="red">  56.         input = sys.stdin</font>
+<font color="red">  57.         if not stream:</font>
+<font color="red">  58.             stream = sys.stderr</font>
+<font color="black">  59. </font>
+<font color="red">  60.     if fd is not None:</font>
+<font color="red">  61.         passwd = None</font>
+<font color="red">  62.         try:</font>
+<font color="red">  63.             old = termios.tcgetattr(fd)     # a copy to save</font>
+<font color="red">  64.             new = old[:]</font>
+<font color="red">  65.             new[3] &amp;= ~termios.ECHO  # 3 == 'lflags'</font>
+<font color="red">  66.             tcsetattr_flags = termios.TCSAFLUSH</font>
+<font color="red">  67.             if hasattr(termios, 'TCSASOFT'):</font>
+<font color="red">  68.                 tcsetattr_flags |= termios.TCSASOFT</font>
+<font color="red">  69.             try:</font>
+<font color="red">  70.                 termios.tcsetattr(fd, tcsetattr_flags, new)</font>
+<font color="red">  71.                 passwd = _raw_input(prompt, stream, input=input)</font>
+<font color="black">  72.             finally:</font>
+<font color="red">  73.                 termios.tcsetattr(fd, tcsetattr_flags, old)</font>
+<font color="red">  74.                 stream.flush()  # issue7208</font>
+<font color="red">  75.         except termios.error, e:</font>
+<font color="red">  76.             if passwd is not None:</font>
+<font color="black">  77.                 # _raw_input succeeded.  The final tcsetattr failed.  Reraise</font>
+<font color="black">  78.                 # instead of leaving the terminal in an unknown state.</font>
+<font color="red">  79.                 raise</font>
+<font color="black">  80.             # We can't control the tty or stdin.  Give up and use normal IO.</font>
+<font color="black">  81.             # fallback_getpass() raises an appropriate warning.</font>
+<font color="red">  82.             del input, tty  # clean up unused file objects before blocking</font>
+<font color="red">  83.             passwd = fallback_getpass(prompt, stream)</font>
+<font color="black">  84. </font>
+<font color="red">  85.     stream.write('\n')</font>
+<font color="red">  86.     return passwd</font>
+<font color="black">  87. </font>
+<font color="black">  88. </font>
+<font color="green">  89. def win_getpass(prompt='Password: ', stream=None):</font>
+<font color="black">  90.     &quot;&quot;&quot;Prompt for password with echo off, using Windows getch().&quot;&quot;&quot;</font>
+<font color="red">  91.     if sys.stdin is not sys.__stdin__:</font>
+<font color="red">  92.         return fallback_getpass(prompt, stream)</font>
+<font color="red">  93.     import msvcrt</font>
+<font color="red">  94.     for c in prompt:</font>
+<font color="red">  95.         msvcrt.putch(c)</font>
+<font color="red">  96.     pw = &quot;&quot;</font>
+<font color="red">  97.     while 1:</font>
+<font color="red">  98.         c = msvcrt.getch()</font>
+<font color="red">  99.         if c == '\r' or c == '\n':</font>
+<font color="red"> 100.             break</font>
+<font color="red"> 101.         if c == '\003':</font>
+<font color="red"> 102.             raise KeyboardInterrupt</font>
+<font color="red"> 103.         if c == '\b':</font>
+<font color="red"> 104.             pw = pw[:-1]</font>
+<font color="black"> 105.         else:</font>
+<font color="red"> 106.             pw = pw + c</font>
+<font color="red"> 107.     msvcrt.putch('\r')</font>
+<font color="red"> 108.     msvcrt.putch('\n')</font>
+<font color="red"> 109.     return pw</font>
+<font color="black"> 110. </font>
+<font color="black"> 111. </font>
+<font color="green"> 112. def fallback_getpass(prompt='Password: ', stream=None):</font>
+<font color="red"> 113.     warnings.warn(&quot;Can not control echo on the terminal.&quot;, GetPassWarning,</font>
+<font color="red"> 114.                   stacklevel=2)</font>
+<font color="red"> 115.     if not stream:</font>
+<font color="red"> 116.         stream = sys.stderr</font>
+<font color="red"> 117.     print &gt;&gt;stream, &quot;Warning: Password input may be echoed.&quot;</font>
+<font color="red"> 118.     return _raw_input(prompt, stream)</font>
+<font color="black"> 119. </font>
+<font color="black"> 120. </font>
+<font color="green"> 121. def _raw_input(prompt=&quot;&quot;, stream=None, input=None):</font>
+<font color="black"> 122.     # A raw_input() replacement that doesn't save the string in the</font>
+<font color="black"> 123.     # GNU readline history.</font>
+<font color="red"> 124.     if not stream:</font>
+<font color="red"> 125.         stream = sys.stderr</font>
+<font color="red"> 126.     if not input:</font>
+<font color="red"> 127.         input = sys.stdin</font>
+<font color="red"> 128.     prompt = str(prompt)</font>
+<font color="red"> 129.     if prompt:</font>
+<font color="red"> 130.         stream.write(prompt)</font>
+<font color="red"> 131.         stream.flush()</font>
+<font color="black"> 132.     # NOTE: The Python C API calls flockfile() (and unlock) during readline.</font>
+<font color="red"> 133.     line = input.readline()</font>
+<font color="red"> 134.     if not line:</font>
+<font color="red"> 135.         raise EOFError</font>
+<font color="red"> 136.     if line[-1] == '\n':</font>
+<font color="red"> 137.         line = line[:-1]</font>
+<font color="red"> 138.     return line</font>
+<font color="black"> 139. </font>
+<font color="black"> 140. </font>
+<font color="green"> 141. def getuser():</font>
+<font color="black"> 142.     &quot;&quot;&quot;Get the username from the environment or password database.</font>
+<font color="black"> 143. </font>
+<font color="black"> 144.     First try various environment variables, then the password</font>
+<font color="black"> 145.     database.  This works on Windows as long as USERNAME is set.</font>
+<font color="black"> 146. </font>
+<font color="black"> 147.     &quot;&quot;&quot;</font>
+<font color="black"> 148. </font>
+<font color="red"> 149.     import os</font>
+<font color="black"> 150. </font>
+<font color="red"> 151.     for name in ('LOGNAME', 'USER', 'LNAME', 'USERNAME'):</font>
+<font color="red"> 152.         user = os.environ.get(name)</font>
+<font color="red"> 153.         if user:</font>
+<font color="red"> 154.             return user</font>
+<font color="black"> 155. </font>
+<font color="black"> 156.     # If this fails, the exception will &quot;explain&quot; why</font>
+<font color="red"> 157.     import pwd</font>
+<font color="red"> 158.     return pwd.getpwuid(os.getuid())[0]</font>
+<font color="black"> 159. </font>
+<font color="black"> 160. # Bind the name getpass to the appropriate function</font>
+<font color="green"> 161. try:</font>
+<font color="green"> 162.     import termios</font>
+<font color="black"> 163.     # it's possible there is an incompatible termios from the</font>
+<font color="black"> 164.     # McMillan Installer, make sure we have a UNIX-compatible termios</font>
+<font color="green"> 165.     termios.tcgetattr, termios.tcsetattr</font>
+<font color="red"> 166. except (ImportError, AttributeError):</font>
+<font color="red"> 167.     try:</font>
+<font color="red"> 168.         import msvcrt</font>
+<font color="red"> 169.     except ImportError:</font>
+<font color="red"> 170.         try:</font>
+<font color="red"> 171.             from EasyDialogs import AskPassword</font>
+<font color="red"> 172.         except ImportError:</font>
+<font color="red"> 173.             getpass = fallback_getpass</font>
+<font color="black"> 174.         else:</font>
+<font color="red"> 175.             getpass = AskPassword</font>
+<font color="black"> 176.     else:</font>
+<font color="red"> 177.         getpass = win_getpass</font>
+<font color="black"> 178. else:</font>
+<font color="green"> 179.     getpass = unix_getpass</font>
+</pre>
+

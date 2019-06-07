@@ -1,0 +1,1496 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/urllib2.py</b><br>
+
+
+file stats: <b>891 lines, 171 executed: 19.2% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;An extensible library for opening URLs using a variety of protocols</font>
+<font color="black">   2. </font>
+<font color="black">   3. The simplest way to use this module is to call the urlopen function,</font>
+<font color="black">   4. which accepts a string containing a URL or a Request object (described</font>
+<font color="black">   5. below).  It opens the URL and returns the results as file-like</font>
+<font color="black">   6. object; the returned object has some extra methods described below.</font>
+<font color="black">   7. </font>
+<font color="black">   8. The OpenerDirector manages a collection of Handler objects that do</font>
+<font color="black">   9. all the actual work.  Each Handler implements a particular protocol or</font>
+<font color="black">  10. option.  The OpenerDirector is a composite object that invokes the</font>
+<font color="black">  11. Handlers needed to open the requested URL.  For example, the</font>
+<font color="black">  12. HTTPHandler performs HTTP GET and POST requests and deals with</font>
+<font color="black">  13. non-error returns.  The HTTPRedirectHandler automatically deals with</font>
+<font color="black">  14. HTTP 301, 302, 303 and 307 redirect errors, and the HTTPDigestAuthHandler</font>
+<font color="black">  15. deals with digest authentication.</font>
+<font color="black">  16. </font>
+<font color="black">  17. urlopen(url, data=None) -- Basic usage is the same as original</font>
+<font color="black">  18. urllib.  pass the url and optionally data to post to an HTTP URL, and</font>
+<font color="black">  19. get a file-like object back.  One difference is that you can also pass</font>
+<font color="black">  20. a Request instance instead of URL.  Raises a URLError (subclass of</font>
+<font color="black">  21. IOError); for HTTP errors, raises an HTTPError, which can also be</font>
+<font color="black">  22. treated as a valid response.</font>
+<font color="black">  23. </font>
+<font color="black">  24. build_opener -- Function that creates a new OpenerDirector instance.</font>
+<font color="black">  25. Will install the default handlers.  Accepts one or more Handlers as</font>
+<font color="black">  26. arguments, either instances or Handler classes that it will</font>
+<font color="black">  27. instantiate.  If one of the argument is a subclass of the default</font>
+<font color="black">  28. handler, the argument will be installed instead of the default.</font>
+<font color="black">  29. </font>
+<font color="black">  30. install_opener -- Installs a new opener as the default opener.</font>
+<font color="black">  31. </font>
+<font color="black">  32. objects of interest:</font>
+<font color="black">  33. </font>
+<font color="black">  34. OpenerDirector -- Sets up the User Agent as the Python-urllib client and manages</font>
+<font color="black">  35. the Handler classes, while dealing with requests and responses.</font>
+<font color="black">  36. </font>
+<font color="black">  37. Request -- An object that encapsulates the state of a request.  The</font>
+<font color="black">  38. state can be as simple as the URL.  It can also include extra HTTP</font>
+<font color="black">  39. headers, e.g. a User-Agent.</font>
+<font color="black">  40. </font>
+<font color="black">  41. BaseHandler --</font>
+<font color="black">  42. </font>
+<font color="black">  43. exceptions:</font>
+<font color="black">  44. URLError -- A subclass of IOError, individual protocols have their own</font>
+<font color="black">  45. specific subclass.</font>
+<font color="black">  46. </font>
+<font color="black">  47. HTTPError -- Also a valid HTTP response, so you can treat an HTTP error</font>
+<font color="black">  48. as an exceptional event or valid response.</font>
+<font color="black">  49. </font>
+<font color="black">  50. internals:</font>
+<font color="black">  51. BaseHandler and parent</font>
+<font color="black">  52. _call_chain conventions</font>
+<font color="black">  53. </font>
+<font color="black">  54. Example usage:</font>
+<font color="black">  55. </font>
+<font color="black">  56. import urllib2</font>
+<font color="black">  57. </font>
+<font color="black">  58. # set up authentication info</font>
+<font color="black">  59. authinfo = urllib2.HTTPBasicAuthHandler()</font>
+<font color="black">  60. authinfo.add_password(realm='PDQ Application',</font>
+<font color="black">  61.                       uri='https://mahler:8092/site-updates.py',</font>
+<font color="black">  62.                       user='klem',</font>
+<font color="black">  63.                       passwd='geheim$parole')</font>
+<font color="black">  64. </font>
+<font color="black">  65. proxy_support = urllib2.ProxyHandler({&quot;http&quot; : &quot;http://ahad-haam:3128&quot;})</font>
+<font color="black">  66. </font>
+<font color="black">  67. # build a new opener that adds authentication and caching FTP handlers</font>
+<font color="black">  68. opener = urllib2.build_opener(proxy_support, authinfo, urllib2.CacheFTPHandler)</font>
+<font color="black">  69. </font>
+<font color="black">  70. # install it</font>
+<font color="black">  71. urllib2.install_opener(opener)</font>
+<font color="black">  72. </font>
+<font color="black">  73. f = urllib2.urlopen('http://www.python.org/')</font>
+<font color="black">  74. </font>
+<font color="black">  75. </font>
+<font color="green">  76. &quot;&quot;&quot;</font>
+<font color="black">  77. </font>
+<font color="black">  78. # XXX issues:</font>
+<font color="black">  79. # If an authentication error handler that tries to perform</font>
+<font color="black">  80. # authentication for some reason but fails, how should the error be</font>
+<font color="black">  81. # signalled?  The client needs to know the HTTP error code.  But if</font>
+<font color="black">  82. # the handler knows that the problem was, e.g., that it didn't know</font>
+<font color="black">  83. # that hash algo that requested in the challenge, it would be good to</font>
+<font color="black">  84. # pass that information along to the client, too.</font>
+<font color="black">  85. # ftp errors aren't handled cleanly</font>
+<font color="black">  86. # check digest against correct (i.e. non-apache) implementation</font>
+<font color="black">  87. </font>
+<font color="black">  88. # Possible extensions:</font>
+<font color="black">  89. # complex proxies  XXX not sure what exactly was meant by this</font>
+<font color="black">  90. # abstract factory for opener</font>
+<font color="black">  91. </font>
+<font color="green">  92. import base64</font>
+<font color="green">  93. import hashlib</font>
+<font color="green">  94. import httplib</font>
+<font color="green">  95. import mimetools</font>
+<font color="green">  96. import os</font>
+<font color="green">  97. import posixpath</font>
+<font color="green">  98. import random</font>
+<font color="green">  99. import re</font>
+<font color="green"> 100. import socket</font>
+<font color="green"> 101. import sys</font>
+<font color="green"> 102. import time</font>
+<font color="green"> 103. import urlparse</font>
+<font color="green"> 104. import bisect</font>
+<font color="green"> 105. import warnings</font>
+<font color="black"> 106. </font>
+<font color="green"> 107. try:</font>
+<font color="green"> 108.     from cStringIO import StringIO</font>
+<font color="red"> 109. except ImportError:</font>
+<font color="red"> 110.     from StringIO import StringIO</font>
+<font color="black"> 111. </font>
+<font color="black"> 112. # check for SSL</font>
+<font color="green"> 113. try:</font>
+<font color="green"> 114.     import ssl</font>
+<font color="red"> 115. except ImportError:</font>
+<font color="red"> 116.     _have_ssl = False</font>
+<font color="black"> 117. else:</font>
+<font color="green"> 118.     _have_ssl = True</font>
+<font color="black"> 119. </font>
+<font color="green"> 120. from urllib import (unwrap, unquote, splittype, splithost, quote,</font>
+<font color="black"> 121.      addinfourl, splitport, splittag, toBytes,</font>
+<font color="black"> 122.      splitattr, ftpwrapper, splituser, splitpasswd, splitvalue)</font>
+<font color="black"> 123. </font>
+<font color="black"> 124. # support for FileHandler, proxies via environment variables</font>
+<font color="green"> 125. from urllib import localhost, url2pathname, getproxies, proxy_bypass</font>
+<font color="black"> 126. </font>
+<font color="black"> 127. # used in User-Agent header sent</font>
+<font color="green"> 128. __version__ = sys.version[:3]</font>
+<font color="black"> 129. </font>
+<font color="green"> 130. _opener = None</font>
+<font color="green"> 131. def urlopen(url, data=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT,</font>
+<font color="green"> 132.             cafile=None, capath=None, cadefault=False, context=None):</font>
+<font color="black"> 133.     global _opener</font>
+<font color="red"> 134.     if cafile or capath or cadefault:</font>
+<font color="red"> 135.         if context is not None:</font>
+<font color="red"> 136.             raise ValueError(</font>
+<font color="red"> 137.                 &quot;You can't pass both context and any of cafile, capath, and &quot;</font>
+<font color="black"> 138.                 &quot;cadefault&quot;</font>
+<font color="black"> 139.             )</font>
+<font color="red"> 140.         if not _have_ssl:</font>
+<font color="red"> 141.             raise ValueError('SSL support not available')</font>
+<font color="red"> 142.         context = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH,</font>
+<font color="red"> 143.                                              cafile=cafile,</font>
+<font color="red"> 144.                                              capath=capath)</font>
+<font color="red"> 145.         https_handler = HTTPSHandler(context=context)</font>
+<font color="red"> 146.         opener = build_opener(https_handler)</font>
+<font color="red"> 147.     elif context:</font>
+<font color="red"> 148.         https_handler = HTTPSHandler(context=context)</font>
+<font color="red"> 149.         opener = build_opener(https_handler)</font>
+<font color="red"> 150.     elif _opener is None:</font>
+<font color="red"> 151.         _opener = opener = build_opener()</font>
+<font color="black"> 152.     else:</font>
+<font color="red"> 153.         opener = _opener</font>
+<font color="red"> 154.     return opener.open(url, data, timeout)</font>
+<font color="black"> 155. </font>
+<font color="green"> 156. def install_opener(opener):</font>
+<font color="black"> 157.     global _opener</font>
+<font color="red"> 158.     _opener = opener</font>
+<font color="black"> 159. </font>
+<font color="black"> 160. # do these error classes make sense?</font>
+<font color="black"> 161. # make sure all of the IOError stuff is overridden.  we just want to be</font>
+<font color="black"> 162. # subtypes.</font>
+<font color="black"> 163. </font>
+<font color="green"> 164. class URLError(IOError):</font>
+<font color="black"> 165.     # URLError is a sub-type of IOError, but it doesn't share any of</font>
+<font color="black"> 166.     # the implementation.  need to override __init__ and __str__.</font>
+<font color="black"> 167.     # It sets self.args for compatibility with other EnvironmentError</font>
+<font color="black"> 168.     # subclasses, but args doesn't have the typical format with errno in</font>
+<font color="black"> 169.     # slot 0 and strerror in slot 1.  This may be better than nothing.</font>
+<font color="green"> 170.     def __init__(self, reason):</font>
+<font color="red"> 171.         self.args = reason,</font>
+<font color="red"> 172.         self.reason = reason</font>
+<font color="black"> 173. </font>
+<font color="green"> 174.     def __str__(self):</font>
+<font color="red"> 175.         return '&lt;urlopen error %s&gt;' % self.reason</font>
+<font color="black"> 176. </font>
+<font color="green"> 177. class HTTPError(URLError, addinfourl):</font>
+<font color="green"> 178.     &quot;&quot;&quot;Raised when HTTP error occurs, but also acts like non-error return&quot;&quot;&quot;</font>
+<font color="green"> 179.     __super_init = addinfourl.__init__</font>
+<font color="black"> 180. </font>
+<font color="green"> 181.     def __init__(self, url, code, msg, hdrs, fp):</font>
+<font color="red"> 182.         self.code = code</font>
+<font color="red"> 183.         self.msg = msg</font>
+<font color="red"> 184.         self.hdrs = hdrs</font>
+<font color="red"> 185.         self.fp = fp</font>
+<font color="red"> 186.         self.filename = url</font>
+<font color="black"> 187.         # The addinfourl classes depend on fp being a valid file</font>
+<font color="black"> 188.         # object.  In some cases, the HTTPError may not have a valid</font>
+<font color="black"> 189.         # file object.  If this happens, the simplest workaround is to</font>
+<font color="black"> 190.         # not initialize the base classes.</font>
+<font color="red"> 191.         if fp is not None:</font>
+<font color="red"> 192.             self.__super_init(fp, hdrs, url, code)</font>
+<font color="black"> 193. </font>
+<font color="green"> 194.     def __str__(self):</font>
+<font color="red"> 195.         return 'HTTP Error %s: %s' % (self.code, self.msg)</font>
+<font color="black"> 196. </font>
+<font color="black"> 197.     # since URLError specifies a .reason attribute, HTTPError should also</font>
+<font color="black"> 198.     #  provide this attribute. See issue13211 fo discussion.</font>
+<font color="green"> 199.     @property</font>
+<font color="black"> 200.     def reason(self):</font>
+<font color="red"> 201.         return self.msg</font>
+<font color="black"> 202. </font>
+<font color="green"> 203.     def info(self):</font>
+<font color="red"> 204.         return self.hdrs</font>
+<font color="black"> 205. </font>
+<font color="black"> 206. # copied from cookielib.py</font>
+<font color="green"> 207. _cut_port_re = re.compile(r&quot;:\d+$&quot;)</font>
+<font color="green"> 208. def request_host(request):</font>
+<font color="black"> 209.     &quot;&quot;&quot;Return request-host, as defined by RFC 2965.</font>
+<font color="black"> 210. </font>
+<font color="black"> 211.     Variation from RFC: returned value is lowercased, for convenient</font>
+<font color="black"> 212.     comparison.</font>
+<font color="black"> 213. </font>
+<font color="black"> 214.     &quot;&quot;&quot;</font>
+<font color="red"> 215.     url = request.get_full_url()</font>
+<font color="red"> 216.     host = urlparse.urlparse(url)[1]</font>
+<font color="red"> 217.     if host == &quot;&quot;:</font>
+<font color="red"> 218.         host = request.get_header(&quot;Host&quot;, &quot;&quot;)</font>
+<font color="black"> 219. </font>
+<font color="black"> 220.     # remove port, if present</font>
+<font color="red"> 221.     host = _cut_port_re.sub(&quot;&quot;, host, 1)</font>
+<font color="red"> 222.     return host.lower()</font>
+<font color="black"> 223. </font>
+<font color="green"> 224. class Request:</font>
+<font color="black"> 225. </font>
+<font color="green"> 226.     def __init__(self, url, data=None, headers={},</font>
+<font color="green"> 227.                  origin_req_host=None, unverifiable=False):</font>
+<font color="black"> 228.         # unwrap('&lt;URL:type://host/path&gt;') --&gt; 'type://host/path'</font>
+<font color="red"> 229.         self.__original = unwrap(url)</font>
+<font color="red"> 230.         self.__original, self.__fragment = splittag(self.__original)</font>
+<font color="red"> 231.         self.type = None</font>
+<font color="black"> 232.         # self.__r_type is what's left after doing the splittype</font>
+<font color="red"> 233.         self.host = None</font>
+<font color="red"> 234.         self.port = None</font>
+<font color="red"> 235.         self._tunnel_host = None</font>
+<font color="red"> 236.         self.data = data</font>
+<font color="red"> 237.         self.headers = {}</font>
+<font color="red"> 238.         for key, value in headers.items():</font>
+<font color="red"> 239.             self.add_header(key, value)</font>
+<font color="red"> 240.         self.unredirected_hdrs = {}</font>
+<font color="red"> 241.         if origin_req_host is None:</font>
+<font color="red"> 242.             origin_req_host = request_host(self)</font>
+<font color="red"> 243.         self.origin_req_host = origin_req_host</font>
+<font color="red"> 244.         self.unverifiable = unverifiable</font>
+<font color="black"> 245. </font>
+<font color="green"> 246.     def __getattr__(self, attr):</font>
+<font color="black"> 247.         # XXX this is a fallback mechanism to guard against these</font>
+<font color="black"> 248.         # methods getting called in a non-standard order.  this may be</font>
+<font color="black"> 249.         # too complicated and/or unnecessary.</font>
+<font color="black"> 250.         # XXX should the __r_XXX attributes be public?</font>
+<font color="red"> 251.         if attr in ('_Request__r_type', '_Request__r_host'):</font>
+<font color="red"> 252.             getattr(self, 'get_' + attr[12:])()</font>
+<font color="red"> 253.             return self.__dict__[attr]</font>
+<font color="red"> 254.         raise AttributeError, attr</font>
+<font color="black"> 255. </font>
+<font color="green"> 256.     def get_method(self):</font>
+<font color="red"> 257.         if self.has_data():</font>
+<font color="red"> 258.             return &quot;POST&quot;</font>
+<font color="black"> 259.         else:</font>
+<font color="red"> 260.             return &quot;GET&quot;</font>
+<font color="black"> 261. </font>
+<font color="black"> 262.     # XXX these helper methods are lame</font>
+<font color="black"> 263. </font>
+<font color="green"> 264.     def add_data(self, data):</font>
+<font color="red"> 265.         self.data = data</font>
+<font color="black"> 266. </font>
+<font color="green"> 267.     def has_data(self):</font>
+<font color="red"> 268.         return self.data is not None</font>
+<font color="black"> 269. </font>
+<font color="green"> 270.     def get_data(self):</font>
+<font color="red"> 271.         return self.data</font>
+<font color="black"> 272. </font>
+<font color="green"> 273.     def get_full_url(self):</font>
+<font color="red"> 274.         if self.__fragment:</font>
+<font color="red"> 275.             return '%s#%s' % (self.__original, self.__fragment)</font>
+<font color="black"> 276.         else:</font>
+<font color="red"> 277.             return self.__original</font>
+<font color="black"> 278. </font>
+<font color="green"> 279.     def get_type(self):</font>
+<font color="red"> 280.         if self.type is None:</font>
+<font color="red"> 281.             self.type, self.__r_type = splittype(self.__original)</font>
+<font color="red"> 282.             if self.type is None:</font>
+<font color="red"> 283.                 raise ValueError, &quot;unknown url type: %s&quot; % self.__original</font>
+<font color="red"> 284.         return self.type</font>
+<font color="black"> 285. </font>
+<font color="green"> 286.     def get_host(self):</font>
+<font color="red"> 287.         if self.host is None:</font>
+<font color="red"> 288.             self.host, self.__r_host = splithost(self.__r_type)</font>
+<font color="red"> 289.             if self.host:</font>
+<font color="red"> 290.                 self.host = unquote(self.host)</font>
+<font color="red"> 291.         return self.host</font>
+<font color="black"> 292. </font>
+<font color="green"> 293.     def get_selector(self):</font>
+<font color="red"> 294.         return self.__r_host</font>
+<font color="black"> 295. </font>
+<font color="green"> 296.     def set_proxy(self, host, type):</font>
+<font color="red"> 297.         if self.type == 'https' and not self._tunnel_host:</font>
+<font color="red"> 298.             self._tunnel_host = self.host</font>
+<font color="black"> 299.         else:</font>
+<font color="red"> 300.             self.type = type</font>
+<font color="red"> 301.             self.__r_host = self.__original</font>
+<font color="black"> 302. </font>
+<font color="red"> 303.         self.host = host</font>
+<font color="black"> 304. </font>
+<font color="green"> 305.     def has_proxy(self):</font>
+<font color="red"> 306.         return self.__r_host == self.__original</font>
+<font color="black"> 307. </font>
+<font color="green"> 308.     def get_origin_req_host(self):</font>
+<font color="red"> 309.         return self.origin_req_host</font>
+<font color="black"> 310. </font>
+<font color="green"> 311.     def is_unverifiable(self):</font>
+<font color="red"> 312.         return self.unverifiable</font>
+<font color="black"> 313. </font>
+<font color="green"> 314.     def add_header(self, key, val):</font>
+<font color="black"> 315.         # useful for something like authentication</font>
+<font color="red"> 316.         self.headers[key.capitalize()] = val</font>
+<font color="black"> 317. </font>
+<font color="green"> 318.     def add_unredirected_header(self, key, val):</font>
+<font color="black"> 319.         # will not be added to a redirected request</font>
+<font color="red"> 320.         self.unredirected_hdrs[key.capitalize()] = val</font>
+<font color="black"> 321. </font>
+<font color="green"> 322.     def has_header(self, header_name):</font>
+<font color="red"> 323.         return (header_name in self.headers or</font>
+<font color="red"> 324.                 header_name in self.unredirected_hdrs)</font>
+<font color="black"> 325. </font>
+<font color="green"> 326.     def get_header(self, header_name, default=None):</font>
+<font color="red"> 327.         return self.headers.get(</font>
+<font color="red"> 328.             header_name,</font>
+<font color="red"> 329.             self.unredirected_hdrs.get(header_name, default))</font>
+<font color="black"> 330. </font>
+<font color="green"> 331.     def header_items(self):</font>
+<font color="red"> 332.         hdrs = self.unredirected_hdrs.copy()</font>
+<font color="red"> 333.         hdrs.update(self.headers)</font>
+<font color="red"> 334.         return hdrs.items()</font>
+<font color="black"> 335. </font>
+<font color="green"> 336. class OpenerDirector:</font>
+<font color="green"> 337.     def __init__(self):</font>
+<font color="red"> 338.         client_version = &quot;Python-urllib/%s&quot; % __version__</font>
+<font color="red"> 339.         self.addheaders = [('User-agent', client_version)]</font>
+<font color="black"> 340.         # self.handlers is retained only for backward compatibility</font>
+<font color="red"> 341.         self.handlers = []</font>
+<font color="black"> 342.         # manage the individual handlers</font>
+<font color="red"> 343.         self.handle_open = {}</font>
+<font color="red"> 344.         self.handle_error = {}</font>
+<font color="red"> 345.         self.process_response = {}</font>
+<font color="red"> 346.         self.process_request = {}</font>
+<font color="black"> 347. </font>
+<font color="green"> 348.     def add_handler(self, handler):</font>
+<font color="red"> 349.         if not hasattr(handler, &quot;add_parent&quot;):</font>
+<font color="red"> 350.             raise TypeError(&quot;expected BaseHandler instance, got %r&quot; %</font>
+<font color="red"> 351.                             type(handler))</font>
+<font color="black"> 352. </font>
+<font color="red"> 353.         added = False</font>
+<font color="red"> 354.         for meth in dir(handler):</font>
+<font color="red"> 355.             if meth in [&quot;redirect_request&quot;, &quot;do_open&quot;, &quot;proxy_open&quot;]:</font>
+<font color="black"> 356.                 # oops, coincidental match</font>
+<font color="red"> 357.                 continue</font>
+<font color="black"> 358. </font>
+<font color="red"> 359.             i = meth.find(&quot;_&quot;)</font>
+<font color="red"> 360.             protocol = meth[:i]</font>
+<font color="red"> 361.             condition = meth[i+1:]</font>
+<font color="black"> 362. </font>
+<font color="red"> 363.             if condition.startswith(&quot;error&quot;):</font>
+<font color="red"> 364.                 j = condition.find(&quot;_&quot;) + i + 1</font>
+<font color="red"> 365.                 kind = meth[j+1:]</font>
+<font color="red"> 366.                 try:</font>
+<font color="red"> 367.                     kind = int(kind)</font>
+<font color="red"> 368.                 except ValueError:</font>
+<font color="red"> 369.                     pass</font>
+<font color="red"> 370.                 lookup = self.handle_error.get(protocol, {})</font>
+<font color="red"> 371.                 self.handle_error[protocol] = lookup</font>
+<font color="red"> 372.             elif condition == &quot;open&quot;:</font>
+<font color="red"> 373.                 kind = protocol</font>
+<font color="red"> 374.                 lookup = self.handle_open</font>
+<font color="red"> 375.             elif condition == &quot;response&quot;:</font>
+<font color="red"> 376.                 kind = protocol</font>
+<font color="red"> 377.                 lookup = self.process_response</font>
+<font color="red"> 378.             elif condition == &quot;request&quot;:</font>
+<font color="red"> 379.                 kind = protocol</font>
+<font color="red"> 380.                 lookup = self.process_request</font>
+<font color="black"> 381.             else:</font>
+<font color="red"> 382.                 continue</font>
+<font color="black"> 383. </font>
+<font color="red"> 384.             handlers = lookup.setdefault(kind, [])</font>
+<font color="red"> 385.             if handlers:</font>
+<font color="red"> 386.                 bisect.insort(handlers, handler)</font>
+<font color="black"> 387.             else:</font>
+<font color="red"> 388.                 handlers.append(handler)</font>
+<font color="red"> 389.             added = True</font>
+<font color="black"> 390. </font>
+<font color="red"> 391.         if added:</font>
+<font color="red"> 392.             bisect.insort(self.handlers, handler)</font>
+<font color="red"> 393.             handler.add_parent(self)</font>
+<font color="black"> 394. </font>
+<font color="green"> 395.     def close(self):</font>
+<font color="black"> 396.         # Only exists for backwards compatibility.</font>
+<font color="red"> 397.         pass</font>
+<font color="black"> 398. </font>
+<font color="green"> 399.     def _call_chain(self, chain, kind, meth_name, *args):</font>
+<font color="black"> 400.         # Handlers raise an exception if no one else should try to handle</font>
+<font color="black"> 401.         # the request, or return None if they can't but another handler</font>
+<font color="black"> 402.         # could.  Otherwise, they return the response.</font>
+<font color="red"> 403.         handlers = chain.get(kind, ())</font>
+<font color="red"> 404.         for handler in handlers:</font>
+<font color="red"> 405.             func = getattr(handler, meth_name)</font>
+<font color="black"> 406. </font>
+<font color="red"> 407.             result = func(*args)</font>
+<font color="red"> 408.             if result is not None:</font>
+<font color="red"> 409.                 return result</font>
+<font color="black"> 410. </font>
+<font color="green"> 411.     def open(self, fullurl, data=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT):</font>
+<font color="black"> 412.         # accept a URL or a Request object</font>
+<font color="red"> 413.         if isinstance(fullurl, basestring):</font>
+<font color="red"> 414.             req = Request(fullurl, data)</font>
+<font color="black"> 415.         else:</font>
+<font color="red"> 416.             req = fullurl</font>
+<font color="red"> 417.             if data is not None:</font>
+<font color="red"> 418.                 req.add_data(data)</font>
+<font color="black"> 419. </font>
+<font color="red"> 420.         req.timeout = timeout</font>
+<font color="red"> 421.         protocol = req.get_type()</font>
+<font color="black"> 422. </font>
+<font color="black"> 423.         # pre-process request</font>
+<font color="red"> 424.         meth_name = protocol+&quot;_request&quot;</font>
+<font color="red"> 425.         for processor in self.process_request.get(protocol, []):</font>
+<font color="red"> 426.             meth = getattr(processor, meth_name)</font>
+<font color="red"> 427.             req = meth(req)</font>
+<font color="black"> 428. </font>
+<font color="red"> 429.         response = self._open(req, data)</font>
+<font color="black"> 430. </font>
+<font color="black"> 431.         # post-process response</font>
+<font color="red"> 432.         meth_name = protocol+&quot;_response&quot;</font>
+<font color="red"> 433.         for processor in self.process_response.get(protocol, []):</font>
+<font color="red"> 434.             meth = getattr(processor, meth_name)</font>
+<font color="red"> 435.             response = meth(req, response)</font>
+<font color="black"> 436. </font>
+<font color="red"> 437.         return response</font>
+<font color="black"> 438. </font>
+<font color="green"> 439.     def _open(self, req, data=None):</font>
+<font color="red"> 440.         result = self._call_chain(self.handle_open, 'default',</font>
+<font color="red"> 441.                                   'default_open', req)</font>
+<font color="red"> 442.         if result:</font>
+<font color="red"> 443.             return result</font>
+<font color="black"> 444. </font>
+<font color="red"> 445.         protocol = req.get_type()</font>
+<font color="red"> 446.         result = self._call_chain(self.handle_open, protocol, protocol +</font>
+<font color="red"> 447.                                   '_open', req)</font>
+<font color="red"> 448.         if result:</font>
+<font color="red"> 449.             return result</font>
+<font color="black"> 450. </font>
+<font color="red"> 451.         return self._call_chain(self.handle_open, 'unknown',</font>
+<font color="red"> 452.                                 'unknown_open', req)</font>
+<font color="black"> 453. </font>
+<font color="green"> 454.     def error(self, proto, *args):</font>
+<font color="red"> 455.         if proto in ('http', 'https'):</font>
+<font color="black"> 456.             # XXX http[s] protocols are special-cased</font>
+<font color="red"> 457.             dict = self.handle_error['http'] # https is not different than http</font>
+<font color="red"> 458.             proto = args[2]  # YUCK!</font>
+<font color="red"> 459.             meth_name = 'http_error_%s' % proto</font>
+<font color="red"> 460.             http_err = 1</font>
+<font color="red"> 461.             orig_args = args</font>
+<font color="black"> 462.         else:</font>
+<font color="red"> 463.             dict = self.handle_error</font>
+<font color="red"> 464.             meth_name = proto + '_error'</font>
+<font color="red"> 465.             http_err = 0</font>
+<font color="red"> 466.         args = (dict, proto, meth_name) + args</font>
+<font color="red"> 467.         result = self._call_chain(*args)</font>
+<font color="red"> 468.         if result:</font>
+<font color="red"> 469.             return result</font>
+<font color="black"> 470. </font>
+<font color="red"> 471.         if http_err:</font>
+<font color="red"> 472.             args = (dict, 'default', 'http_error_default') + orig_args</font>
+<font color="red"> 473.             return self._call_chain(*args)</font>
+<font color="black"> 474. </font>
+<font color="black"> 475. # XXX probably also want an abstract factory that knows when it makes</font>
+<font color="black"> 476. # sense to skip a superclass in favor of a subclass and when it might</font>
+<font color="black"> 477. # make sense to include both</font>
+<font color="black"> 478. </font>
+<font color="green"> 479. def build_opener(*handlers):</font>
+<font color="black"> 480.     &quot;&quot;&quot;Create an opener object from a list of handlers.</font>
+<font color="black"> 481. </font>
+<font color="black"> 482.     The opener will use several default handlers, including support</font>
+<font color="black"> 483.     for HTTP, FTP and when applicable, HTTPS.</font>
+<font color="black"> 484. </font>
+<font color="black"> 485.     If any of the handlers passed as arguments are subclasses of the</font>
+<font color="black"> 486.     default handlers, the default handlers will not be used.</font>
+<font color="black"> 487.     &quot;&quot;&quot;</font>
+<font color="red"> 488.     import types</font>
+<font color="red"> 489.     def isclass(obj):</font>
+<font color="red"> 490.         return isinstance(obj, (types.ClassType, type))</font>
+<font color="black"> 491. </font>
+<font color="red"> 492.     opener = OpenerDirector()</font>
+<font color="red"> 493.     default_classes = [ProxyHandler, UnknownHandler, HTTPHandler,</font>
+<font color="red"> 494.                        HTTPDefaultErrorHandler, HTTPRedirectHandler,</font>
+<font color="red"> 495.                        FTPHandler, FileHandler, HTTPErrorProcessor]</font>
+<font color="red"> 496.     if hasattr(httplib, 'HTTPS'):</font>
+<font color="red"> 497.         default_classes.append(HTTPSHandler)</font>
+<font color="red"> 498.     skip = set()</font>
+<font color="red"> 499.     for klass in default_classes:</font>
+<font color="red"> 500.         for check in handlers:</font>
+<font color="red"> 501.             if isclass(check):</font>
+<font color="red"> 502.                 if issubclass(check, klass):</font>
+<font color="red"> 503.                     skip.add(klass)</font>
+<font color="red"> 504.             elif isinstance(check, klass):</font>
+<font color="red"> 505.                 skip.add(klass)</font>
+<font color="red"> 506.     for klass in skip:</font>
+<font color="red"> 507.         default_classes.remove(klass)</font>
+<font color="black"> 508. </font>
+<font color="red"> 509.     for klass in default_classes:</font>
+<font color="red"> 510.         opener.add_handler(klass())</font>
+<font color="black"> 511. </font>
+<font color="red"> 512.     for h in handlers:</font>
+<font color="red"> 513.         if isclass(h):</font>
+<font color="red"> 514.             h = h()</font>
+<font color="red"> 515.         opener.add_handler(h)</font>
+<font color="red"> 516.     return opener</font>
+<font color="black"> 517. </font>
+<font color="green"> 518. class BaseHandler:</font>
+<font color="green"> 519.     handler_order = 500</font>
+<font color="black"> 520. </font>
+<font color="green"> 521.     def add_parent(self, parent):</font>
+<font color="red"> 522.         self.parent = parent</font>
+<font color="black"> 523. </font>
+<font color="green"> 524.     def close(self):</font>
+<font color="black"> 525.         # Only exists for backwards compatibility</font>
+<font color="red"> 526.         pass</font>
+<font color="black"> 527. </font>
+<font color="green"> 528.     def __lt__(self, other):</font>
+<font color="red"> 529.         if not hasattr(other, &quot;handler_order&quot;):</font>
+<font color="black"> 530.             # Try to preserve the old behavior of having custom classes</font>
+<font color="black"> 531.             # inserted after default ones (works only for custom user</font>
+<font color="black"> 532.             # classes which are not aware of handler_order).</font>
+<font color="red"> 533.             return True</font>
+<font color="red"> 534.         return self.handler_order &lt; other.handler_order</font>
+<font color="black"> 535. </font>
+<font color="black"> 536. </font>
+<font color="green"> 537. class HTTPErrorProcessor(BaseHandler):</font>
+<font color="green"> 538.     &quot;&quot;&quot;Process HTTP error responses.&quot;&quot;&quot;</font>
+<font color="green"> 539.     handler_order = 1000  # after all other processing</font>
+<font color="black"> 540. </font>
+<font color="green"> 541.     def http_response(self, request, response):</font>
+<font color="red"> 542.         code, msg, hdrs = response.code, response.msg, response.info()</font>
+<font color="black"> 543. </font>
+<font color="black"> 544.         # According to RFC 2616, &quot;2xx&quot; code indicates that the client's</font>
+<font color="black"> 545.         # request was successfully received, understood, and accepted.</font>
+<font color="red"> 546.         if not (200 &lt;= code &lt; 300):</font>
+<font color="red"> 547.             response = self.parent.error(</font>
+<font color="red"> 548.                 'http', request, response, code, msg, hdrs)</font>
+<font color="black"> 549. </font>
+<font color="red"> 550.         return response</font>
+<font color="black"> 551. </font>
+<font color="green"> 552.     https_response = http_response</font>
+<font color="black"> 553. </font>
+<font color="green"> 554. class HTTPDefaultErrorHandler(BaseHandler):</font>
+<font color="green"> 555.     def http_error_default(self, req, fp, code, msg, hdrs):</font>
+<font color="red"> 556.         raise HTTPError(req.get_full_url(), code, msg, hdrs, fp)</font>
+<font color="black"> 557. </font>
+<font color="green"> 558. class HTTPRedirectHandler(BaseHandler):</font>
+<font color="black"> 559.     # maximum number of redirections to any single URL</font>
+<font color="black"> 560.     # this is needed because of the state that cookies introduce</font>
+<font color="green"> 561.     max_repeats = 4</font>
+<font color="black"> 562.     # maximum total number of redirections (regardless of URL) before</font>
+<font color="black"> 563.     # assuming we're in a loop</font>
+<font color="green"> 564.     max_redirections = 10</font>
+<font color="black"> 565. </font>
+<font color="green"> 566.     def redirect_request(self, req, fp, code, msg, headers, newurl):</font>
+<font color="black"> 567.         &quot;&quot;&quot;Return a Request or None in response to a redirect.</font>
+<font color="black"> 568. </font>
+<font color="black"> 569.         This is called by the http_error_30x methods when a</font>
+<font color="black"> 570.         redirection response is received.  If a redirection should</font>
+<font color="black"> 571.         take place, return a new Request to allow http_error_30x to</font>
+<font color="black"> 572.         perform the redirect.  Otherwise, raise HTTPError if no-one</font>
+<font color="black"> 573.         else should try to handle this url.  Return None if you can't</font>
+<font color="black"> 574.         but another Handler might.</font>
+<font color="black"> 575.         &quot;&quot;&quot;</font>
+<font color="red"> 576.         m = req.get_method()</font>
+<font color="red"> 577.         if (code in (301, 302, 303, 307) and m in (&quot;GET&quot;, &quot;HEAD&quot;)</font>
+<font color="red"> 578.             or code in (301, 302, 303) and m == &quot;POST&quot;):</font>
+<font color="black"> 579.             # Strictly (according to RFC 2616), 301 or 302 in response</font>
+<font color="black"> 580.             # to a POST MUST NOT cause a redirection without confirmation</font>
+<font color="black"> 581.             # from the user (of urllib2, in this case).  In practice,</font>
+<font color="black"> 582.             # essentially all clients do redirect in this case, so we</font>
+<font color="black"> 583.             # do the same.</font>
+<font color="black"> 584.             # be conciliant with URIs containing a space</font>
+<font color="red"> 585.             newurl = newurl.replace(' ', '%20')</font>
+<font color="red"> 586.             newheaders = dict((k,v) for k,v in req.headers.items()</font>
+<font color="red"> 587.                               if k.lower() not in (&quot;content-length&quot;, &quot;content-type&quot;)</font>
+<font color="black"> 588.                              )</font>
+<font color="red"> 589.             return Request(newurl,</font>
+<font color="red"> 590.                            headers=newheaders,</font>
+<font color="red"> 591.                            origin_req_host=req.get_origin_req_host(),</font>
+<font color="red"> 592.                            unverifiable=True)</font>
+<font color="black"> 593.         else:</font>
+<font color="red"> 594.             raise HTTPError(req.get_full_url(), code, msg, headers, fp)</font>
+<font color="black"> 595. </font>
+<font color="black"> 596.     # Implementation note: To avoid the server sending us into an</font>
+<font color="black"> 597.     # infinite loop, the request object needs to track what URLs we</font>
+<font color="black"> 598.     # have already seen.  Do this by adding a handler-specific</font>
+<font color="black"> 599.     # attribute to the Request object.</font>
+<font color="green"> 600.     def http_error_302(self, req, fp, code, msg, headers):</font>
+<font color="black"> 601.         # Some servers (incorrectly) return multiple Location headers</font>
+<font color="black"> 602.         # (so probably same goes for URI).  Use first header.</font>
+<font color="red"> 603.         if 'location' in headers:</font>
+<font color="red"> 604.             newurl = headers.getheaders('location')[0]</font>
+<font color="red"> 605.         elif 'uri' in headers:</font>
+<font color="red"> 606.             newurl = headers.getheaders('uri')[0]</font>
+<font color="black"> 607.         else:</font>
+<font color="red"> 608.             return</font>
+<font color="black"> 609. </font>
+<font color="black"> 610.         # fix a possible malformed URL</font>
+<font color="red"> 611.         urlparts = urlparse.urlparse(newurl)</font>
+<font color="red"> 612.         if not urlparts.path and urlparts.netloc:</font>
+<font color="red"> 613.             urlparts = list(urlparts)</font>
+<font color="red"> 614.             urlparts[2] = &quot;/&quot;</font>
+<font color="red"> 615.         newurl = urlparse.urlunparse(urlparts)</font>
+<font color="black"> 616. </font>
+<font color="red"> 617.         newurl = urlparse.urljoin(req.get_full_url(), newurl)</font>
+<font color="black"> 618. </font>
+<font color="black"> 619.         # For security reasons we do not allow redirects to protocols</font>
+<font color="black"> 620.         # other than HTTP, HTTPS or FTP.</font>
+<font color="red"> 621.         newurl_lower = newurl.lower()</font>
+<font color="red"> 622.         if not (newurl_lower.startswith('http://') or</font>
+<font color="red"> 623.                 newurl_lower.startswith('https://') or</font>
+<font color="red"> 624.                 newurl_lower.startswith('ftp://')):</font>
+<font color="red"> 625.             raise HTTPError(newurl, code,</font>
+<font color="red"> 626.                             msg + &quot; - Redirection to url '%s' is not allowed&quot; %</font>
+<font color="red"> 627.                             newurl,</font>
+<font color="red"> 628.                             headers, fp)</font>
+<font color="black"> 629. </font>
+<font color="black"> 630.         # XXX Probably want to forget about the state of the current</font>
+<font color="black"> 631.         # request, although that might interact poorly with other</font>
+<font color="black"> 632.         # handlers that also use handler-specific request attributes</font>
+<font color="red"> 633.         new = self.redirect_request(req, fp, code, msg, headers, newurl)</font>
+<font color="red"> 634.         if new is None:</font>
+<font color="red"> 635.             return</font>
+<font color="black"> 636. </font>
+<font color="black"> 637.         # loop detection</font>
+<font color="black"> 638.         # .redirect_dict has a key url if url was previously visited.</font>
+<font color="red"> 639.         if hasattr(req, 'redirect_dict'):</font>
+<font color="red"> 640.             visited = new.redirect_dict = req.redirect_dict</font>
+<font color="red"> 641.             if (visited.get(newurl, 0) &gt;= self.max_repeats or</font>
+<font color="red"> 642.                 len(visited) &gt;= self.max_redirections):</font>
+<font color="red"> 643.                 raise HTTPError(req.get_full_url(), code,</font>
+<font color="red"> 644.                                 self.inf_msg + msg, headers, fp)</font>
+<font color="black"> 645.         else:</font>
+<font color="red"> 646.             visited = new.redirect_dict = req.redirect_dict = {}</font>
+<font color="red"> 647.         visited[newurl] = visited.get(newurl, 0) + 1</font>
+<font color="black"> 648. </font>
+<font color="black"> 649.         # Don't close the fp until we are sure that we won't use it</font>
+<font color="black"> 650.         # with HTTPError.</font>
+<font color="red"> 651.         fp.read()</font>
+<font color="red"> 652.         fp.close()</font>
+<font color="black"> 653. </font>
+<font color="red"> 654.         return self.parent.open(new, timeout=req.timeout)</font>
+<font color="black"> 655. </font>
+<font color="green"> 656.     http_error_301 = http_error_303 = http_error_307 = http_error_302</font>
+<font color="black"> 657. </font>
+<font color="green"> 658.     inf_msg = &quot;The HTTP server returned a redirect error that would &quot; \</font>
+<font color="black"> 659.               &quot;lead to an infinite loop.\n&quot; \</font>
+<font color="black"> 660.               &quot;The last 30x error message was:\n&quot;</font>
+<font color="black"> 661. </font>
+<font color="black"> 662. </font>
+<font color="green"> 663. def _parse_proxy(proxy):</font>
+<font color="black"> 664.     &quot;&quot;&quot;Return (scheme, user, password, host/port) given a URL or an authority.</font>
+<font color="black"> 665. </font>
+<font color="black"> 666.     If a URL is supplied, it must have an authority (host:port) component.</font>
+<font color="black"> 667.     According to RFC 3986, having an authority component means the URL must</font>
+<font color="black"> 668.     have two slashes after the scheme:</font>
+<font color="black"> 669. </font>
+<font color="black"> 670.     &gt;&gt;&gt; _parse_proxy('file:/ftp.example.com/')</font>
+<font color="black"> 671.     Traceback (most recent call last):</font>
+<font color="black"> 672.     ValueError: proxy URL with no authority: 'file:/ftp.example.com/'</font>
+<font color="black"> 673. </font>
+<font color="black"> 674.     The first three items of the returned tuple may be None.</font>
+<font color="black"> 675. </font>
+<font color="black"> 676.     Examples of authority parsing:</font>
+<font color="black"> 677. </font>
+<font color="black"> 678.     &gt;&gt;&gt; _parse_proxy('proxy.example.com')</font>
+<font color="black"> 679.     (None, None, None, 'proxy.example.com')</font>
+<font color="black"> 680.     &gt;&gt;&gt; _parse_proxy('proxy.example.com:3128')</font>
+<font color="black"> 681.     (None, None, None, 'proxy.example.com:3128')</font>
+<font color="black"> 682. </font>
+<font color="black"> 683.     The authority component may optionally include userinfo (assumed to be</font>
+<font color="black"> 684.     username:password):</font>
+<font color="black"> 685. </font>
+<font color="black"> 686.     &gt;&gt;&gt; _parse_proxy('joe:password@proxy.example.com')</font>
+<font color="black"> 687.     (None, 'joe', 'password', 'proxy.example.com')</font>
+<font color="black"> 688.     &gt;&gt;&gt; _parse_proxy('joe:password@proxy.example.com:3128')</font>
+<font color="black"> 689.     (None, 'joe', 'password', 'proxy.example.com:3128')</font>
+<font color="black"> 690. </font>
+<font color="black"> 691.     Same examples, but with URLs instead:</font>
+<font color="black"> 692. </font>
+<font color="black"> 693.     &gt;&gt;&gt; _parse_proxy('http://proxy.example.com/')</font>
+<font color="black"> 694.     ('http', None, None, 'proxy.example.com')</font>
+<font color="black"> 695.     &gt;&gt;&gt; _parse_proxy('http://proxy.example.com:3128/')</font>
+<font color="black"> 696.     ('http', None, None, 'proxy.example.com:3128')</font>
+<font color="black"> 697.     &gt;&gt;&gt; _parse_proxy('http://joe:password@proxy.example.com/')</font>
+<font color="black"> 698.     ('http', 'joe', 'password', 'proxy.example.com')</font>
+<font color="black"> 699.     &gt;&gt;&gt; _parse_proxy('http://joe:password@proxy.example.com:3128')</font>
+<font color="black"> 700.     ('http', 'joe', 'password', 'proxy.example.com:3128')</font>
+<font color="black"> 701. </font>
+<font color="black"> 702.     Everything after the authority is ignored:</font>
+<font color="black"> 703. </font>
+<font color="black"> 704.     &gt;&gt;&gt; _parse_proxy('ftp://joe:password@proxy.example.com/rubbish:3128')</font>
+<font color="black"> 705.     ('ftp', 'joe', 'password', 'proxy.example.com')</font>
+<font color="black"> 706. </font>
+<font color="black"> 707.     Test for no trailing '/' case:</font>
+<font color="black"> 708. </font>
+<font color="black"> 709.     &gt;&gt;&gt; _parse_proxy('http://joe:password@proxy.example.com')</font>
+<font color="black"> 710.     ('http', 'joe', 'password', 'proxy.example.com')</font>
+<font color="black"> 711. </font>
+<font color="black"> 712.     &quot;&quot;&quot;</font>
+<font color="red"> 713.     scheme, r_scheme = splittype(proxy)</font>
+<font color="red"> 714.     if not r_scheme.startswith(&quot;/&quot;):</font>
+<font color="black"> 715.         # authority</font>
+<font color="red"> 716.         scheme = None</font>
+<font color="red"> 717.         authority = proxy</font>
+<font color="black"> 718.     else:</font>
+<font color="black"> 719.         # URL</font>
+<font color="red"> 720.         if not r_scheme.startswith(&quot;//&quot;):</font>
+<font color="red"> 721.             raise ValueError(&quot;proxy URL with no authority: %r&quot; % proxy)</font>
+<font color="black"> 722.         # We have an authority, so for RFC 3986-compliant URLs (by ss 3.</font>
+<font color="black"> 723.         # and 3.3.), path is empty or starts with '/'</font>
+<font color="red"> 724.         end = r_scheme.find(&quot;/&quot;, 2)</font>
+<font color="red"> 725.         if end == -1:</font>
+<font color="red"> 726.             end = None</font>
+<font color="red"> 727.         authority = r_scheme[2:end]</font>
+<font color="red"> 728.     userinfo, hostport = splituser(authority)</font>
+<font color="red"> 729.     if userinfo is not None:</font>
+<font color="red"> 730.         user, password = splitpasswd(userinfo)</font>
+<font color="black"> 731.     else:</font>
+<font color="red"> 732.         user = password = None</font>
+<font color="red"> 733.     return scheme, user, password, hostport</font>
+<font color="black"> 734. </font>
+<font color="green"> 735. class ProxyHandler(BaseHandler):</font>
+<font color="black"> 736.     # Proxies must be in front</font>
+<font color="green"> 737.     handler_order = 100</font>
+<font color="black"> 738. </font>
+<font color="green"> 739.     def __init__(self, proxies=None):</font>
+<font color="red"> 740.         if proxies is None:</font>
+<font color="red"> 741.             proxies = getproxies()</font>
+<font color="red"> 742.         assert hasattr(proxies, 'has_key'), &quot;proxies must be a mapping&quot;</font>
+<font color="red"> 743.         self.proxies = proxies</font>
+<font color="red"> 744.         for type, url in proxies.items():</font>
+<font color="red"> 745.             setattr(self, '%s_open' % type,</font>
+<font color="red"> 746.                     lambda r, proxy=url, type=type, meth=self.proxy_open: \</font>
+<font color="red"> 747.                     meth(r, proxy, type))</font>
+<font color="black"> 748. </font>
+<font color="green"> 749.     def proxy_open(self, req, proxy, type):</font>
+<font color="red"> 750.         orig_type = req.get_type()</font>
+<font color="red"> 751.         proxy_type, user, password, hostport = _parse_proxy(proxy)</font>
+<font color="black"> 752. </font>
+<font color="red"> 753.         if proxy_type is None:</font>
+<font color="red"> 754.             proxy_type = orig_type</font>
+<font color="black"> 755. </font>
+<font color="red"> 756.         if req.host and proxy_bypass(req.host):</font>
+<font color="red"> 757.             return None</font>
+<font color="black"> 758. </font>
+<font color="red"> 759.         if user and password:</font>
+<font color="red"> 760.             user_pass = '%s:%s' % (unquote(user), unquote(password))</font>
+<font color="red"> 761.             creds = base64.b64encode(user_pass).strip()</font>
+<font color="red"> 762.             req.add_header('Proxy-authorization', 'Basic ' + creds)</font>
+<font color="red"> 763.         hostport = unquote(hostport)</font>
+<font color="red"> 764.         req.set_proxy(hostport, proxy_type)</font>
+<font color="black"> 765. </font>
+<font color="red"> 766.         if orig_type == proxy_type or orig_type == 'https':</font>
+<font color="black"> 767.             # let other handlers take care of it</font>
+<font color="red"> 768.             return None</font>
+<font color="black"> 769.         else:</font>
+<font color="black"> 770.             # need to start over, because the other handlers don't</font>
+<font color="black"> 771.             # grok the proxy's URL type</font>
+<font color="black"> 772.             # e.g. if we have a constructor arg proxies like so:</font>
+<font color="black"> 773.             # {'http': 'ftp://proxy.example.com'}, we may end up turning</font>
+<font color="black"> 774.             # a request for http://acme.example.com/a into one for</font>
+<font color="black"> 775.             # ftp://proxy.example.com/a</font>
+<font color="red"> 776.             return self.parent.open(req, timeout=req.timeout)</font>
+<font color="black"> 777. </font>
+<font color="green"> 778. class HTTPPasswordMgr:</font>
+<font color="black"> 779. </font>
+<font color="green"> 780.     def __init__(self):</font>
+<font color="red"> 781.         self.passwd = {}</font>
+<font color="black"> 782. </font>
+<font color="green"> 783.     def add_password(self, realm, uri, user, passwd):</font>
+<font color="black"> 784.         # uri could be a single URI or a sequence</font>
+<font color="red"> 785.         if isinstance(uri, basestring):</font>
+<font color="red"> 786.             uri = [uri]</font>
+<font color="red"> 787.         if not realm in self.passwd:</font>
+<font color="red"> 788.             self.passwd[realm] = {}</font>
+<font color="red"> 789.         for default_port in True, False:</font>
+<font color="red"> 790.             reduced_uri = tuple(</font>
+<font color="red"> 791.                 [self.reduce_uri(u, default_port) for u in uri])</font>
+<font color="red"> 792.             self.passwd[realm][reduced_uri] = (user, passwd)</font>
+<font color="black"> 793. </font>
+<font color="green"> 794.     def find_user_password(self, realm, authuri):</font>
+<font color="red"> 795.         domains = self.passwd.get(realm, {})</font>
+<font color="red"> 796.         for default_port in True, False:</font>
+<font color="red"> 797.             reduced_authuri = self.reduce_uri(authuri, default_port)</font>
+<font color="red"> 798.             for uris, authinfo in domains.iteritems():</font>
+<font color="red"> 799.                 for uri in uris:</font>
+<font color="red"> 800.                     if self.is_suburi(uri, reduced_authuri):</font>
+<font color="red"> 801.                         return authinfo</font>
+<font color="red"> 802.         return None, None</font>
+<font color="black"> 803. </font>
+<font color="green"> 804.     def reduce_uri(self, uri, default_port=True):</font>
+<font color="black"> 805.         &quot;&quot;&quot;Accept authority or URI and extract only the authority and path.&quot;&quot;&quot;</font>
+<font color="black"> 806.         # note HTTP URLs do not have a userinfo component</font>
+<font color="red"> 807.         parts = urlparse.urlsplit(uri)</font>
+<font color="red"> 808.         if parts[1]:</font>
+<font color="black"> 809.             # URI</font>
+<font color="red"> 810.             scheme = parts[0]</font>
+<font color="red"> 811.             authority = parts[1]</font>
+<font color="red"> 812.             path = parts[2] or '/'</font>
+<font color="black"> 813.         else:</font>
+<font color="black"> 814.             # host or host:port</font>
+<font color="red"> 815.             scheme = None</font>
+<font color="red"> 816.             authority = uri</font>
+<font color="red"> 817.             path = '/'</font>
+<font color="red"> 818.         host, port = splitport(authority)</font>
+<font color="red"> 819.         if default_port and port is None and scheme is not None:</font>
+<font color="red"> 820.             dport = {&quot;http&quot;: 80,</font>
+<font color="red"> 821.                      &quot;https&quot;: 443,</font>
+<font color="red"> 822.                      }.get(scheme)</font>
+<font color="red"> 823.             if dport is not None:</font>
+<font color="red"> 824.                 authority = &quot;%s:%d&quot; % (host, dport)</font>
+<font color="red"> 825.         return authority, path</font>
+<font color="black"> 826. </font>
+<font color="green"> 827.     def is_suburi(self, base, test):</font>
+<font color="black"> 828.         &quot;&quot;&quot;Check if test is below base in a URI tree</font>
+<font color="black"> 829. </font>
+<font color="black"> 830.         Both args must be URIs in reduced form.</font>
+<font color="black"> 831.         &quot;&quot;&quot;</font>
+<font color="red"> 832.         if base == test:</font>
+<font color="red"> 833.             return True</font>
+<font color="red"> 834.         if base[0] != test[0]:</font>
+<font color="red"> 835.             return False</font>
+<font color="red"> 836.         common = posixpath.commonprefix((base[1], test[1]))</font>
+<font color="red"> 837.         if len(common) == len(base[1]):</font>
+<font color="red"> 838.             return True</font>
+<font color="red"> 839.         return False</font>
+<font color="black"> 840. </font>
+<font color="black"> 841. </font>
+<font color="green"> 842. class HTTPPasswordMgrWithDefaultRealm(HTTPPasswordMgr):</font>
+<font color="black"> 843. </font>
+<font color="green"> 844.     def find_user_password(self, realm, authuri):</font>
+<font color="red"> 845.         user, password = HTTPPasswordMgr.find_user_password(self, realm,</font>
+<font color="red"> 846.                                                             authuri)</font>
+<font color="red"> 847.         if user is not None:</font>
+<font color="red"> 848.             return user, password</font>
+<font color="red"> 849.         return HTTPPasswordMgr.find_user_password(self, None, authuri)</font>
+<font color="black"> 850. </font>
+<font color="black"> 851. </font>
+<font color="green"> 852. class AbstractBasicAuthHandler:</font>
+<font color="black"> 853. </font>
+<font color="black"> 854.     # XXX this allows for multiple auth-schemes, but will stupidly pick</font>
+<font color="black"> 855.     # the last one with a realm specified.</font>
+<font color="black"> 856. </font>
+<font color="black"> 857.     # allow for double- and single-quoted realm values</font>
+<font color="black"> 858.     # (single quotes are a violation of the RFC, but appear in the wild)</font>
+<font color="green"> 859.     rx = re.compile('(?:.*,)*[ \t]*([^ \t]+)[ \t]+'</font>
+<font color="green"> 860.                     'realm=([&quot;\']?)([^&quot;\']*)\\2', re.I)</font>
+<font color="black"> 861. </font>
+<font color="black"> 862.     # XXX could pre-emptively send auth info already accepted (RFC 2617,</font>
+<font color="black"> 863.     # end of section 2, and section 1.2 immediately after &quot;credentials&quot;</font>
+<font color="black"> 864.     # production).</font>
+<font color="black"> 865. </font>
+<font color="green"> 866.     def __init__(self, password_mgr=None):</font>
+<font color="red"> 867.         if password_mgr is None:</font>
+<font color="red"> 868.             password_mgr = HTTPPasswordMgr()</font>
+<font color="red"> 869.         self.passwd = password_mgr</font>
+<font color="red"> 870.         self.add_password = self.passwd.add_password</font>
+<font color="black"> 871. </font>
+<font color="black"> 872. </font>
+<font color="green"> 873.     def http_error_auth_reqed(self, authreq, host, req, headers):</font>
+<font color="black"> 874.         # host may be an authority (without userinfo) or a URL with an</font>
+<font color="black"> 875.         # authority</font>
+<font color="black"> 876.         # XXX could be multiple headers</font>
+<font color="red"> 877.         authreq = headers.get(authreq, None)</font>
+<font color="black"> 878. </font>
+<font color="red"> 879.         if authreq:</font>
+<font color="red"> 880.             mo = AbstractBasicAuthHandler.rx.search(authreq)</font>
+<font color="red"> 881.             if mo:</font>
+<font color="red"> 882.                 scheme, quote, realm = mo.groups()</font>
+<font color="red"> 883.                 if quote not in ['&quot;', &quot;'&quot;]:</font>
+<font color="red"> 884.                     warnings.warn(&quot;Basic Auth Realm was unquoted&quot;,</font>
+<font color="red"> 885.                                   UserWarning, 2)</font>
+<font color="red"> 886.                 if scheme.lower() == 'basic':</font>
+<font color="red"> 887.                     return self.retry_http_basic_auth(host, req, realm)</font>
+<font color="black"> 888. </font>
+<font color="green"> 889.     def retry_http_basic_auth(self, host, req, realm):</font>
+<font color="red"> 890.         user, pw = self.passwd.find_user_password(realm, host)</font>
+<font color="red"> 891.         if pw is not None:</font>
+<font color="red"> 892.             raw = &quot;%s:%s&quot; % (user, pw)</font>
+<font color="red"> 893.             auth = 'Basic %s' % base64.b64encode(raw).strip()</font>
+<font color="red"> 894.             if req.get_header(self.auth_header, None) == auth:</font>
+<font color="red"> 895.                 return None</font>
+<font color="red"> 896.             req.add_unredirected_header(self.auth_header, auth)</font>
+<font color="red"> 897.             return self.parent.open(req, timeout=req.timeout)</font>
+<font color="black"> 898.         else:</font>
+<font color="red"> 899.             return None</font>
+<font color="black"> 900. </font>
+<font color="black"> 901. </font>
+<font color="green"> 902. class HTTPBasicAuthHandler(AbstractBasicAuthHandler, BaseHandler):</font>
+<font color="black"> 903. </font>
+<font color="green"> 904.     auth_header = 'Authorization'</font>
+<font color="black"> 905. </font>
+<font color="green"> 906.     def http_error_401(self, req, fp, code, msg, headers):</font>
+<font color="red"> 907.         url = req.get_full_url()</font>
+<font color="red"> 908.         response = self.http_error_auth_reqed('www-authenticate',</font>
+<font color="red"> 909.                                               url, req, headers)</font>
+<font color="red"> 910.         return response</font>
+<font color="black"> 911. </font>
+<font color="black"> 912. </font>
+<font color="green"> 913. class ProxyBasicAuthHandler(AbstractBasicAuthHandler, BaseHandler):</font>
+<font color="black"> 914. </font>
+<font color="green"> 915.     auth_header = 'Proxy-authorization'</font>
+<font color="black"> 916. </font>
+<font color="green"> 917.     def http_error_407(self, req, fp, code, msg, headers):</font>
+<font color="black"> 918.         # http_error_auth_reqed requires that there is no userinfo component in</font>
+<font color="black"> 919.         # authority.  Assume there isn't one, since urllib2 does not (and</font>
+<font color="black"> 920.         # should not, RFC 3986 s. 3.2.1) support requests for URLs containing</font>
+<font color="black"> 921.         # userinfo.</font>
+<font color="red"> 922.         authority = req.get_host()</font>
+<font color="red"> 923.         response = self.http_error_auth_reqed('proxy-authenticate',</font>
+<font color="red"> 924.                                           authority, req, headers)</font>
+<font color="red"> 925.         return response</font>
+<font color="black"> 926. </font>
+<font color="black"> 927. </font>
+<font color="green"> 928. def randombytes(n):</font>
+<font color="black"> 929.     &quot;&quot;&quot;Return n random bytes.&quot;&quot;&quot;</font>
+<font color="black"> 930.     # Use /dev/urandom if it is available.  Fall back to random module</font>
+<font color="black"> 931.     # if not.  It might be worthwhile to extend this function to use</font>
+<font color="black"> 932.     # other platform-specific mechanisms for getting random bytes.</font>
+<font color="red"> 933.     if os.path.exists(&quot;/dev/urandom&quot;):</font>
+<font color="red"> 934.         f = open(&quot;/dev/urandom&quot;)</font>
+<font color="red"> 935.         s = f.read(n)</font>
+<font color="red"> 936.         f.close()</font>
+<font color="red"> 937.         return s</font>
+<font color="black"> 938.     else:</font>
+<font color="red"> 939.         L = [chr(random.randrange(0, 256)) for i in range(n)]</font>
+<font color="red"> 940.         return &quot;&quot;.join(L)</font>
+<font color="black"> 941. </font>
+<font color="green"> 942. class AbstractDigestAuthHandler:</font>
+<font color="black"> 943.     # Digest authentication is specified in RFC 2617.</font>
+<font color="black"> 944. </font>
+<font color="black"> 945.     # XXX The client does not inspect the Authentication-Info header</font>
+<font color="black"> 946.     # in a successful response.</font>
+<font color="black"> 947. </font>
+<font color="black"> 948.     # XXX It should be possible to test this implementation against</font>
+<font color="black"> 949.     # a mock server that just generates a static set of challenges.</font>
+<font color="black"> 950. </font>
+<font color="black"> 951.     # XXX qop=&quot;auth-int&quot; supports is shaky</font>
+<font color="black"> 952. </font>
+<font color="green"> 953.     def __init__(self, passwd=None):</font>
+<font color="red"> 954.         if passwd is None:</font>
+<font color="red"> 955.             passwd = HTTPPasswordMgr()</font>
+<font color="red"> 956.         self.passwd = passwd</font>
+<font color="red"> 957.         self.add_password = self.passwd.add_password</font>
+<font color="red"> 958.         self.retried = 0</font>
+<font color="red"> 959.         self.nonce_count = 0</font>
+<font color="red"> 960.         self.last_nonce = None</font>
+<font color="black"> 961. </font>
+<font color="green"> 962.     def reset_retry_count(self):</font>
+<font color="red"> 963.         self.retried = 0</font>
+<font color="black"> 964. </font>
+<font color="green"> 965.     def http_error_auth_reqed(self, auth_header, host, req, headers):</font>
+<font color="red"> 966.         authreq = headers.get(auth_header, None)</font>
+<font color="red"> 967.         if self.retried &gt; 5:</font>
+<font color="black"> 968.             # Don't fail endlessly - if we failed once, we'll probably</font>
+<font color="black"> 969.             # fail a second time. Hm. Unless the Password Manager is</font>
+<font color="black"> 970.             # prompting for the information. Crap. This isn't great</font>
+<font color="black"> 971.             # but it's better than the current 'repeat until recursion</font>
+<font color="black"> 972.             # depth exceeded' approach &lt;wink&gt;</font>
+<font color="red"> 973.             raise HTTPError(req.get_full_url(), 401, &quot;digest auth failed&quot;,</font>
+<font color="red"> 974.                             headers, None)</font>
+<font color="black"> 975.         else:</font>
+<font color="red"> 976.             self.retried += 1</font>
+<font color="red"> 977.         if authreq:</font>
+<font color="red"> 978.             scheme = authreq.split()[0]</font>
+<font color="red"> 979.             if scheme.lower() == 'digest':</font>
+<font color="red"> 980.                 return self.retry_http_digest_auth(req, authreq)</font>
+<font color="black"> 981. </font>
+<font color="green"> 982.     def retry_http_digest_auth(self, req, auth):</font>
+<font color="red"> 983.         token, challenge = auth.split(' ', 1)</font>
+<font color="red"> 984.         chal = parse_keqv_list(parse_http_list(challenge))</font>
+<font color="red"> 985.         auth = self.get_authorization(req, chal)</font>
+<font color="red"> 986.         if auth:</font>
+<font color="red"> 987.             auth_val = 'Digest %s' % auth</font>
+<font color="red"> 988.             if req.headers.get(self.auth_header, None) == auth_val:</font>
+<font color="red"> 989.                 return None</font>
+<font color="red"> 990.             req.add_unredirected_header(self.auth_header, auth_val)</font>
+<font color="red"> 991.             resp = self.parent.open(req, timeout=req.timeout)</font>
+<font color="red"> 992.             return resp</font>
+<font color="black"> 993. </font>
+<font color="green"> 994.     def get_cnonce(self, nonce):</font>
+<font color="black"> 995.         # The cnonce-value is an opaque</font>
+<font color="black"> 996.         # quoted string value provided by the client and used by both client</font>
+<font color="black"> 997.         # and server to avoid chosen plaintext attacks, to provide mutual</font>
+<font color="black"> 998.         # authentication, and to provide some message integrity protection.</font>
+<font color="black"> 999.         # This isn't a fabulous effort, but it's probably Good Enough.</font>
+<font color="red">1000.         dig = hashlib.sha1(&quot;%s:%s:%s:%s&quot; % (self.nonce_count, nonce, time.ctime(),</font>
+<font color="red">1001.                                             randombytes(8))).hexdigest()</font>
+<font color="red">1002.         return dig[:16]</font>
+<font color="black">1003. </font>
+<font color="green">1004.     def get_authorization(self, req, chal):</font>
+<font color="red">1005.         try:</font>
+<font color="red">1006.             realm = chal['realm']</font>
+<font color="red">1007.             nonce = chal['nonce']</font>
+<font color="red">1008.             qop = chal.get('qop')</font>
+<font color="red">1009.             algorithm = chal.get('algorithm', 'MD5')</font>
+<font color="black">1010.             # mod_digest doesn't send an opaque, even though it isn't</font>
+<font color="black">1011.             # supposed to be optional</font>
+<font color="red">1012.             opaque = chal.get('opaque', None)</font>
+<font color="red">1013.         except KeyError:</font>
+<font color="red">1014.             return None</font>
+<font color="black">1015. </font>
+<font color="red">1016.         H, KD = self.get_algorithm_impls(algorithm)</font>
+<font color="red">1017.         if H is None:</font>
+<font color="red">1018.             return None</font>
+<font color="black">1019. </font>
+<font color="red">1020.         user, pw = self.passwd.find_user_password(realm, req.get_full_url())</font>
+<font color="red">1021.         if user is None:</font>
+<font color="red">1022.             return None</font>
+<font color="black">1023. </font>
+<font color="black">1024.         # XXX not implemented yet</font>
+<font color="red">1025.         if req.has_data():</font>
+<font color="red">1026.             entdig = self.get_entity_digest(req.get_data(), chal)</font>
+<font color="black">1027.         else:</font>
+<font color="red">1028.             entdig = None</font>
+<font color="black">1029. </font>
+<font color="red">1030.         A1 = &quot;%s:%s:%s&quot; % (user, realm, pw)</font>
+<font color="red">1031.         A2 = &quot;%s:%s&quot; % (req.get_method(),</font>
+<font color="black">1032.                         # XXX selector: what about proxies and full urls</font>
+<font color="red">1033.                         req.get_selector())</font>
+<font color="red">1034.         if qop == 'auth':</font>
+<font color="red">1035.             if nonce == self.last_nonce:</font>
+<font color="red">1036.                 self.nonce_count += 1</font>
+<font color="black">1037.             else:</font>
+<font color="red">1038.                 self.nonce_count = 1</font>
+<font color="red">1039.                 self.last_nonce = nonce</font>
+<font color="black">1040. </font>
+<font color="red">1041.             ncvalue = '%08x' % self.nonce_count</font>
+<font color="red">1042.             cnonce = self.get_cnonce(nonce)</font>
+<font color="red">1043.             noncebit = &quot;%s:%s:%s:%s:%s&quot; % (nonce, ncvalue, cnonce, qop, H(A2))</font>
+<font color="red">1044.             respdig = KD(H(A1), noncebit)</font>
+<font color="red">1045.         elif qop is None:</font>
+<font color="red">1046.             respdig = KD(H(A1), &quot;%s:%s&quot; % (nonce, H(A2)))</font>
+<font color="black">1047.         else:</font>
+<font color="black">1048.             # XXX handle auth-int.</font>
+<font color="red">1049.             raise URLError(&quot;qop '%s' is not supported.&quot; % qop)</font>
+<font color="black">1050. </font>
+<font color="black">1051.         # XXX should the partial digests be encoded too?</font>
+<font color="black">1052. </font>
+<font color="red">1053.         base = 'username=&quot;%s&quot;, realm=&quot;%s&quot;, nonce=&quot;%s&quot;, uri=&quot;%s&quot;, ' \</font>
+<font color="red">1054.                'response=&quot;%s&quot;' % (user, realm, nonce, req.get_selector(),</font>
+<font color="red">1055.                                   respdig)</font>
+<font color="red">1056.         if opaque:</font>
+<font color="red">1057.             base += ', opaque=&quot;%s&quot;' % opaque</font>
+<font color="red">1058.         if entdig:</font>
+<font color="red">1059.             base += ', digest=&quot;%s&quot;' % entdig</font>
+<font color="red">1060.         base += ', algorithm=&quot;%s&quot;' % algorithm</font>
+<font color="red">1061.         if qop:</font>
+<font color="red">1062.             base += ', qop=auth, nc=%s, cnonce=&quot;%s&quot;' % (ncvalue, cnonce)</font>
+<font color="red">1063.         return base</font>
+<font color="black">1064. </font>
+<font color="green">1065.     def get_algorithm_impls(self, algorithm):</font>
+<font color="black">1066.         # algorithm should be case-insensitive according to RFC2617</font>
+<font color="red">1067.         algorithm = algorithm.upper()</font>
+<font color="black">1068.         # lambdas assume digest modules are imported at the top level</font>
+<font color="red">1069.         if algorithm == 'MD5':</font>
+<font color="red">1070.             H = lambda x: hashlib.md5(x).hexdigest()</font>
+<font color="red">1071.         elif algorithm == 'SHA':</font>
+<font color="red">1072.             H = lambda x: hashlib.sha1(x).hexdigest()</font>
+<font color="black">1073.         # XXX MD5-sess</font>
+<font color="black">1074.         else:</font>
+<font color="red">1075.             raise ValueError(&quot;Unsupported digest authentication &quot;</font>
+<font color="red">1076.                              &quot;algorithm %r&quot; % algorithm.lower())</font>
+<font color="red">1077.         KD = lambda s, d: H(&quot;%s:%s&quot; % (s, d))</font>
+<font color="red">1078.         return H, KD</font>
+<font color="black">1079. </font>
+<font color="green">1080.     def get_entity_digest(self, data, chal):</font>
+<font color="black">1081.         # XXX not implemented yet</font>
+<font color="red">1082.         return None</font>
+<font color="black">1083. </font>
+<font color="black">1084. </font>
+<font color="green">1085. class HTTPDigestAuthHandler(BaseHandler, AbstractDigestAuthHandler):</font>
+<font color="black">1086.     &quot;&quot;&quot;An authentication protocol defined by RFC 2069</font>
+<font color="black">1087. </font>
+<font color="black">1088.     Digest authentication improves on basic authentication because it</font>
+<font color="black">1089.     does not transmit passwords in the clear.</font>
+<font color="green">1090.     &quot;&quot;&quot;</font>
+<font color="black">1091. </font>
+<font color="green">1092.     auth_header = 'Authorization'</font>
+<font color="green">1093.     handler_order = 490  # before Basic auth</font>
+<font color="black">1094. </font>
+<font color="green">1095.     def http_error_401(self, req, fp, code, msg, headers):</font>
+<font color="red">1096.         host = urlparse.urlparse(req.get_full_url())[1]</font>
+<font color="red">1097.         retry = self.http_error_auth_reqed('www-authenticate',</font>
+<font color="red">1098.                                            host, req, headers)</font>
+<font color="red">1099.         self.reset_retry_count()</font>
+<font color="red">1100.         return retry</font>
+<font color="black">1101. </font>
+<font color="black">1102. </font>
+<font color="green">1103. class ProxyDigestAuthHandler(BaseHandler, AbstractDigestAuthHandler):</font>
+<font color="black">1104. </font>
+<font color="green">1105.     auth_header = 'Proxy-Authorization'</font>
+<font color="green">1106.     handler_order = 490  # before Basic auth</font>
+<font color="black">1107. </font>
+<font color="green">1108.     def http_error_407(self, req, fp, code, msg, headers):</font>
+<font color="red">1109.         host = req.get_host()</font>
+<font color="red">1110.         retry = self.http_error_auth_reqed('proxy-authenticate',</font>
+<font color="red">1111.                                            host, req, headers)</font>
+<font color="red">1112.         self.reset_retry_count()</font>
+<font color="red">1113.         return retry</font>
+<font color="black">1114. </font>
+<font color="green">1115. class AbstractHTTPHandler(BaseHandler):</font>
+<font color="black">1116. </font>
+<font color="green">1117.     def __init__(self, debuglevel=0):</font>
+<font color="red">1118.         self._debuglevel = debuglevel</font>
+<font color="black">1119. </font>
+<font color="green">1120.     def set_http_debuglevel(self, level):</font>
+<font color="red">1121.         self._debuglevel = level</font>
+<font color="black">1122. </font>
+<font color="green">1123.     def do_request_(self, request):</font>
+<font color="red">1124.         host = request.get_host()</font>
+<font color="red">1125.         if not host:</font>
+<font color="red">1126.             raise URLError('no host given')</font>
+<font color="black">1127. </font>
+<font color="red">1128.         if request.has_data():  # POST</font>
+<font color="red">1129.             data = request.get_data()</font>
+<font color="red">1130.             if not request.has_header('Content-type'):</font>
+<font color="red">1131.                 request.add_unredirected_header(</font>
+<font color="red">1132.                     'Content-type',</font>
+<font color="red">1133.                     'application/x-www-form-urlencoded')</font>
+<font color="red">1134.             if not request.has_header('Content-length'):</font>
+<font color="red">1135.                 request.add_unredirected_header(</font>
+<font color="red">1136.                     'Content-length', '%d' % len(data))</font>
+<font color="black">1137. </font>
+<font color="red">1138.         sel_host = host</font>
+<font color="red">1139.         if request.has_proxy():</font>
+<font color="red">1140.             scheme, sel = splittype(request.get_selector())</font>
+<font color="red">1141.             sel_host, sel_path = splithost(sel)</font>
+<font color="black">1142. </font>
+<font color="red">1143.         if not request.has_header('Host'):</font>
+<font color="red">1144.             request.add_unredirected_header('Host', sel_host)</font>
+<font color="red">1145.         for name, value in self.parent.addheaders:</font>
+<font color="red">1146.             name = name.capitalize()</font>
+<font color="red">1147.             if not request.has_header(name):</font>
+<font color="red">1148.                 request.add_unredirected_header(name, value)</font>
+<font color="black">1149. </font>
+<font color="red">1150.         return request</font>
+<font color="black">1151. </font>
+<font color="green">1152.     def do_open(self, http_class, req, **http_conn_args):</font>
+<font color="black">1153.         &quot;&quot;&quot;Return an addinfourl object for the request, using http_class.</font>
+<font color="black">1154. </font>
+<font color="black">1155.         http_class must implement the HTTPConnection API from httplib.</font>
+<font color="black">1156.         The addinfourl return value is a file-like object.  It also</font>
+<font color="black">1157.         has methods and attributes including:</font>
+<font color="black">1158.             - info(): return a mimetools.Message object for the headers</font>
+<font color="black">1159.             - geturl(): return the original request URL</font>
+<font color="black">1160.             - code: HTTP status code</font>
+<font color="black">1161.         &quot;&quot;&quot;</font>
+<font color="red">1162.         host = req.get_host()</font>
+<font color="red">1163.         if not host:</font>
+<font color="red">1164.             raise URLError('no host given')</font>
+<font color="black">1165. </font>
+<font color="black">1166.         # will parse host:port</font>
+<font color="red">1167.         h = http_class(host, timeout=req.timeout, **http_conn_args)</font>
+<font color="red">1168.         h.set_debuglevel(self._debuglevel)</font>
+<font color="black">1169. </font>
+<font color="red">1170.         headers = dict(req.unredirected_hdrs)</font>
+<font color="red">1171.         headers.update(dict((k, v) for k, v in req.headers.items()</font>
+<font color="red">1172.                             if k not in headers))</font>
+<font color="black">1173. </font>
+<font color="black">1174.         # We want to make an HTTP/1.1 request, but the addinfourl</font>
+<font color="black">1175.         # class isn't prepared to deal with a persistent connection.</font>
+<font color="black">1176.         # It will try to read all remaining data from the socket,</font>
+<font color="black">1177.         # which will block while the server waits for the next request.</font>
+<font color="black">1178.         # So make sure the connection gets closed after the (only)</font>
+<font color="black">1179.         # request.</font>
+<font color="red">1180.         headers[&quot;Connection&quot;] = &quot;close&quot;</font>
+<font color="red">1181.         headers = dict(</font>
+<font color="red">1182.             (name.title(), val) for name, val in headers.items())</font>
+<font color="black">1183. </font>
+<font color="red">1184.         if req._tunnel_host:</font>
+<font color="red">1185.             tunnel_headers = {}</font>
+<font color="red">1186.             proxy_auth_hdr = &quot;Proxy-Authorization&quot;</font>
+<font color="red">1187.             if proxy_auth_hdr in headers:</font>
+<font color="red">1188.                 tunnel_headers[proxy_auth_hdr] = headers[proxy_auth_hdr]</font>
+<font color="black">1189.                 # Proxy-Authorization should not be sent to origin</font>
+<font color="black">1190.                 # server.</font>
+<font color="red">1191.                 del headers[proxy_auth_hdr]</font>
+<font color="red">1192.             h.set_tunnel(req._tunnel_host, headers=tunnel_headers)</font>
+<font color="black">1193. </font>
+<font color="red">1194.         try:</font>
+<font color="red">1195.             h.request(req.get_method(), req.get_selector(), req.data, headers)</font>
+<font color="red">1196.         except socket.error, err: # XXX what error?</font>
+<font color="red">1197.             h.close()</font>
+<font color="red">1198.             raise URLError(err)</font>
+<font color="black">1199.         else:</font>
+<font color="red">1200.             try:</font>
+<font color="red">1201.                 r = h.getresponse(buffering=True)</font>
+<font color="red">1202.             except TypeError: # buffering kw not supported</font>
+<font color="red">1203.                 r = h.getresponse()</font>
+<font color="black">1204. </font>
+<font color="black">1205.         # Pick apart the HTTPResponse object to get the addinfourl</font>
+<font color="black">1206.         # object initialized properly.</font>
+<font color="black">1207. </font>
+<font color="black">1208.         # Wrap the HTTPResponse object in socket's file object adapter</font>
+<font color="black">1209.         # for Windows.  That adapter calls recv(), so delegate recv()</font>
+<font color="black">1210.         # to read().  This weird wrapping allows the returned object to</font>
+<font color="black">1211.         # have readline() and readlines() methods.</font>
+<font color="black">1212. </font>
+<font color="black">1213.         # XXX It might be better to extract the read buffering code</font>
+<font color="black">1214.         # out of socket._fileobject() and into a base class.</font>
+<font color="black">1215. </font>
+<font color="red">1216.         r.recv = r.read</font>
+<font color="red">1217.         fp = socket._fileobject(r, close=True)</font>
+<font color="black">1218. </font>
+<font color="red">1219.         resp = addinfourl(fp, r.msg, req.get_full_url())</font>
+<font color="red">1220.         resp.code = r.status</font>
+<font color="red">1221.         resp.msg = r.reason</font>
+<font color="red">1222.         return resp</font>
+<font color="black">1223. </font>
+<font color="black">1224. </font>
+<font color="green">1225. class HTTPHandler(AbstractHTTPHandler):</font>
+<font color="black">1226. </font>
+<font color="green">1227.     def http_open(self, req):</font>
+<font color="red">1228.         return self.do_open(httplib.HTTPConnection, req)</font>
+<font color="black">1229. </font>
+<font color="green">1230.     http_request = AbstractHTTPHandler.do_request_</font>
+<font color="black">1231. </font>
+<font color="green">1232. if hasattr(httplib, 'HTTPS'):</font>
+<font color="green">1233.     class HTTPSHandler(AbstractHTTPHandler):</font>
+<font color="black">1234. </font>
+<font color="green">1235.         def __init__(self, debuglevel=0, context=None):</font>
+<font color="red">1236.             AbstractHTTPHandler.__init__(self, debuglevel)</font>
+<font color="red">1237.             self._context = context</font>
+<font color="black">1238. </font>
+<font color="green">1239.         def https_open(self, req):</font>
+<font color="red">1240.             return self.do_open(httplib.HTTPSConnection, req,</font>
+<font color="red">1241.                 context=self._context)</font>
+<font color="black">1242. </font>
+<font color="green">1243.         https_request = AbstractHTTPHandler.do_request_</font>
+<font color="black">1244. </font>
+<font color="green">1245. class HTTPCookieProcessor(BaseHandler):</font>
+<font color="green">1246.     def __init__(self, cookiejar=None):</font>
+<font color="red">1247.         import cookielib</font>
+<font color="red">1248.         if cookiejar is None:</font>
+<font color="red">1249.             cookiejar = cookielib.CookieJar()</font>
+<font color="red">1250.         self.cookiejar = cookiejar</font>
+<font color="black">1251. </font>
+<font color="green">1252.     def http_request(self, request):</font>
+<font color="red">1253.         self.cookiejar.add_cookie_header(request)</font>
+<font color="red">1254.         return request</font>
+<font color="black">1255. </font>
+<font color="green">1256.     def http_response(self, request, response):</font>
+<font color="red">1257.         self.cookiejar.extract_cookies(response, request)</font>
+<font color="red">1258.         return response</font>
+<font color="black">1259. </font>
+<font color="green">1260.     https_request = http_request</font>
+<font color="green">1261.     https_response = http_response</font>
+<font color="black">1262. </font>
+<font color="green">1263. class UnknownHandler(BaseHandler):</font>
+<font color="green">1264.     def unknown_open(self, req):</font>
+<font color="red">1265.         type = req.get_type()</font>
+<font color="red">1266.         raise URLError('unknown url type: %s' % type)</font>
+<font color="black">1267. </font>
+<font color="green">1268. def parse_keqv_list(l):</font>
+<font color="black">1269.     &quot;&quot;&quot;Parse list of key=value strings where keys are not duplicated.&quot;&quot;&quot;</font>
+<font color="red">1270.     parsed = {}</font>
+<font color="red">1271.     for elt in l:</font>
+<font color="red">1272.         k, v = elt.split('=', 1)</font>
+<font color="red">1273.         if v[0] == '&quot;' and v[-1] == '&quot;':</font>
+<font color="red">1274.             v = v[1:-1]</font>
+<font color="red">1275.         parsed[k] = v</font>
+<font color="red">1276.     return parsed</font>
+<font color="black">1277. </font>
+<font color="green">1278. def parse_http_list(s):</font>
+<font color="black">1279.     &quot;&quot;&quot;Parse lists as described by RFC 2068 Section 2.</font>
+<font color="black">1280. </font>
+<font color="black">1281.     In particular, parse comma-separated lists where the elements of</font>
+<font color="black">1282.     the list may include quoted-strings.  A quoted-string could</font>
+<font color="black">1283.     contain a comma.  A non-quoted string could have quotes in the</font>
+<font color="black">1284.     middle.  Neither commas nor quotes count if they are escaped.</font>
+<font color="black">1285.     Only double-quotes count, not single-quotes.</font>
+<font color="black">1286.     &quot;&quot;&quot;</font>
+<font color="red">1287.     res = []</font>
+<font color="red">1288.     part = ''</font>
+<font color="black">1289. </font>
+<font color="red">1290.     escape = quote = False</font>
+<font color="red">1291.     for cur in s:</font>
+<font color="red">1292.         if escape:</font>
+<font color="red">1293.             part += cur</font>
+<font color="red">1294.             escape = False</font>
+<font color="red">1295.             continue</font>
+<font color="red">1296.         if quote:</font>
+<font color="red">1297.             if cur == '\\':</font>
+<font color="red">1298.                 escape = True</font>
+<font color="red">1299.                 continue</font>
+<font color="red">1300.             elif cur == '&quot;':</font>
+<font color="red">1301.                 quote = False</font>
+<font color="red">1302.             part += cur</font>
+<font color="red">1303.             continue</font>
+<font color="black">1304. </font>
+<font color="red">1305.         if cur == ',':</font>
+<font color="red">1306.             res.append(part)</font>
+<font color="red">1307.             part = ''</font>
+<font color="red">1308.             continue</font>
+<font color="black">1309. </font>
+<font color="red">1310.         if cur == '&quot;':</font>
+<font color="red">1311.             quote = True</font>
+<font color="black">1312. </font>
+<font color="red">1313.         part += cur</font>
+<font color="black">1314. </font>
+<font color="black">1315.     # append last part</font>
+<font color="red">1316.     if part:</font>
+<font color="red">1317.         res.append(part)</font>
+<font color="black">1318. </font>
+<font color="red">1319.     return [part.strip() for part in res]</font>
+<font color="black">1320. </font>
+<font color="green">1321. def _safe_gethostbyname(host):</font>
+<font color="red">1322.     try:</font>
+<font color="red">1323.         return socket.gethostbyname(host)</font>
+<font color="red">1324.     except socket.gaierror:</font>
+<font color="red">1325.         return None</font>
+<font color="black">1326. </font>
+<font color="green">1327. class FileHandler(BaseHandler):</font>
+<font color="black">1328.     # Use local file or FTP depending on form of URL</font>
+<font color="green">1329.     def file_open(self, req):</font>
+<font color="red">1330.         url = req.get_selector()</font>
+<font color="red">1331.         if url[:2] == '//' and url[2:3] != '/' and (req.host and</font>
+<font color="red">1332.                 req.host != 'localhost'):</font>
+<font color="red">1333.             req.type = 'ftp'</font>
+<font color="red">1334.             return self.parent.open(req)</font>
+<font color="black">1335.         else:</font>
+<font color="red">1336.             return self.open_local_file(req)</font>
+<font color="black">1337. </font>
+<font color="black">1338.     # names for the localhost</font>
+<font color="green">1339.     names = None</font>
+<font color="green">1340.     def get_names(self):</font>
+<font color="red">1341.         if FileHandler.names is None:</font>
+<font color="red">1342.             try:</font>
+<font color="red">1343.                 FileHandler.names = tuple(</font>
+<font color="red">1344.                     socket.gethostbyname_ex('localhost')[2] +</font>
+<font color="red">1345.                     socket.gethostbyname_ex(socket.gethostname())[2])</font>
+<font color="red">1346.             except socket.gaierror:</font>
+<font color="red">1347.                 FileHandler.names = (socket.gethostbyname('localhost'),)</font>
+<font color="red">1348.         return FileHandler.names</font>
+<font color="black">1349. </font>
+<font color="black">1350.     # not entirely sure what the rules are here</font>
+<font color="green">1351.     def open_local_file(self, req):</font>
+<font color="red">1352.         import email.utils</font>
+<font color="red">1353.         import mimetypes</font>
+<font color="red">1354.         host = req.get_host()</font>
+<font color="red">1355.         filename = req.get_selector()</font>
+<font color="red">1356.         localfile = url2pathname(filename)</font>
+<font color="red">1357.         try:</font>
+<font color="red">1358.             stats = os.stat(localfile)</font>
+<font color="red">1359.             size = stats.st_size</font>
+<font color="red">1360.             modified = email.utils.formatdate(stats.st_mtime, usegmt=True)</font>
+<font color="red">1361.             mtype = mimetypes.guess_type(filename)[0]</font>
+<font color="red">1362.             headers = mimetools.Message(StringIO(</font>
+<font color="red">1363.                 'Content-type: %s\nContent-length: %d\nLast-modified: %s\n' %</font>
+<font color="red">1364.                 (mtype or 'text/plain', size, modified)))</font>
+<font color="red">1365.             if host:</font>
+<font color="red">1366.                 host, port = splitport(host)</font>
+<font color="red">1367.             if not host or \</font>
+<font color="red">1368.                 (not port and _safe_gethostbyname(host) in self.get_names()):</font>
+<font color="red">1369.                 if host:</font>
+<font color="red">1370.                     origurl = 'file://' + host + filename</font>
+<font color="black">1371.                 else:</font>
+<font color="red">1372.                     origurl = 'file://' + filename</font>
+<font color="red">1373.                 return addinfourl(open(localfile, 'rb'), headers, origurl)</font>
+<font color="red">1374.         except OSError, msg:</font>
+<font color="black">1375.             # urllib2 users shouldn't expect OSErrors coming from urlopen()</font>
+<font color="red">1376.             raise URLError(msg)</font>
+<font color="red">1377.         raise URLError('file not on local host')</font>
+<font color="black">1378. </font>
+<font color="green">1379. class FTPHandler(BaseHandler):</font>
+<font color="green">1380.     def ftp_open(self, req):</font>
+<font color="red">1381.         import ftplib</font>
+<font color="red">1382.         import mimetypes</font>
+<font color="red">1383.         host = req.get_host()</font>
+<font color="red">1384.         if not host:</font>
+<font color="red">1385.             raise URLError('ftp error: no host given')</font>
+<font color="red">1386.         host, port = splitport(host)</font>
+<font color="red">1387.         if port is None:</font>
+<font color="red">1388.             port = ftplib.FTP_PORT</font>
+<font color="black">1389.         else:</font>
+<font color="red">1390.             port = int(port)</font>
+<font color="black">1391. </font>
+<font color="black">1392.         # username/password handling</font>
+<font color="red">1393.         user, host = splituser(host)</font>
+<font color="red">1394.         if user:</font>
+<font color="red">1395.             user, passwd = splitpasswd(user)</font>
+<font color="black">1396.         else:</font>
+<font color="red">1397.             passwd = None</font>
+<font color="red">1398.         host = unquote(host)</font>
+<font color="red">1399.         user = user or ''</font>
+<font color="red">1400.         passwd = passwd or ''</font>
+<font color="black">1401. </font>
+<font color="red">1402.         try:</font>
+<font color="red">1403.             host = socket.gethostbyname(host)</font>
+<font color="red">1404.         except socket.error, msg:</font>
+<font color="red">1405.             raise URLError(msg)</font>
+<font color="red">1406.         path, attrs = splitattr(req.get_selector())</font>
+<font color="red">1407.         dirs = path.split('/')</font>
+<font color="red">1408.         dirs = map(unquote, dirs)</font>
+<font color="red">1409.         dirs, file = dirs[:-1], dirs[-1]</font>
+<font color="red">1410.         if dirs and not dirs[0]:</font>
+<font color="red">1411.             dirs = dirs[1:]</font>
+<font color="red">1412.         try:</font>
+<font color="red">1413.             fw = self.connect_ftp(user, passwd, host, port, dirs, req.timeout)</font>
+<font color="red">1414.             type = file and 'I' or 'D'</font>
+<font color="red">1415.             for attr in attrs:</font>
+<font color="red">1416.                 attr, value = splitvalue(attr)</font>
+<font color="red">1417.                 if attr.lower() == 'type' and \</font>
+<font color="red">1418.                    value in ('a', 'A', 'i', 'I', 'd', 'D'):</font>
+<font color="red">1419.                     type = value.upper()</font>
+<font color="red">1420.             fp, retrlen = fw.retrfile(file, type)</font>
+<font color="red">1421.             headers = &quot;&quot;</font>
+<font color="red">1422.             mtype = mimetypes.guess_type(req.get_full_url())[0]</font>
+<font color="red">1423.             if mtype:</font>
+<font color="red">1424.                 headers += &quot;Content-type: %s\n&quot; % mtype</font>
+<font color="red">1425.             if retrlen is not None and retrlen &gt;= 0:</font>
+<font color="red">1426.                 headers += &quot;Content-length: %d\n&quot; % retrlen</font>
+<font color="red">1427.             sf = StringIO(headers)</font>
+<font color="red">1428.             headers = mimetools.Message(sf)</font>
+<font color="red">1429.             return addinfourl(fp, headers, req.get_full_url())</font>
+<font color="red">1430.         except ftplib.all_errors, msg:</font>
+<font color="red">1431.             raise URLError, ('ftp error: %s' % msg), sys.exc_info()[2]</font>
+<font color="black">1432. </font>
+<font color="green">1433.     def connect_ftp(self, user, passwd, host, port, dirs, timeout):</font>
+<font color="red">1434.         fw = ftpwrapper(user, passwd, host, port, dirs, timeout,</font>
+<font color="red">1435.                         persistent=False)</font>
+<font color="black">1436. ##        fw.ftp.set_debuglevel(1)</font>
+<font color="red">1437.         return fw</font>
+<font color="black">1438. </font>
+<font color="green">1439. class CacheFTPHandler(FTPHandler):</font>
+<font color="black">1440.     # XXX would be nice to have pluggable cache strategies</font>
+<font color="black">1441.     # XXX this stuff is definitely not thread safe</font>
+<font color="green">1442.     def __init__(self):</font>
+<font color="red">1443.         self.cache = {}</font>
+<font color="red">1444.         self.timeout = {}</font>
+<font color="red">1445.         self.soonest = 0</font>
+<font color="red">1446.         self.delay = 60</font>
+<font color="red">1447.         self.max_conns = 16</font>
+<font color="black">1448. </font>
+<font color="green">1449.     def setTimeout(self, t):</font>
+<font color="red">1450.         self.delay = t</font>
+<font color="black">1451. </font>
+<font color="green">1452.     def setMaxConns(self, m):</font>
+<font color="red">1453.         self.max_conns = m</font>
+<font color="black">1454. </font>
+<font color="green">1455.     def connect_ftp(self, user, passwd, host, port, dirs, timeout):</font>
+<font color="red">1456.         key = user, host, port, '/'.join(dirs), timeout</font>
+<font color="red">1457.         if key in self.cache:</font>
+<font color="red">1458.             self.timeout[key] = time.time() + self.delay</font>
+<font color="black">1459.         else:</font>
+<font color="red">1460.             self.cache[key] = ftpwrapper(user, passwd, host, port, dirs, timeout)</font>
+<font color="red">1461.             self.timeout[key] = time.time() + self.delay</font>
+<font color="red">1462.         self.check_cache()</font>
+<font color="red">1463.         return self.cache[key]</font>
+<font color="black">1464. </font>
+<font color="green">1465.     def check_cache(self):</font>
+<font color="black">1466.         # first check for old ones</font>
+<font color="red">1467.         t = time.time()</font>
+<font color="red">1468.         if self.soonest &lt;= t:</font>
+<font color="red">1469.             for k, v in self.timeout.items():</font>
+<font color="red">1470.                 if v &lt; t:</font>
+<font color="red">1471.                     self.cache[k].close()</font>
+<font color="red">1472.                     del self.cache[k]</font>
+<font color="red">1473.                     del self.timeout[k]</font>
+<font color="red">1474.         self.soonest = min(self.timeout.values())</font>
+<font color="black">1475. </font>
+<font color="black">1476.         # then check the size</font>
+<font color="red">1477.         if len(self.cache) == self.max_conns:</font>
+<font color="red">1478.             for k, v in self.timeout.items():</font>
+<font color="red">1479.                 if v == self.soonest:</font>
+<font color="red">1480.                     del self.cache[k]</font>
+<font color="red">1481.                     del self.timeout[k]</font>
+<font color="red">1482.                     break</font>
+<font color="red">1483.             self.soonest = min(self.timeout.values())</font>
+<font color="black">1484. </font>
+<font color="green">1485.     def clear_cache(self):</font>
+<font color="red">1486.         for conn in self.cache.values():</font>
+<font color="red">1487.             conn.close()</font>
+<font color="red">1488.         self.cache.clear()</font>
+<font color="red">1489.         self.timeout.clear()</font>
+</pre>
+

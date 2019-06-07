@@ -1,0 +1,284 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/multiprocessing/__init__.py</b><br>
+
+
+file stats: <b>107 lines, 42 executed: 39.3% covered</b>
+<pre>
+<font color="black">   1. #</font>
+<font color="black">   2. # Package analogous to 'threading.py' but using processes</font>
+<font color="black">   3. #</font>
+<font color="black">   4. # multiprocessing/__init__.py</font>
+<font color="black">   5. #</font>
+<font color="black">   6. # This package is intended to duplicate the functionality (and much of</font>
+<font color="black">   7. # the API) of threading.py but uses processes instead of threads.  A</font>
+<font color="black">   8. # subpackage 'multiprocessing.dummy' has the same API but is a simple</font>
+<font color="black">   9. # wrapper for 'threading'.</font>
+<font color="black">  10. #</font>
+<font color="black">  11. # Try calling `multiprocessing.doc.main()` to read the html</font>
+<font color="black">  12. # documentation in a webbrowser.</font>
+<font color="black">  13. #</font>
+<font color="black">  14. #</font>
+<font color="black">  15. # Copyright (c) 2006-2008, R Oudkerk</font>
+<font color="black">  16. # All rights reserved.</font>
+<font color="black">  17. #</font>
+<font color="black">  18. # Redistribution and use in source and binary forms, with or without</font>
+<font color="black">  19. # modification, are permitted provided that the following conditions</font>
+<font color="black">  20. # are met:</font>
+<font color="black">  21. #</font>
+<font color="black">  22. # 1. Redistributions of source code must retain the above copyright</font>
+<font color="black">  23. #    notice, this list of conditions and the following disclaimer.</font>
+<font color="black">  24. # 2. Redistributions in binary form must reproduce the above copyright</font>
+<font color="black">  25. #    notice, this list of conditions and the following disclaimer in the</font>
+<font color="black">  26. #    documentation and/or other materials provided with the distribution.</font>
+<font color="black">  27. # 3. Neither the name of author nor the names of any contributors may be</font>
+<font color="black">  28. #    used to endorse or promote products derived from this software</font>
+<font color="black">  29. #    without specific prior written permission.</font>
+<font color="black">  30. #</font>
+<font color="black">  31. # THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS &quot;AS IS&quot; AND</font>
+<font color="black">  32. # ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE</font>
+<font color="black">  33. # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE</font>
+<font color="black">  34. # ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE</font>
+<font color="black">  35. # FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL</font>
+<font color="black">  36. # DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS</font>
+<font color="black">  37. # OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)</font>
+<font color="black">  38. # HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT</font>
+<font color="black">  39. # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY</font>
+<font color="black">  40. # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</font>
+<font color="black">  41. # SUCH DAMAGE.</font>
+<font color="black">  42. #</font>
+<font color="black">  43. </font>
+<font color="green">  44. __version__ = '0.70a1'</font>
+<font color="black">  45. </font>
+<font color="black">  46. __all__ = [</font>
+<font color="green">  47.     'Process', 'current_process', 'active_children', 'freeze_support',</font>
+<font color="green">  48.     'Manager', 'Pipe', 'cpu_count', 'log_to_stderr', 'get_logger',</font>
+<font color="green">  49.     'allow_connection_pickling', 'BufferTooShort', 'TimeoutError',</font>
+<font color="green">  50.     'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition',</font>
+<font color="green">  51.     'Event', 'Queue', 'JoinableQueue', 'Pool', 'Value', 'Array',</font>
+<font color="green">  52.     'RawValue', 'RawArray', 'SUBDEBUG', 'SUBWARNING',</font>
+<font color="black">  53.     ]</font>
+<font color="black">  54. </font>
+<font color="green">  55. __author__ = 'R. Oudkerk (r.m.oudkerk@gmail.com)'</font>
+<font color="black">  56. </font>
+<font color="black">  57. #</font>
+<font color="black">  58. # Imports</font>
+<font color="black">  59. #</font>
+<font color="black">  60. </font>
+<font color="green">  61. import os</font>
+<font color="green">  62. import sys</font>
+<font color="black">  63. </font>
+<font color="green">  64. from multiprocessing.process import Process, current_process, active_children</font>
+<font color="green">  65. from multiprocessing.util import SUBDEBUG, SUBWARNING</font>
+<font color="black">  66. </font>
+<font color="black">  67. #</font>
+<font color="black">  68. # Exceptions</font>
+<font color="black">  69. #</font>
+<font color="black">  70. </font>
+<font color="green">  71. class ProcessError(Exception):</font>
+<font color="green">  72.     pass</font>
+<font color="black">  73. </font>
+<font color="green">  74. class BufferTooShort(ProcessError):</font>
+<font color="green">  75.     pass</font>
+<font color="black">  76. </font>
+<font color="green">  77. class TimeoutError(ProcessError):</font>
+<font color="green">  78.     pass</font>
+<font color="black">  79. </font>
+<font color="green">  80. class AuthenticationError(ProcessError):</font>
+<font color="green">  81.     pass</font>
+<font color="black">  82. </font>
+<font color="black">  83. # This is down here because _multiprocessing uses BufferTooShort</font>
+<font color="green">  84. import _multiprocessing</font>
+<font color="black">  85. </font>
+<font color="black">  86. #</font>
+<font color="black">  87. # Definitions not depending on native semaphores</font>
+<font color="black">  88. #</font>
+<font color="black">  89. </font>
+<font color="green">  90. def Manager():</font>
+<font color="black">  91.     '''</font>
+<font color="black">  92.     Returns a manager associated with a running server process</font>
+<font color="black">  93. </font>
+<font color="black">  94.     The managers methods such as `Lock()`, `Condition()` and `Queue()`</font>
+<font color="black">  95.     can be used to create shared objects.</font>
+<font color="black">  96.     '''</font>
+<font color="red">  97.     from multiprocessing.managers import SyncManager</font>
+<font color="red">  98.     m = SyncManager()</font>
+<font color="red">  99.     m.start()</font>
+<font color="red"> 100.     return m</font>
+<font color="black"> 101. </font>
+<font color="green"> 102. def Pipe(duplex=True):</font>
+<font color="black"> 103.     '''</font>
+<font color="black"> 104.     Returns two connection object connected by a pipe</font>
+<font color="black"> 105.     '''</font>
+<font color="red"> 106.     from multiprocessing.connection import Pipe</font>
+<font color="red"> 107.     return Pipe(duplex)</font>
+<font color="black"> 108. </font>
+<font color="green"> 109. def cpu_count():</font>
+<font color="black"> 110.     '''</font>
+<font color="black"> 111.     Returns the number of CPUs in the system</font>
+<font color="black"> 112.     '''</font>
+<font color="red"> 113.     if sys.platform == 'win32':</font>
+<font color="red"> 114.         try:</font>
+<font color="red"> 115.             num = int(os.environ['NUMBER_OF_PROCESSORS'])</font>
+<font color="red"> 116.         except (ValueError, KeyError):</font>
+<font color="red"> 117.             num = 0</font>
+<font color="red"> 118.     elif 'bsd' in sys.platform or sys.platform == 'darwin':</font>
+<font color="red"> 119.         comm = '/sbin/sysctl -n hw.ncpu'</font>
+<font color="red"> 120.         if sys.platform == 'darwin':</font>
+<font color="red"> 121.             comm = '/usr' + comm</font>
+<font color="red"> 122.         try:</font>
+<font color="red"> 123.             with os.popen(comm) as p:</font>
+<font color="red"> 124.                 num = int(p.read())</font>
+<font color="red"> 125.         except ValueError:</font>
+<font color="red"> 126.             num = 0</font>
+<font color="black"> 127.     else:</font>
+<font color="red"> 128.         try:</font>
+<font color="red"> 129.             num = os.sysconf('SC_NPROCESSORS_ONLN')</font>
+<font color="red"> 130.         except (ValueError, OSError, AttributeError):</font>
+<font color="red"> 131.             num = 0</font>
+<font color="black"> 132. </font>
+<font color="red"> 133.     if num &gt;= 1:</font>
+<font color="red"> 134.         return num</font>
+<font color="black"> 135.     else:</font>
+<font color="red"> 136.         raise NotImplementedError('cannot determine number of cpus')</font>
+<font color="black"> 137. </font>
+<font color="green"> 138. def freeze_support():</font>
+<font color="black"> 139.     '''</font>
+<font color="black"> 140.     Check whether this is a fake forked process in a frozen executable.</font>
+<font color="black"> 141.     If so then run code specified by commandline and exit.</font>
+<font color="black"> 142.     '''</font>
+<font color="red"> 143.     if sys.platform == 'win32' and getattr(sys, 'frozen', False):</font>
+<font color="red"> 144.         from multiprocessing.forking import freeze_support</font>
+<font color="red"> 145.         freeze_support()</font>
+<font color="black"> 146. </font>
+<font color="green"> 147. def get_logger():</font>
+<font color="black"> 148.     '''</font>
+<font color="black"> 149.     Return package logger -- if it does not already exist then it is created</font>
+<font color="black"> 150.     '''</font>
+<font color="red"> 151.     from multiprocessing.util import get_logger</font>
+<font color="red"> 152.     return get_logger()</font>
+<font color="black"> 153. </font>
+<font color="green"> 154. def log_to_stderr(level=None):</font>
+<font color="black"> 155.     '''</font>
+<font color="black"> 156.     Turn on logging and add a handler which prints to stderr</font>
+<font color="black"> 157.     '''</font>
+<font color="red"> 158.     from multiprocessing.util import log_to_stderr</font>
+<font color="red"> 159.     return log_to_stderr(level)</font>
+<font color="black"> 160. </font>
+<font color="green"> 161. def allow_connection_pickling():</font>
+<font color="black"> 162.     '''</font>
+<font color="black"> 163.     Install support for sending connections and sockets between processes</font>
+<font color="black"> 164.     '''</font>
+<font color="red"> 165.     from multiprocessing import reduction</font>
+<font color="black"> 166. </font>
+<font color="black"> 167. #</font>
+<font color="black"> 168. # Definitions depending on native semaphores</font>
+<font color="black"> 169. #</font>
+<font color="black"> 170. </font>
+<font color="green"> 171. def Lock():</font>
+<font color="black"> 172.     '''</font>
+<font color="black"> 173.     Returns a non-recursive lock object</font>
+<font color="black"> 174.     '''</font>
+<font color="red"> 175.     from multiprocessing.synchronize import Lock</font>
+<font color="red"> 176.     return Lock()</font>
+<font color="black"> 177. </font>
+<font color="green"> 178. def RLock():</font>
+<font color="black"> 179.     '''</font>
+<font color="black"> 180.     Returns a recursive lock object</font>
+<font color="black"> 181.     '''</font>
+<font color="red"> 182.     from multiprocessing.synchronize import RLock</font>
+<font color="red"> 183.     return RLock()</font>
+<font color="black"> 184. </font>
+<font color="green"> 185. def Condition(lock=None):</font>
+<font color="black"> 186.     '''</font>
+<font color="black"> 187.     Returns a condition object</font>
+<font color="black"> 188.     '''</font>
+<font color="red"> 189.     from multiprocessing.synchronize import Condition</font>
+<font color="red"> 190.     return Condition(lock)</font>
+<font color="black"> 191. </font>
+<font color="green"> 192. def Semaphore(value=1):</font>
+<font color="black"> 193.     '''</font>
+<font color="black"> 194.     Returns a semaphore object</font>
+<font color="black"> 195.     '''</font>
+<font color="red"> 196.     from multiprocessing.synchronize import Semaphore</font>
+<font color="red"> 197.     return Semaphore(value)</font>
+<font color="black"> 198. </font>
+<font color="green"> 199. def BoundedSemaphore(value=1):</font>
+<font color="black"> 200.     '''</font>
+<font color="black"> 201.     Returns a bounded semaphore object</font>
+<font color="black"> 202.     '''</font>
+<font color="red"> 203.     from multiprocessing.synchronize import BoundedSemaphore</font>
+<font color="red"> 204.     return BoundedSemaphore(value)</font>
+<font color="black"> 205. </font>
+<font color="green"> 206. def Event():</font>
+<font color="black"> 207.     '''</font>
+<font color="black"> 208.     Returns an event object</font>
+<font color="black"> 209.     '''</font>
+<font color="red"> 210.     from multiprocessing.synchronize import Event</font>
+<font color="red"> 211.     return Event()</font>
+<font color="black"> 212. </font>
+<font color="green"> 213. def Queue(maxsize=0):</font>
+<font color="black"> 214.     '''</font>
+<font color="black"> 215.     Returns a queue object</font>
+<font color="black"> 216.     '''</font>
+<font color="red"> 217.     from multiprocessing.queues import Queue</font>
+<font color="red"> 218.     return Queue(maxsize)</font>
+<font color="black"> 219. </font>
+<font color="green"> 220. def JoinableQueue(maxsize=0):</font>
+<font color="black"> 221.     '''</font>
+<font color="black"> 222.     Returns a queue object</font>
+<font color="black"> 223.     '''</font>
+<font color="red"> 224.     from multiprocessing.queues import JoinableQueue</font>
+<font color="red"> 225.     return JoinableQueue(maxsize)</font>
+<font color="black"> 226. </font>
+<font color="green"> 227. def Pool(processes=None, initializer=None, initargs=(), maxtasksperchild=None):</font>
+<font color="black"> 228.     '''</font>
+<font color="black"> 229.     Returns a process pool object</font>
+<font color="black"> 230.     '''</font>
+<font color="red"> 231.     from multiprocessing.pool import Pool</font>
+<font color="red"> 232.     return Pool(processes, initializer, initargs, maxtasksperchild)</font>
+<font color="black"> 233. </font>
+<font color="green"> 234. def RawValue(typecode_or_type, *args):</font>
+<font color="black"> 235.     '''</font>
+<font color="black"> 236.     Returns a shared object</font>
+<font color="black"> 237.     '''</font>
+<font color="red"> 238.     from multiprocessing.sharedctypes import RawValue</font>
+<font color="red"> 239.     return RawValue(typecode_or_type, *args)</font>
+<font color="black"> 240. </font>
+<font color="green"> 241. def RawArray(typecode_or_type, size_or_initializer):</font>
+<font color="black"> 242.     '''</font>
+<font color="black"> 243.     Returns a shared array</font>
+<font color="black"> 244.     '''</font>
+<font color="red"> 245.     from multiprocessing.sharedctypes import RawArray</font>
+<font color="red"> 246.     return RawArray(typecode_or_type, size_or_initializer)</font>
+<font color="black"> 247. </font>
+<font color="green"> 248. def Value(typecode_or_type, *args, **kwds):</font>
+<font color="black"> 249.     '''</font>
+<font color="black"> 250.     Returns a synchronized shared object</font>
+<font color="black"> 251.     '''</font>
+<font color="red"> 252.     from multiprocessing.sharedctypes import Value</font>
+<font color="red"> 253.     return Value(typecode_or_type, *args, **kwds)</font>
+<font color="black"> 254. </font>
+<font color="green"> 255. def Array(typecode_or_type, size_or_initializer, **kwds):</font>
+<font color="black"> 256.     '''</font>
+<font color="black"> 257.     Returns a synchronized shared array</font>
+<font color="black"> 258.     '''</font>
+<font color="red"> 259.     from multiprocessing.sharedctypes import Array</font>
+<font color="red"> 260.     return Array(typecode_or_type, size_or_initializer, **kwds)</font>
+<font color="black"> 261. </font>
+<font color="black"> 262. #</font>
+<font color="black"> 263. #</font>
+<font color="black"> 264. #</font>
+<font color="black"> 265. </font>
+<font color="green"> 266. if sys.platform == 'win32':</font>
+<font color="black"> 267. </font>
+<font color="red"> 268.     def set_executable(executable):</font>
+<font color="black"> 269.         '''</font>
+<font color="black"> 270.         Sets the path to a python.exe or pythonw.exe binary used to run</font>
+<font color="black"> 271.         child processes on Windows instead of sys.executable.</font>
+<font color="black"> 272.         Useful for people embedding Python.</font>
+<font color="black"> 273.         '''</font>
+<font color="red"> 274.         from multiprocessing.forking import set_executable</font>
+<font color="red"> 275.         set_executable(executable)</font>
+<font color="black"> 276. </font>
+<font color="red"> 277.     __all__ += ['set_executable']</font>
+</pre>
+

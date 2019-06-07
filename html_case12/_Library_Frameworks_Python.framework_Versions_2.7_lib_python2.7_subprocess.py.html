@@ -1,0 +1,1351 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/subprocess.py</b><br>
+
+
+file stats: <b>769 lines, 164 executed: 21.3% covered</b>
+<pre>
+<font color="black">   1. # subprocess - Subprocesses with accessible I/O streams</font>
+<font color="black">   2. #</font>
+<font color="black">   3. # For more information about this module, see PEP 324.</font>
+<font color="black">   4. #</font>
+<font color="black">   5. # Copyright (c) 2003-2005 by Peter Astrand &lt;astrand@lysator.liu.se&gt;</font>
+<font color="black">   6. #</font>
+<font color="black">   7. # Licensed to PSF under a Contributor Agreement.</font>
+<font color="black">   8. # See http://www.python.org/2.4/license for licensing details.</font>
+<font color="black">   9. </font>
+<font color="black">  10. r&quot;&quot;&quot;Subprocesses with accessible I/O streams</font>
+<font color="black">  11. </font>
+<font color="black">  12. This module allows you to spawn processes, connect to their</font>
+<font color="black">  13. input/output/error pipes, and obtain their return codes.</font>
+<font color="black">  14. </font>
+<font color="black">  15. For a complete description of this module see the Python documentation.</font>
+<font color="black">  16. </font>
+<font color="black">  17. Main API</font>
+<font color="black">  18. ========</font>
+<font color="black">  19. call(...): Runs a command, waits for it to complete, then returns</font>
+<font color="black">  20.     the return code.</font>
+<font color="black">  21. check_call(...): Same as call() but raises CalledProcessError()</font>
+<font color="black">  22.     if return code is not 0</font>
+<font color="black">  23. check_output(...): Same as check_call() but returns the contents of</font>
+<font color="black">  24.     stdout instead of a return code</font>
+<font color="black">  25. Popen(...): A class for flexibly executing a command in a new process</font>
+<font color="black">  26. </font>
+<font color="black">  27. Constants</font>
+<font color="black">  28. ---------</font>
+<font color="black">  29. PIPE:    Special value that indicates a pipe should be created</font>
+<font color="black">  30. STDOUT:  Special value that indicates that stderr should go to stdout</font>
+<font color="green">  31. &quot;&quot;&quot;</font>
+<font color="black">  32. </font>
+<font color="green">  33. import sys</font>
+<font color="green">  34. mswindows = (sys.platform == &quot;win32&quot;)</font>
+<font color="black">  35. </font>
+<font color="green">  36. import os</font>
+<font color="green">  37. import types</font>
+<font color="green">  38. import traceback</font>
+<font color="green">  39. import gc</font>
+<font color="green">  40. import signal</font>
+<font color="green">  41. import errno</font>
+<font color="black">  42. </font>
+<font color="black">  43. # Exception classes used by this module.</font>
+<font color="green">  44. class CalledProcessError(Exception):</font>
+<font color="black">  45.     &quot;&quot;&quot;This exception is raised when a process run by check_call() or</font>
+<font color="black">  46.     check_output() returns a non-zero exit status.</font>
+<font color="black">  47. </font>
+<font color="black">  48.     Attributes:</font>
+<font color="black">  49.       cmd, returncode, output</font>
+<font color="green">  50.     &quot;&quot;&quot;</font>
+<font color="green">  51.     def __init__(self, returncode, cmd, output=None):</font>
+<font color="red">  52.         self.returncode = returncode</font>
+<font color="red">  53.         self.cmd = cmd</font>
+<font color="red">  54.         self.output = output</font>
+<font color="green">  55.     def __str__(self):</font>
+<font color="red">  56.         return &quot;Command '%s' returned non-zero exit status %d&quot; % (self.cmd, self.returncode)</font>
+<font color="black">  57. </font>
+<font color="black">  58. </font>
+<font color="green">  59. if mswindows:</font>
+<font color="red">  60.     import threading</font>
+<font color="red">  61.     import msvcrt</font>
+<font color="red">  62.     import _subprocess</font>
+<font color="red">  63.     class STARTUPINFO:</font>
+<font color="red">  64.         dwFlags = 0</font>
+<font color="red">  65.         hStdInput = None</font>
+<font color="red">  66.         hStdOutput = None</font>
+<font color="red">  67.         hStdError = None</font>
+<font color="red">  68.         wShowWindow = 0</font>
+<font color="red">  69.     class pywintypes:</font>
+<font color="red">  70.         error = IOError</font>
+<font color="black">  71. else:</font>
+<font color="green">  72.     import select</font>
+<font color="green">  73.     _has_poll = hasattr(select, 'poll')</font>
+<font color="green">  74.     try:</font>
+<font color="green">  75.         import threading</font>
+<font color="red">  76.     except ImportError:</font>
+<font color="red">  77.         threading = None</font>
+<font color="green">  78.     import fcntl</font>
+<font color="green">  79.     import pickle</font>
+<font color="black">  80. </font>
+<font color="black">  81.     # When select or poll has indicated that the file is writable,</font>
+<font color="black">  82.     # we can write up to _PIPE_BUF bytes without risk of blocking.</font>
+<font color="black">  83.     # POSIX defines PIPE_BUF as &gt;= 512.</font>
+<font color="green">  84.     _PIPE_BUF = getattr(select, 'PIPE_BUF', 512)</font>
+<font color="black">  85. </font>
+<font color="black">  86. </font>
+<font color="green">  87. __all__ = [&quot;Popen&quot;, &quot;PIPE&quot;, &quot;STDOUT&quot;, &quot;call&quot;, &quot;check_call&quot;,</font>
+<font color="green">  88.            &quot;check_output&quot;, &quot;CalledProcessError&quot;]</font>
+<font color="black">  89. </font>
+<font color="green">  90. if mswindows:</font>
+<font color="red">  91.     from _subprocess import (CREATE_NEW_CONSOLE, CREATE_NEW_PROCESS_GROUP,</font>
+<font color="black">  92.                              STD_INPUT_HANDLE, STD_OUTPUT_HANDLE,</font>
+<font color="black">  93.                              STD_ERROR_HANDLE, SW_HIDE,</font>
+<font color="black">  94.                              STARTF_USESTDHANDLES, STARTF_USESHOWWINDOW)</font>
+<font color="black">  95. </font>
+<font color="red">  96.     __all__.extend([&quot;CREATE_NEW_CONSOLE&quot;, &quot;CREATE_NEW_PROCESS_GROUP&quot;,</font>
+<font color="red">  97.                     &quot;STD_INPUT_HANDLE&quot;, &quot;STD_OUTPUT_HANDLE&quot;,</font>
+<font color="red">  98.                     &quot;STD_ERROR_HANDLE&quot;, &quot;SW_HIDE&quot;,</font>
+<font color="red">  99.                     &quot;STARTF_USESTDHANDLES&quot;, &quot;STARTF_USESHOWWINDOW&quot;])</font>
+<font color="green"> 100. try:</font>
+<font color="green"> 101.     MAXFD = os.sysconf(&quot;SC_OPEN_MAX&quot;)</font>
+<font color="red"> 102. except:</font>
+<font color="red"> 103.     MAXFD = 256</font>
+<font color="black"> 104. </font>
+<font color="green"> 105. _active = []</font>
+<font color="black"> 106. </font>
+<font color="green"> 107. def _cleanup():</font>
+<font color="green"> 108.     for inst in _active[:]:</font>
+<font color="red"> 109.         res = inst._internal_poll(_deadstate=sys.maxint)</font>
+<font color="red"> 110.         if res is not None:</font>
+<font color="red"> 111.             try:</font>
+<font color="red"> 112.                 _active.remove(inst)</font>
+<font color="red"> 113.             except ValueError:</font>
+<font color="black"> 114.                 # This can happen if two threads create a new Popen instance.</font>
+<font color="black"> 115.                 # It's harmless that it was already removed, so ignore.</font>
+<font color="red"> 116.                 pass</font>
+<font color="black"> 117. </font>
+<font color="green"> 118. PIPE = -1</font>
+<font color="green"> 119. STDOUT = -2</font>
+<font color="black"> 120. </font>
+<font color="black"> 121. </font>
+<font color="green"> 122. def _eintr_retry_call(func, *args):</font>
+<font color="green"> 123.     while True:</font>
+<font color="green"> 124.         try:</font>
+<font color="green"> 125.             return func(*args)</font>
+<font color="red"> 126.         except (OSError, IOError) as e:</font>
+<font color="red"> 127.             if e.errno == errno.EINTR:</font>
+<font color="red"> 128.                 continue</font>
+<font color="red"> 129.             raise</font>
+<font color="black"> 130. </font>
+<font color="black"> 131. </font>
+<font color="black"> 132. # XXX This function is only used by multiprocessing and the test suite,</font>
+<font color="black"> 133. # but it's here so that it can be imported when Python is compiled without</font>
+<font color="black"> 134. # threads.</font>
+<font color="black"> 135. </font>
+<font color="green"> 136. def _args_from_interpreter_flags():</font>
+<font color="black"> 137.     &quot;&quot;&quot;Return a list of command-line arguments reproducing the current</font>
+<font color="black"> 138.     settings in sys.flags and sys.warnoptions.&quot;&quot;&quot;</font>
+<font color="red"> 139.     flag_opt_map = {</font>
+<font color="red"> 140.         'debug': 'd',</font>
+<font color="black"> 141.         # 'inspect': 'i',</font>
+<font color="black"> 142.         # 'interactive': 'i',</font>
+<font color="red"> 143.         'optimize': 'O',</font>
+<font color="red"> 144.         'dont_write_bytecode': 'B',</font>
+<font color="red"> 145.         'no_user_site': 's',</font>
+<font color="red"> 146.         'no_site': 'S',</font>
+<font color="red"> 147.         'ignore_environment': 'E',</font>
+<font color="red"> 148.         'verbose': 'v',</font>
+<font color="red"> 149.         'bytes_warning': 'b',</font>
+<font color="red"> 150.         'py3k_warning': '3',</font>
+<font color="black"> 151.     }</font>
+<font color="red"> 152.     args = []</font>
+<font color="red"> 153.     for flag, opt in flag_opt_map.items():</font>
+<font color="red"> 154.         v = getattr(sys.flags, flag)</font>
+<font color="red"> 155.         if v &gt; 0:</font>
+<font color="red"> 156.             args.append('-' + opt * v)</font>
+<font color="red"> 157.     if getattr(sys.flags, 'hash_randomization') != 0:</font>
+<font color="red"> 158.         args.append('-R')</font>
+<font color="red"> 159.     for opt in sys.warnoptions:</font>
+<font color="red"> 160.         args.append('-W' + opt)</font>
+<font color="red"> 161.     return args</font>
+<font color="black"> 162. </font>
+<font color="black"> 163. </font>
+<font color="green"> 164. def call(*popenargs, **kwargs):</font>
+<font color="black"> 165.     &quot;&quot;&quot;Run command with arguments.  Wait for command to complete, then</font>
+<font color="black"> 166.     return the returncode attribute.</font>
+<font color="black"> 167. </font>
+<font color="black"> 168.     The arguments are the same as for the Popen constructor.  Example:</font>
+<font color="black"> 169. </font>
+<font color="black"> 170.     retcode = call([&quot;ls&quot;, &quot;-l&quot;])</font>
+<font color="black"> 171.     &quot;&quot;&quot;</font>
+<font color="green"> 172.     return Popen(*popenargs, **kwargs).wait()</font>
+<font color="black"> 173. </font>
+<font color="black"> 174. </font>
+<font color="green"> 175. def check_call(*popenargs, **kwargs):</font>
+<font color="black"> 176.     &quot;&quot;&quot;Run command with arguments.  Wait for command to complete.  If</font>
+<font color="black"> 177.     the exit code was zero then return, otherwise raise</font>
+<font color="black"> 178.     CalledProcessError.  The CalledProcessError object will have the</font>
+<font color="black"> 179.     return code in the returncode attribute.</font>
+<font color="black"> 180. </font>
+<font color="black"> 181.     The arguments are the same as for the Popen constructor.  Example:</font>
+<font color="black"> 182. </font>
+<font color="black"> 183.     check_call([&quot;ls&quot;, &quot;-l&quot;])</font>
+<font color="black"> 184.     &quot;&quot;&quot;</font>
+<font color="red"> 185.     retcode = call(*popenargs, **kwargs)</font>
+<font color="red"> 186.     if retcode:</font>
+<font color="red"> 187.         cmd = kwargs.get(&quot;args&quot;)</font>
+<font color="red"> 188.         if cmd is None:</font>
+<font color="red"> 189.             cmd = popenargs[0]</font>
+<font color="red"> 190.         raise CalledProcessError(retcode, cmd)</font>
+<font color="red"> 191.     return 0</font>
+<font color="black"> 192. </font>
+<font color="black"> 193. </font>
+<font color="green"> 194. def check_output(*popenargs, **kwargs):</font>
+<font color="black"> 195.     r&quot;&quot;&quot;Run command with arguments and return its output as a byte string.</font>
+<font color="black"> 196. </font>
+<font color="black"> 197.     If the exit code was non-zero it raises a CalledProcessError.  The</font>
+<font color="black"> 198.     CalledProcessError object will have the return code in the returncode</font>
+<font color="black"> 199.     attribute and output in the output attribute.</font>
+<font color="black"> 200. </font>
+<font color="black"> 201.     The arguments are the same as for the Popen constructor.  Example:</font>
+<font color="black"> 202. </font>
+<font color="black"> 203.     &gt;&gt;&gt; check_output([&quot;ls&quot;, &quot;-l&quot;, &quot;/dev/null&quot;])</font>
+<font color="black"> 204.     'crw-rw-rw- 1 root root 1, 3 Oct 18  2007 /dev/null\n'</font>
+<font color="black"> 205. </font>
+<font color="black"> 206.     The stdout argument is not allowed as it is used internally.</font>
+<font color="black"> 207.     To capture standard error in the result, use stderr=STDOUT.</font>
+<font color="black"> 208. </font>
+<font color="black"> 209.     &gt;&gt;&gt; check_output([&quot;/bin/sh&quot;, &quot;-c&quot;,</font>
+<font color="black"> 210.     ...               &quot;ls -l non_existent_file ; exit 0&quot;],</font>
+<font color="black"> 211.     ...              stderr=STDOUT)</font>
+<font color="black"> 212.     'ls: non_existent_file: No such file or directory\n'</font>
+<font color="black"> 213.     &quot;&quot;&quot;</font>
+<font color="red"> 214.     if 'stdout' in kwargs:</font>
+<font color="red"> 215.         raise ValueError('stdout argument not allowed, it will be overridden.')</font>
+<font color="red"> 216.     process = Popen(stdout=PIPE, *popenargs, **kwargs)</font>
+<font color="red"> 217.     output, unused_err = process.communicate()</font>
+<font color="red"> 218.     retcode = process.poll()</font>
+<font color="red"> 219.     if retcode:</font>
+<font color="red"> 220.         cmd = kwargs.get(&quot;args&quot;)</font>
+<font color="red"> 221.         if cmd is None:</font>
+<font color="red"> 222.             cmd = popenargs[0]</font>
+<font color="red"> 223.         raise CalledProcessError(retcode, cmd, output=output)</font>
+<font color="red"> 224.     return output</font>
+<font color="black"> 225. </font>
+<font color="black"> 226. </font>
+<font color="green"> 227. def list2cmdline(seq):</font>
+<font color="black"> 228.     &quot;&quot;&quot;</font>
+<font color="black"> 229.     Translate a sequence of arguments into a command line</font>
+<font color="black"> 230.     string, using the same rules as the MS C runtime:</font>
+<font color="black"> 231. </font>
+<font color="black"> 232.     1) Arguments are delimited by white space, which is either a</font>
+<font color="black"> 233.        space or a tab.</font>
+<font color="black"> 234. </font>
+<font color="black"> 235.     2) A string surrounded by double quotation marks is</font>
+<font color="black"> 236.        interpreted as a single argument, regardless of white space</font>
+<font color="black"> 237.        contained within.  A quoted string can be embedded in an</font>
+<font color="black"> 238.        argument.</font>
+<font color="black"> 239. </font>
+<font color="black"> 240.     3) A double quotation mark preceded by a backslash is</font>
+<font color="black"> 241.        interpreted as a literal double quotation mark.</font>
+<font color="black"> 242. </font>
+<font color="black"> 243.     4) Backslashes are interpreted literally, unless they</font>
+<font color="black"> 244.        immediately precede a double quotation mark.</font>
+<font color="black"> 245. </font>
+<font color="black"> 246.     5) If backslashes immediately precede a double quotation mark,</font>
+<font color="black"> 247.        every pair of backslashes is interpreted as a literal</font>
+<font color="black"> 248.        backslash.  If the number of backslashes is odd, the last</font>
+<font color="black"> 249.        backslash escapes the next double quotation mark as</font>
+<font color="black"> 250.        described in rule 3.</font>
+<font color="black"> 251.     &quot;&quot;&quot;</font>
+<font color="black"> 252. </font>
+<font color="black"> 253.     # See</font>
+<font color="black"> 254.     # http://msdn.microsoft.com/en-us/library/17w5ykft.aspx</font>
+<font color="black"> 255.     # or search http://msdn.microsoft.com for</font>
+<font color="black"> 256.     # &quot;Parsing C++ Command-Line Arguments&quot;</font>
+<font color="red"> 257.     result = []</font>
+<font color="red"> 258.     needquote = False</font>
+<font color="red"> 259.     for arg in seq:</font>
+<font color="red"> 260.         bs_buf = []</font>
+<font color="black"> 261. </font>
+<font color="black"> 262.         # Add a space to separate this argument from the others</font>
+<font color="red"> 263.         if result:</font>
+<font color="red"> 264.             result.append(' ')</font>
+<font color="black"> 265. </font>
+<font color="red"> 266.         needquote = (&quot; &quot; in arg) or (&quot;\t&quot; in arg) or not arg</font>
+<font color="red"> 267.         if needquote:</font>
+<font color="red"> 268.             result.append('&quot;')</font>
+<font color="black"> 269. </font>
+<font color="red"> 270.         for c in arg:</font>
+<font color="red"> 271.             if c == '\\':</font>
+<font color="black"> 272.                 # Don't know if we need to double yet.</font>
+<font color="red"> 273.                 bs_buf.append(c)</font>
+<font color="red"> 274.             elif c == '&quot;':</font>
+<font color="black"> 275.                 # Double backslashes.</font>
+<font color="red"> 276.                 result.append('\\' * len(bs_buf)*2)</font>
+<font color="red"> 277.                 bs_buf = []</font>
+<font color="red"> 278.                 result.append('\\&quot;')</font>
+<font color="black"> 279.             else:</font>
+<font color="black"> 280.                 # Normal char</font>
+<font color="red"> 281.                 if bs_buf:</font>
+<font color="red"> 282.                     result.extend(bs_buf)</font>
+<font color="red"> 283.                     bs_buf = []</font>
+<font color="red"> 284.                 result.append(c)</font>
+<font color="black"> 285. </font>
+<font color="black"> 286.         # Add remaining backslashes, if any.</font>
+<font color="red"> 287.         if bs_buf:</font>
+<font color="red"> 288.             result.extend(bs_buf)</font>
+<font color="black"> 289. </font>
+<font color="red"> 290.         if needquote:</font>
+<font color="red"> 291.             result.extend(bs_buf)</font>
+<font color="red"> 292.             result.append('&quot;')</font>
+<font color="black"> 293. </font>
+<font color="red"> 294.     return ''.join(result)</font>
+<font color="black"> 295. </font>
+<font color="black"> 296. </font>
+<font color="green"> 297. class Popen(object):</font>
+<font color="black"> 298.     &quot;&quot;&quot; Execute a child program in a new process.</font>
+<font color="black"> 299. </font>
+<font color="black"> 300.     For a complete description of the arguments see the Python documentation.</font>
+<font color="black"> 301. </font>
+<font color="black"> 302.     Arguments:</font>
+<font color="black"> 303.       args: A string, or a sequence of program arguments.</font>
+<font color="black"> 304. </font>
+<font color="black"> 305.       bufsize: supplied as the buffering argument to the open() function when</font>
+<font color="black"> 306.           creating the stdin/stdout/stderr pipe file objects</font>
+<font color="black"> 307. </font>
+<font color="black"> 308.       executable: A replacement program to execute.</font>
+<font color="black"> 309. </font>
+<font color="black"> 310.       stdin, stdout and stderr: These specify the executed programs' standard</font>
+<font color="black"> 311.           input, standard output and standard error file handles, respectively.</font>
+<font color="black"> 312. </font>
+<font color="black"> 313.       preexec_fn: (POSIX only) An object to be called in the child process</font>
+<font color="black"> 314.           just before the child is executed.</font>
+<font color="black"> 315. </font>
+<font color="black"> 316.       close_fds: Controls closing or inheriting of file descriptors.</font>
+<font color="black"> 317. </font>
+<font color="black"> 318.       shell: If true, the command will be executed through the shell.</font>
+<font color="black"> 319. </font>
+<font color="black"> 320.       cwd: Sets the current directory before the child is executed.</font>
+<font color="black"> 321. </font>
+<font color="black"> 322.       env: Defines the environment variables for the new process.</font>
+<font color="black"> 323. </font>
+<font color="black"> 324.       universal_newlines: If true, use universal line endings for file</font>
+<font color="black"> 325.           objects stdin, stdout and stderr.</font>
+<font color="black"> 326. </font>
+<font color="black"> 327.       startupinfo and creationflags (Windows only)</font>
+<font color="black"> 328. </font>
+<font color="black"> 329.     Attributes:</font>
+<font color="black"> 330.         stdin, stdout, stderr, pid, returncode</font>
+<font color="green"> 331.     &quot;&quot;&quot;</font>
+<font color="green"> 332.     _child_created = False  # Set here since __del__ checks it</font>
+<font color="black"> 333. </font>
+<font color="green"> 334.     def __init__(self, args, bufsize=0, executable=None,</font>
+<font color="green"> 335.                  stdin=None, stdout=None, stderr=None,</font>
+<font color="green"> 336.                  preexec_fn=None, close_fds=False, shell=False,</font>
+<font color="green"> 337.                  cwd=None, env=None, universal_newlines=False,</font>
+<font color="green"> 338.                  startupinfo=None, creationflags=0):</font>
+<font color="black"> 339.         &quot;&quot;&quot;Create new Popen instance.&quot;&quot;&quot;</font>
+<font color="green"> 340.         _cleanup()</font>
+<font color="black"> 341. </font>
+<font color="green"> 342.         if not isinstance(bufsize, (int, long)):</font>
+<font color="red"> 343.             raise TypeError(&quot;bufsize must be an integer&quot;)</font>
+<font color="black"> 344. </font>
+<font color="green"> 345.         if mswindows:</font>
+<font color="red"> 346.             if preexec_fn is not None:</font>
+<font color="red"> 347.                 raise ValueError(&quot;preexec_fn is not supported on Windows &quot;</font>
+<font color="black"> 348.                                  &quot;platforms&quot;)</font>
+<font color="red"> 349.             if close_fds and (stdin is not None or stdout is not None or</font>
+<font color="red"> 350.                               stderr is not None):</font>
+<font color="red"> 351.                 raise ValueError(&quot;close_fds is not supported on Windows &quot;</font>
+<font color="black"> 352.                                  &quot;platforms if you redirect stdin/stdout/stderr&quot;)</font>
+<font color="black"> 353.         else:</font>
+<font color="black"> 354.             # POSIX</font>
+<font color="green"> 355.             if startupinfo is not None:</font>
+<font color="red"> 356.                 raise ValueError(&quot;startupinfo is only supported on Windows &quot;</font>
+<font color="black"> 357.                                  &quot;platforms&quot;)</font>
+<font color="green"> 358.             if creationflags != 0:</font>
+<font color="red"> 359.                 raise ValueError(&quot;creationflags is only supported on Windows &quot;</font>
+<font color="black"> 360.                                  &quot;platforms&quot;)</font>
+<font color="black"> 361. </font>
+<font color="green"> 362.         self.stdin = None</font>
+<font color="green"> 363.         self.stdout = None</font>
+<font color="green"> 364.         self.stderr = None</font>
+<font color="green"> 365.         self.pid = None</font>
+<font color="green"> 366.         self.returncode = None</font>
+<font color="green"> 367.         self.universal_newlines = universal_newlines</font>
+<font color="black"> 368. </font>
+<font color="black"> 369.         # Input and output objects. The general principle is like</font>
+<font color="black"> 370.         # this:</font>
+<font color="black"> 371.         #</font>
+<font color="black"> 372.         # Parent                   Child</font>
+<font color="black"> 373.         # ------                   -----</font>
+<font color="black"> 374.         # p2cwrite   ---stdin---&gt;  p2cread</font>
+<font color="black"> 375.         # c2pread    &lt;--stdout---  c2pwrite</font>
+<font color="black"> 376.         # errread    &lt;--stderr---  errwrite</font>
+<font color="black"> 377.         #</font>
+<font color="black"> 378.         # On POSIX, the child objects are file descriptors.  On</font>
+<font color="black"> 379.         # Windows, these are Windows file handles.  The parent objects</font>
+<font color="black"> 380.         # are file descriptors on both platforms.  The parent objects</font>
+<font color="black"> 381.         # are None when not using PIPEs. The child objects are None</font>
+<font color="black"> 382.         # when not redirecting.</font>
+<font color="black"> 383. </font>
+<font color="black"> 384.         (p2cread, p2cwrite,</font>
+<font color="black"> 385.          c2pread, c2pwrite,</font>
+<font color="green"> 386.          errread, errwrite), to_close = self._get_handles(stdin, stdout, stderr)</font>
+<font color="black"> 387. </font>
+<font color="green"> 388.         try:</font>
+<font color="green"> 389.             self._execute_child(args, executable, preexec_fn, close_fds,</font>
+<font color="green"> 390.                                 cwd, env, universal_newlines,</font>
+<font color="green"> 391.                                 startupinfo, creationflags, shell, to_close,</font>
+<font color="green"> 392.                                 p2cread, p2cwrite,</font>
+<font color="green"> 393.                                 c2pread, c2pwrite,</font>
+<font color="green"> 394.                                 errread, errwrite)</font>
+<font color="red"> 395.         except Exception:</font>
+<font color="black"> 396.             # Preserve original exception in case os.close raises.</font>
+<font color="red"> 397.             exc_type, exc_value, exc_trace = sys.exc_info()</font>
+<font color="black"> 398. </font>
+<font color="red"> 399.             for fd in to_close:</font>
+<font color="red"> 400.                 try:</font>
+<font color="red"> 401.                     if mswindows:</font>
+<font color="red"> 402.                         fd.Close()</font>
+<font color="black"> 403.                     else:</font>
+<font color="red"> 404.                         os.close(fd)</font>
+<font color="red"> 405.                 except EnvironmentError:</font>
+<font color="red"> 406.                     pass</font>
+<font color="black"> 407. </font>
+<font color="red"> 408.             raise exc_type, exc_value, exc_trace</font>
+<font color="black"> 409. </font>
+<font color="green"> 410.         if mswindows:</font>
+<font color="red"> 411.             if p2cwrite is not None:</font>
+<font color="red"> 412.                 p2cwrite = msvcrt.open_osfhandle(p2cwrite.Detach(), 0)</font>
+<font color="red"> 413.             if c2pread is not None:</font>
+<font color="red"> 414.                 c2pread = msvcrt.open_osfhandle(c2pread.Detach(), 0)</font>
+<font color="red"> 415.             if errread is not None:</font>
+<font color="red"> 416.                 errread = msvcrt.open_osfhandle(errread.Detach(), 0)</font>
+<font color="black"> 417. </font>
+<font color="green"> 418.         if p2cwrite is not None:</font>
+<font color="red"> 419.             self.stdin = os.fdopen(p2cwrite, 'wb', bufsize)</font>
+<font color="green"> 420.         if c2pread is not None:</font>
+<font color="red"> 421.             if universal_newlines:</font>
+<font color="red"> 422.                 self.stdout = os.fdopen(c2pread, 'rU', bufsize)</font>
+<font color="black"> 423.             else:</font>
+<font color="red"> 424.                 self.stdout = os.fdopen(c2pread, 'rb', bufsize)</font>
+<font color="green"> 425.         if errread is not None:</font>
+<font color="red"> 426.             if universal_newlines:</font>
+<font color="red"> 427.                 self.stderr = os.fdopen(errread, 'rU', bufsize)</font>
+<font color="black"> 428.             else:</font>
+<font color="red"> 429.                 self.stderr = os.fdopen(errread, 'rb', bufsize)</font>
+<font color="black"> 430. </font>
+<font color="black"> 431. </font>
+<font color="green"> 432.     def _translate_newlines(self, data):</font>
+<font color="red"> 433.         data = data.replace(&quot;\r\n&quot;, &quot;\n&quot;)</font>
+<font color="red"> 434.         data = data.replace(&quot;\r&quot;, &quot;\n&quot;)</font>
+<font color="red"> 435.         return data</font>
+<font color="black"> 436. </font>
+<font color="black"> 437. </font>
+<font color="green"> 438.     def __del__(self, _maxint=sys.maxint):</font>
+<font color="black"> 439.         # If __init__ hasn't had a chance to execute (e.g. if it</font>
+<font color="black"> 440.         # was passed an undeclared keyword argument), we don't</font>
+<font color="black"> 441.         # have a _child_created attribute at all.</font>
+<font color="green"> 442.         if not self._child_created:</font>
+<font color="black"> 443.             # We didn't get to successfully create a child process.</font>
+<font color="red"> 444.             return</font>
+<font color="black"> 445.         # In case the child hasn't been waited on, check if it's done.</font>
+<font color="green"> 446.         self._internal_poll(_deadstate=_maxint)</font>
+<font color="green"> 447.         if self.returncode is None and _active is not None:</font>
+<font color="black"> 448.             # Child is still running, keep us alive until we can wait on it.</font>
+<font color="red"> 449.             _active.append(self)</font>
+<font color="black"> 450. </font>
+<font color="black"> 451. </font>
+<font color="green"> 452.     def communicate(self, input=None):</font>
+<font color="black"> 453.         &quot;&quot;&quot;Interact with process: Send data to stdin.  Read data from</font>
+<font color="black"> 454.         stdout and stderr, until end-of-file is reached.  Wait for</font>
+<font color="black"> 455.         process to terminate.  The optional input argument should be a</font>
+<font color="black"> 456.         string to be sent to the child process, or None, if no data</font>
+<font color="black"> 457.         should be sent to the child.</font>
+<font color="black"> 458. </font>
+<font color="black"> 459.         communicate() returns a tuple (stdout, stderr).&quot;&quot;&quot;</font>
+<font color="black"> 460. </font>
+<font color="black"> 461.         # Optimization: If we are only using one pipe, or no pipe at</font>
+<font color="black"> 462.         # all, using select() or threads is unnecessary.</font>
+<font color="red"> 463.         if [self.stdin, self.stdout, self.stderr].count(None) &gt;= 2:</font>
+<font color="red"> 464.             stdout = None</font>
+<font color="red"> 465.             stderr = None</font>
+<font color="red"> 466.             if self.stdin:</font>
+<font color="red"> 467.                 if input:</font>
+<font color="red"> 468.                     try:</font>
+<font color="red"> 469.                         self.stdin.write(input)</font>
+<font color="red"> 470.                     except IOError as e:</font>
+<font color="red"> 471.                         if e.errno != errno.EPIPE and e.errno != errno.EINVAL:</font>
+<font color="red"> 472.                             raise</font>
+<font color="red"> 473.                 self.stdin.close()</font>
+<font color="red"> 474.             elif self.stdout:</font>
+<font color="red"> 475.                 stdout = _eintr_retry_call(self.stdout.read)</font>
+<font color="red"> 476.                 self.stdout.close()</font>
+<font color="red"> 477.             elif self.stderr:</font>
+<font color="red"> 478.                 stderr = _eintr_retry_call(self.stderr.read)</font>
+<font color="red"> 479.                 self.stderr.close()</font>
+<font color="red"> 480.             self.wait()</font>
+<font color="red"> 481.             return (stdout, stderr)</font>
+<font color="black"> 482. </font>
+<font color="red"> 483.         return self._communicate(input)</font>
+<font color="black"> 484. </font>
+<font color="black"> 485. </font>
+<font color="green"> 486.     def poll(self):</font>
+<font color="black"> 487.         &quot;&quot;&quot;Check if child process has terminated. Set and return returncode</font>
+<font color="black"> 488.         attribute.&quot;&quot;&quot;</font>
+<font color="red"> 489.         return self._internal_poll()</font>
+<font color="black"> 490. </font>
+<font color="black"> 491. </font>
+<font color="green"> 492.     if mswindows:</font>
+<font color="black"> 493.         #</font>
+<font color="black"> 494.         # Windows methods</font>
+<font color="black"> 495.         #</font>
+<font color="red"> 496.         def _get_handles(self, stdin, stdout, stderr):</font>
+<font color="black"> 497.             &quot;&quot;&quot;Construct and return tuple with IO objects:</font>
+<font color="black"> 498.             p2cread, p2cwrite, c2pread, c2pwrite, errread, errwrite</font>
+<font color="black"> 499.             &quot;&quot;&quot;</font>
+<font color="red"> 500.             to_close = set()</font>
+<font color="red"> 501.             if stdin is None and stdout is None and stderr is None:</font>
+<font color="red"> 502.                 return (None, None, None, None, None, None), to_close</font>
+<font color="black"> 503. </font>
+<font color="red"> 504.             p2cread, p2cwrite = None, None</font>
+<font color="red"> 505.             c2pread, c2pwrite = None, None</font>
+<font color="red"> 506.             errread, errwrite = None, None</font>
+<font color="black"> 507. </font>
+<font color="red"> 508.             if stdin is None:</font>
+<font color="red"> 509.                 p2cread = _subprocess.GetStdHandle(_subprocess.STD_INPUT_HANDLE)</font>
+<font color="red"> 510.                 if p2cread is None:</font>
+<font color="red"> 511.                     p2cread, _ = _subprocess.CreatePipe(None, 0)</font>
+<font color="red"> 512.             elif stdin == PIPE:</font>
+<font color="red"> 513.                 p2cread, p2cwrite = _subprocess.CreatePipe(None, 0)</font>
+<font color="red"> 514.             elif isinstance(stdin, (int, long)):</font>
+<font color="red"> 515.                 p2cread = msvcrt.get_osfhandle(stdin)</font>
+<font color="black"> 516.             else:</font>
+<font color="black"> 517.                 # Assuming file-like object</font>
+<font color="red"> 518.                 p2cread = msvcrt.get_osfhandle(stdin.fileno())</font>
+<font color="red"> 519.             p2cread = self._make_inheritable(p2cread)</font>
+<font color="black"> 520.             # We just duplicated the handle, it has to be closed at the end</font>
+<font color="red"> 521.             to_close.add(p2cread)</font>
+<font color="red"> 522.             if stdin == PIPE:</font>
+<font color="red"> 523.                 to_close.add(p2cwrite)</font>
+<font color="black"> 524. </font>
+<font color="red"> 525.             if stdout is None:</font>
+<font color="red"> 526.                 c2pwrite = _subprocess.GetStdHandle(_subprocess.STD_OUTPUT_HANDLE)</font>
+<font color="red"> 527.                 if c2pwrite is None:</font>
+<font color="red"> 528.                     _, c2pwrite = _subprocess.CreatePipe(None, 0)</font>
+<font color="red"> 529.             elif stdout == PIPE:</font>
+<font color="red"> 530.                 c2pread, c2pwrite = _subprocess.CreatePipe(None, 0)</font>
+<font color="red"> 531.             elif isinstance(stdout, (int, long)):</font>
+<font color="red"> 532.                 c2pwrite = msvcrt.get_osfhandle(stdout)</font>
+<font color="black"> 533.             else:</font>
+<font color="black"> 534.                 # Assuming file-like object</font>
+<font color="red"> 535.                 c2pwrite = msvcrt.get_osfhandle(stdout.fileno())</font>
+<font color="red"> 536.             c2pwrite = self._make_inheritable(c2pwrite)</font>
+<font color="black"> 537.             # We just duplicated the handle, it has to be closed at the end</font>
+<font color="red"> 538.             to_close.add(c2pwrite)</font>
+<font color="red"> 539.             if stdout == PIPE:</font>
+<font color="red"> 540.                 to_close.add(c2pread)</font>
+<font color="black"> 541. </font>
+<font color="red"> 542.             if stderr is None:</font>
+<font color="red"> 543.                 errwrite = _subprocess.GetStdHandle(_subprocess.STD_ERROR_HANDLE)</font>
+<font color="red"> 544.                 if errwrite is None:</font>
+<font color="red"> 545.                     _, errwrite = _subprocess.CreatePipe(None, 0)</font>
+<font color="red"> 546.             elif stderr == PIPE:</font>
+<font color="red"> 547.                 errread, errwrite = _subprocess.CreatePipe(None, 0)</font>
+<font color="red"> 548.             elif stderr == STDOUT:</font>
+<font color="red"> 549.                 errwrite = c2pwrite</font>
+<font color="red"> 550.             elif isinstance(stderr, (int, long)):</font>
+<font color="red"> 551.                 errwrite = msvcrt.get_osfhandle(stderr)</font>
+<font color="black"> 552.             else:</font>
+<font color="black"> 553.                 # Assuming file-like object</font>
+<font color="red"> 554.                 errwrite = msvcrt.get_osfhandle(stderr.fileno())</font>
+<font color="red"> 555.             errwrite = self._make_inheritable(errwrite)</font>
+<font color="black"> 556.             # We just duplicated the handle, it has to be closed at the end</font>
+<font color="red"> 557.             to_close.add(errwrite)</font>
+<font color="red"> 558.             if stderr == PIPE:</font>
+<font color="red"> 559.                 to_close.add(errread)</font>
+<font color="black"> 560. </font>
+<font color="red"> 561.             return (p2cread, p2cwrite,</font>
+<font color="red"> 562.                     c2pread, c2pwrite,</font>
+<font color="red"> 563.                     errread, errwrite), to_close</font>
+<font color="black"> 564. </font>
+<font color="black"> 565. </font>
+<font color="red"> 566.         def _make_inheritable(self, handle):</font>
+<font color="black"> 567.             &quot;&quot;&quot;Return a duplicate of handle, which is inheritable&quot;&quot;&quot;</font>
+<font color="red"> 568.             return _subprocess.DuplicateHandle(_subprocess.GetCurrentProcess(),</font>
+<font color="red"> 569.                                 handle, _subprocess.GetCurrentProcess(), 0, 1,</font>
+<font color="red"> 570.                                 _subprocess.DUPLICATE_SAME_ACCESS)</font>
+<font color="black"> 571. </font>
+<font color="black"> 572. </font>
+<font color="red"> 573.         def _find_w9xpopen(self):</font>
+<font color="black"> 574.             &quot;&quot;&quot;Find and return absolut path to w9xpopen.exe&quot;&quot;&quot;</font>
+<font color="red"> 575.             w9xpopen = os.path.join(</font>
+<font color="red"> 576.                             os.path.dirname(_subprocess.GetModuleFileName(0)),</font>
+<font color="red"> 577.                                     &quot;w9xpopen.exe&quot;)</font>
+<font color="red"> 578.             if not os.path.exists(w9xpopen):</font>
+<font color="black"> 579.                 # Eeek - file-not-found - possibly an embedding</font>
+<font color="black"> 580.                 # situation - see if we can locate it in sys.exec_prefix</font>
+<font color="red"> 581.                 w9xpopen = os.path.join(os.path.dirname(sys.exec_prefix),</font>
+<font color="red"> 582.                                         &quot;w9xpopen.exe&quot;)</font>
+<font color="red"> 583.                 if not os.path.exists(w9xpopen):</font>
+<font color="red"> 584.                     raise RuntimeError(&quot;Cannot locate w9xpopen.exe, which is &quot;</font>
+<font color="black"> 585.                                        &quot;needed for Popen to work with your &quot;</font>
+<font color="black"> 586.                                        &quot;shell or platform.&quot;)</font>
+<font color="red"> 587.             return w9xpopen</font>
+<font color="black"> 588. </font>
+<font color="black"> 589. </font>
+<font color="red"> 590.         def _execute_child(self, args, executable, preexec_fn, close_fds,</font>
+<font color="black"> 591.                            cwd, env, universal_newlines,</font>
+<font color="black"> 592.                            startupinfo, creationflags, shell, to_close,</font>
+<font color="black"> 593.                            p2cread, p2cwrite,</font>
+<font color="black"> 594.                            c2pread, c2pwrite,</font>
+<font color="black"> 595.                            errread, errwrite):</font>
+<font color="black"> 596.             &quot;&quot;&quot;Execute program (MS Windows version)&quot;&quot;&quot;</font>
+<font color="black"> 597. </font>
+<font color="red"> 598.             if not isinstance(args, types.StringTypes):</font>
+<font color="red"> 599.                 args = list2cmdline(args)</font>
+<font color="black"> 600. </font>
+<font color="black"> 601.             # Process startup details</font>
+<font color="red"> 602.             if startupinfo is None:</font>
+<font color="red"> 603.                 startupinfo = STARTUPINFO()</font>
+<font color="red"> 604.             if None not in (p2cread, c2pwrite, errwrite):</font>
+<font color="red"> 605.                 startupinfo.dwFlags |= _subprocess.STARTF_USESTDHANDLES</font>
+<font color="red"> 606.                 startupinfo.hStdInput = p2cread</font>
+<font color="red"> 607.                 startupinfo.hStdOutput = c2pwrite</font>
+<font color="red"> 608.                 startupinfo.hStdError = errwrite</font>
+<font color="black"> 609. </font>
+<font color="red"> 610.             if shell:</font>
+<font color="red"> 611.                 startupinfo.dwFlags |= _subprocess.STARTF_USESHOWWINDOW</font>
+<font color="red"> 612.                 startupinfo.wShowWindow = _subprocess.SW_HIDE</font>
+<font color="red"> 613.                 comspec = os.environ.get(&quot;COMSPEC&quot;, &quot;cmd.exe&quot;)</font>
+<font color="red"> 614.                 args = '{} /c &quot;{}&quot;'.format (comspec, args)</font>
+<font color="red"> 615.                 if (_subprocess.GetVersion() &gt;= 0x80000000 or</font>
+<font color="red"> 616.                         os.path.basename(comspec).lower() == &quot;command.com&quot;):</font>
+<font color="black"> 617.                     # Win9x, or using command.com on NT. We need to</font>
+<font color="black"> 618.                     # use the w9xpopen intermediate program. For more</font>
+<font color="black"> 619.                     # information, see KB Q150956</font>
+<font color="black"> 620.                     # (http://web.archive.org/web/20011105084002/http://support.microsoft.com/support/kb/articles/Q150/9/56.asp)</font>
+<font color="red"> 621.                     w9xpopen = self._find_w9xpopen()</font>
+<font color="red"> 622.                     args = '&quot;%s&quot; %s' % (w9xpopen, args)</font>
+<font color="black"> 623.                     # Not passing CREATE_NEW_CONSOLE has been known to</font>
+<font color="black"> 624.                     # cause random failures on win9x.  Specifically a</font>
+<font color="black"> 625.                     # dialog: &quot;Your program accessed mem currently in</font>
+<font color="black"> 626.                     # use at xxx&quot; and a hopeful warning about the</font>
+<font color="black"> 627.                     # stability of your system.  Cost is Ctrl+C wont</font>
+<font color="black"> 628.                     # kill children.</font>
+<font color="red"> 629.                     creationflags |= _subprocess.CREATE_NEW_CONSOLE</font>
+<font color="black"> 630. </font>
+<font color="red"> 631.             def _close_in_parent(fd):</font>
+<font color="red"> 632.                 fd.Close()</font>
+<font color="red"> 633.                 to_close.remove(fd)</font>
+<font color="black"> 634. </font>
+<font color="black"> 635.             # Start the process</font>
+<font color="red"> 636.             try:</font>
+<font color="red"> 637.                 hp, ht, pid, tid = _subprocess.CreateProcess(executable, args,</font>
+<font color="black"> 638.                                          # no special security</font>
+<font color="red"> 639.                                          None, None,</font>
+<font color="red"> 640.                                          int(not close_fds),</font>
+<font color="red"> 641.                                          creationflags,</font>
+<font color="red"> 642.                                          env,</font>
+<font color="red"> 643.                                          cwd,</font>
+<font color="red"> 644.                                          startupinfo)</font>
+<font color="red"> 645.             except pywintypes.error, e:</font>
+<font color="black"> 646.                 # Translate pywintypes.error to WindowsError, which is</font>
+<font color="black"> 647.                 # a subclass of OSError.  FIXME: We should really</font>
+<font color="black"> 648.                 # translate errno using _sys_errlist (or similar), but</font>
+<font color="black"> 649.                 # how can this be done from Python?</font>
+<font color="red"> 650.                 raise WindowsError(*e.args)</font>
+<font color="black"> 651.             finally:</font>
+<font color="black"> 652.                 # Child is launched. Close the parent's copy of those pipe</font>
+<font color="black"> 653.                 # handles that only the child should have open.  You need</font>
+<font color="black"> 654.                 # to make sure that no handles to the write end of the</font>
+<font color="black"> 655.                 # output pipe are maintained in this process or else the</font>
+<font color="black"> 656.                 # pipe will not close when the child process exits and the</font>
+<font color="black"> 657.                 # ReadFile will hang.</font>
+<font color="red"> 658.                 if p2cread is not None:</font>
+<font color="red"> 659.                     _close_in_parent(p2cread)</font>
+<font color="red"> 660.                 if c2pwrite is not None:</font>
+<font color="red"> 661.                     _close_in_parent(c2pwrite)</font>
+<font color="red"> 662.                 if errwrite is not None:</font>
+<font color="red"> 663.                     _close_in_parent(errwrite)</font>
+<font color="black"> 664. </font>
+<font color="black"> 665.             # Retain the process handle, but close the thread handle</font>
+<font color="red"> 666.             self._child_created = True</font>
+<font color="red"> 667.             self._handle = hp</font>
+<font color="red"> 668.             self.pid = pid</font>
+<font color="red"> 669.             ht.Close()</font>
+<font color="black"> 670. </font>
+<font color="red"> 671.         def _internal_poll(self, _deadstate=None,</font>
+<font color="red"> 672.                 _WaitForSingleObject=_subprocess.WaitForSingleObject,</font>
+<font color="red"> 673.                 _WAIT_OBJECT_0=_subprocess.WAIT_OBJECT_0,</font>
+<font color="red"> 674.                 _GetExitCodeProcess=_subprocess.GetExitCodeProcess):</font>
+<font color="black"> 675.             &quot;&quot;&quot;Check if child process has terminated.  Returns returncode</font>
+<font color="black"> 676.             attribute.</font>
+<font color="black"> 677. </font>
+<font color="black"> 678.             This method is called by __del__, so it can only refer to objects</font>
+<font color="black"> 679.             in its local scope.</font>
+<font color="black"> 680. </font>
+<font color="black"> 681.             &quot;&quot;&quot;</font>
+<font color="red"> 682.             if self.returncode is None:</font>
+<font color="red"> 683.                 if _WaitForSingleObject(self._handle, 0) == _WAIT_OBJECT_0:</font>
+<font color="red"> 684.                     self.returncode = _GetExitCodeProcess(self._handle)</font>
+<font color="red"> 685.             return self.returncode</font>
+<font color="black"> 686. </font>
+<font color="black"> 687. </font>
+<font color="red"> 688.         def wait(self):</font>
+<font color="black"> 689.             &quot;&quot;&quot;Wait for child process to terminate.  Returns returncode</font>
+<font color="black"> 690.             attribute.&quot;&quot;&quot;</font>
+<font color="red"> 691.             if self.returncode is None:</font>
+<font color="red"> 692.                 _subprocess.WaitForSingleObject(self._handle,</font>
+<font color="red"> 693.                                                 _subprocess.INFINITE)</font>
+<font color="red"> 694.                 self.returncode = _subprocess.GetExitCodeProcess(self._handle)</font>
+<font color="red"> 695.             return self.returncode</font>
+<font color="black"> 696. </font>
+<font color="black"> 697. </font>
+<font color="red"> 698.         def _readerthread(self, fh, buffer):</font>
+<font color="red"> 699.             buffer.append(fh.read())</font>
+<font color="black"> 700. </font>
+<font color="black"> 701. </font>
+<font color="red"> 702.         def _communicate(self, input):</font>
+<font color="red"> 703.             stdout = None # Return</font>
+<font color="red"> 704.             stderr = None # Return</font>
+<font color="black"> 705. </font>
+<font color="red"> 706.             if self.stdout:</font>
+<font color="red"> 707.                 stdout = []</font>
+<font color="red"> 708.                 stdout_thread = threading.Thread(target=self._readerthread,</font>
+<font color="red"> 709.                                                  args=(self.stdout, stdout))</font>
+<font color="red"> 710.                 stdout_thread.setDaemon(True)</font>
+<font color="red"> 711.                 stdout_thread.start()</font>
+<font color="red"> 712.             if self.stderr:</font>
+<font color="red"> 713.                 stderr = []</font>
+<font color="red"> 714.                 stderr_thread = threading.Thread(target=self._readerthread,</font>
+<font color="red"> 715.                                                  args=(self.stderr, stderr))</font>
+<font color="red"> 716.                 stderr_thread.setDaemon(True)</font>
+<font color="red"> 717.                 stderr_thread.start()</font>
+<font color="black"> 718. </font>
+<font color="red"> 719.             if self.stdin:</font>
+<font color="red"> 720.                 if input is not None:</font>
+<font color="red"> 721.                     try:</font>
+<font color="red"> 722.                         self.stdin.write(input)</font>
+<font color="red"> 723.                     except IOError as e:</font>
+<font color="red"> 724.                         if e.errno == errno.EPIPE:</font>
+<font color="black"> 725.                             # communicate() should ignore broken pipe error</font>
+<font color="red"> 726.                             pass</font>
+<font color="red"> 727.                         elif e.errno == errno.EINVAL:</font>
+<font color="black"> 728.                             # bpo-19612, bpo-30418: On Windows, stdin.write()</font>
+<font color="black"> 729.                             # fails with EINVAL if the child process exited or</font>
+<font color="black"> 730.                             # if the child process is still running but closed</font>
+<font color="black"> 731.                             # the pipe.</font>
+<font color="red"> 732.                             pass</font>
+<font color="black"> 733.                         else:</font>
+<font color="red"> 734.                             raise</font>
+<font color="red"> 735.                 self.stdin.close()</font>
+<font color="black"> 736. </font>
+<font color="red"> 737.             if self.stdout:</font>
+<font color="red"> 738.                 stdout_thread.join()</font>
+<font color="red"> 739.             if self.stderr:</font>
+<font color="red"> 740.                 stderr_thread.join()</font>
+<font color="black"> 741. </font>
+<font color="black"> 742.             # All data exchanged.  Translate lists into strings.</font>
+<font color="red"> 743.             if stdout is not None:</font>
+<font color="red"> 744.                 stdout = stdout[0]</font>
+<font color="red"> 745.             if stderr is not None:</font>
+<font color="red"> 746.                 stderr = stderr[0]</font>
+<font color="black"> 747. </font>
+<font color="black"> 748.             # Translate newlines, if requested.  We cannot let the file</font>
+<font color="black"> 749.             # object do the translation: It is based on stdio, which is</font>
+<font color="black"> 750.             # impossible to combine with select (unless forcing no</font>
+<font color="black"> 751.             # buffering).</font>
+<font color="red"> 752.             if self.universal_newlines and hasattr(file, 'newlines'):</font>
+<font color="red"> 753.                 if stdout:</font>
+<font color="red"> 754.                     stdout = self._translate_newlines(stdout)</font>
+<font color="red"> 755.                 if stderr:</font>
+<font color="red"> 756.                     stderr = self._translate_newlines(stderr)</font>
+<font color="black"> 757. </font>
+<font color="red"> 758.             self.wait()</font>
+<font color="red"> 759.             return (stdout, stderr)</font>
+<font color="black"> 760. </font>
+<font color="red"> 761.         def send_signal(self, sig):</font>
+<font color="black"> 762.             &quot;&quot;&quot;Send a signal to the process</font>
+<font color="black"> 763.             &quot;&quot;&quot;</font>
+<font color="red"> 764.             if sig == signal.SIGTERM:</font>
+<font color="red"> 765.                 self.terminate()</font>
+<font color="red"> 766.             elif sig == signal.CTRL_C_EVENT:</font>
+<font color="red"> 767.                 os.kill(self.pid, signal.CTRL_C_EVENT)</font>
+<font color="red"> 768.             elif sig == signal.CTRL_BREAK_EVENT:</font>
+<font color="red"> 769.                 os.kill(self.pid, signal.CTRL_BREAK_EVENT)</font>
+<font color="black"> 770.             else:</font>
+<font color="red"> 771.                 raise ValueError(&quot;Unsupported signal: {}&quot;.format(sig))</font>
+<font color="black"> 772. </font>
+<font color="red"> 773.         def terminate(self):</font>
+<font color="black"> 774.             &quot;&quot;&quot;Terminates the process</font>
+<font color="black"> 775.             &quot;&quot;&quot;</font>
+<font color="red"> 776.             try:</font>
+<font color="red"> 777.                 _subprocess.TerminateProcess(self._handle, 1)</font>
+<font color="red"> 778.             except OSError as e:</font>
+<font color="black"> 779.                 # ERROR_ACCESS_DENIED (winerror 5) is received when the</font>
+<font color="black"> 780.                 # process already died.</font>
+<font color="red"> 781.                 if e.winerror != 5:</font>
+<font color="red"> 782.                     raise</font>
+<font color="red"> 783.                 rc = _subprocess.GetExitCodeProcess(self._handle)</font>
+<font color="red"> 784.                 if rc == _subprocess.STILL_ACTIVE:</font>
+<font color="red"> 785.                     raise</font>
+<font color="red"> 786.                 self.returncode = rc</font>
+<font color="black"> 787. </font>
+<font color="red"> 788.         kill = terminate</font>
+<font color="black"> 789. </font>
+<font color="black"> 790.     else:</font>
+<font color="black"> 791.         #</font>
+<font color="black"> 792.         # POSIX methods</font>
+<font color="black"> 793.         #</font>
+<font color="green"> 794.         def _get_handles(self, stdin, stdout, stderr):</font>
+<font color="black"> 795.             &quot;&quot;&quot;Construct and return tuple with IO objects:</font>
+<font color="black"> 796.             p2cread, p2cwrite, c2pread, c2pwrite, errread, errwrite</font>
+<font color="black"> 797.             &quot;&quot;&quot;</font>
+<font color="green"> 798.             to_close = set()</font>
+<font color="green"> 799.             p2cread, p2cwrite = None, None</font>
+<font color="green"> 800.             c2pread, c2pwrite = None, None</font>
+<font color="green"> 801.             errread, errwrite = None, None</font>
+<font color="black"> 802. </font>
+<font color="green"> 803.             if stdin is None:</font>
+<font color="green"> 804.                 pass</font>
+<font color="red"> 805.             elif stdin == PIPE:</font>
+<font color="red"> 806.                 p2cread, p2cwrite = self.pipe_cloexec()</font>
+<font color="red"> 807.                 to_close.update((p2cread, p2cwrite))</font>
+<font color="red"> 808.             elif isinstance(stdin, (int, long)):</font>
+<font color="red"> 809.                 p2cread = stdin</font>
+<font color="black"> 810.             else:</font>
+<font color="black"> 811.                 # Assuming file-like object</font>
+<font color="red"> 812.                 p2cread = stdin.fileno()</font>
+<font color="black"> 813. </font>
+<font color="green"> 814.             if stdout is None:</font>
+<font color="green"> 815.                 pass</font>
+<font color="red"> 816.             elif stdout == PIPE:</font>
+<font color="red"> 817.                 c2pread, c2pwrite = self.pipe_cloexec()</font>
+<font color="red"> 818.                 to_close.update((c2pread, c2pwrite))</font>
+<font color="red"> 819.             elif isinstance(stdout, (int, long)):</font>
+<font color="red"> 820.                 c2pwrite = stdout</font>
+<font color="black"> 821.             else:</font>
+<font color="black"> 822.                 # Assuming file-like object</font>
+<font color="red"> 823.                 c2pwrite = stdout.fileno()</font>
+<font color="black"> 824. </font>
+<font color="green"> 825.             if stderr is None:</font>
+<font color="green"> 826.                 pass</font>
+<font color="red"> 827.             elif stderr == PIPE:</font>
+<font color="red"> 828.                 errread, errwrite = self.pipe_cloexec()</font>
+<font color="red"> 829.                 to_close.update((errread, errwrite))</font>
+<font color="red"> 830.             elif stderr == STDOUT:</font>
+<font color="red"> 831.                 if c2pwrite is not None:</font>
+<font color="red"> 832.                     errwrite = c2pwrite</font>
+<font color="black"> 833.                 else: # child's stdout is not set, use parent's stdout</font>
+<font color="red"> 834.                     errwrite = sys.__stdout__.fileno()</font>
+<font color="red"> 835.             elif isinstance(stderr, (int, long)):</font>
+<font color="red"> 836.                 errwrite = stderr</font>
+<font color="black"> 837.             else:</font>
+<font color="black"> 838.                 # Assuming file-like object</font>
+<font color="red"> 839.                 errwrite = stderr.fileno()</font>
+<font color="black"> 840. </font>
+<font color="green"> 841.             return (p2cread, p2cwrite,</font>
+<font color="green"> 842.                     c2pread, c2pwrite,</font>
+<font color="green"> 843.                     errread, errwrite), to_close</font>
+<font color="black"> 844. </font>
+<font color="black"> 845. </font>
+<font color="green"> 846.         def _set_cloexec_flag(self, fd, cloexec=True):</font>
+<font color="green"> 847.             try:</font>
+<font color="green"> 848.                 cloexec_flag = fcntl.FD_CLOEXEC</font>
+<font color="red"> 849.             except AttributeError:</font>
+<font color="red"> 850.                 cloexec_flag = 1</font>
+<font color="black"> 851. </font>
+<font color="green"> 852.             old = fcntl.fcntl(fd, fcntl.F_GETFD)</font>
+<font color="green"> 853.             if cloexec:</font>
+<font color="green"> 854.                 fcntl.fcntl(fd, fcntl.F_SETFD, old | cloexec_flag)</font>
+<font color="black"> 855.             else:</font>
+<font color="red"> 856.                 fcntl.fcntl(fd, fcntl.F_SETFD, old &amp; ~cloexec_flag)</font>
+<font color="black"> 857. </font>
+<font color="black"> 858. </font>
+<font color="green"> 859.         def pipe_cloexec(self):</font>
+<font color="black"> 860.             &quot;&quot;&quot;Create a pipe with FDs set CLOEXEC.&quot;&quot;&quot;</font>
+<font color="black"> 861.             # Pipes' FDs are set CLOEXEC by default because we don't want them</font>
+<font color="black"> 862.             # to be inherited by other subprocesses: the CLOEXEC flag is removed</font>
+<font color="black"> 863.             # from the child's FDs by _dup2(), between fork() and exec().</font>
+<font color="black"> 864.             # This is not atomic: we would need the pipe2() syscall for that.</font>
+<font color="green"> 865.             r, w = os.pipe()</font>
+<font color="green"> 866.             self._set_cloexec_flag(r)</font>
+<font color="green"> 867.             self._set_cloexec_flag(w)</font>
+<font color="green"> 868.             return r, w</font>
+<font color="black"> 869. </font>
+<font color="black"> 870. </font>
+<font color="green"> 871.         def _close_fds(self, but):</font>
+<font color="red"> 872.             if hasattr(os, 'closerange'):</font>
+<font color="red"> 873.                 os.closerange(3, but)</font>
+<font color="red"> 874.                 os.closerange(but + 1, MAXFD)</font>
+<font color="black"> 875.             else:</font>
+<font color="red"> 876.                 for i in xrange(3, MAXFD):</font>
+<font color="red"> 877.                     if i == but:</font>
+<font color="red"> 878.                         continue</font>
+<font color="red"> 879.                     try:</font>
+<font color="red"> 880.                         os.close(i)</font>
+<font color="red"> 881.                     except:</font>
+<font color="red"> 882.                         pass</font>
+<font color="black"> 883. </font>
+<font color="black"> 884. </font>
+<font color="black"> 885.         # Used as a bandaid workaround for https://bugs.python.org/issue27448</font>
+<font color="black"> 886.         # to prevent multiple simultaneous subprocess launches from interfering</font>
+<font color="black"> 887.         # with one another and leaving gc disabled.</font>
+<font color="green"> 888.         if threading:</font>
+<font color="green"> 889.             _disabling_gc_lock = threading.Lock()</font>
+<font color="black"> 890.         else:</font>
+<font color="red"> 891.             class _noop_context_manager(object):</font>
+<font color="black"> 892.                 # A dummy context manager that does nothing for the rare</font>
+<font color="black"> 893.                 # user of a --without-threads build.</font>
+<font color="red"> 894.                 def __enter__(self): pass</font>
+<font color="red"> 895.                 def __exit__(self, *args): pass</font>
+<font color="black"> 896. </font>
+<font color="red"> 897.             _disabling_gc_lock = _noop_context_manager()</font>
+<font color="black"> 898. </font>
+<font color="black"> 899. </font>
+<font color="green"> 900.         def _execute_child(self, args, executable, preexec_fn, close_fds,</font>
+<font color="black"> 901.                            cwd, env, universal_newlines,</font>
+<font color="black"> 902.                            startupinfo, creationflags, shell, to_close,</font>
+<font color="black"> 903.                            p2cread, p2cwrite,</font>
+<font color="black"> 904.                            c2pread, c2pwrite,</font>
+<font color="black"> 905.                            errread, errwrite):</font>
+<font color="black"> 906.             &quot;&quot;&quot;Execute program (POSIX version)&quot;&quot;&quot;</font>
+<font color="black"> 907. </font>
+<font color="green"> 908.             if isinstance(args, types.StringTypes):</font>
+<font color="red"> 909.                 args = [args]</font>
+<font color="black"> 910.             else:</font>
+<font color="green"> 911.                 args = list(args)</font>
+<font color="black"> 912. </font>
+<font color="green"> 913.             if shell:</font>
+<font color="red"> 914.                 args = [&quot;/bin/sh&quot;, &quot;-c&quot;] + args</font>
+<font color="red"> 915.                 if executable:</font>
+<font color="red"> 916.                     args[0] = executable</font>
+<font color="black"> 917. </font>
+<font color="green"> 918.             if executable is None:</font>
+<font color="green"> 919.                 executable = args[0]</font>
+<font color="black"> 920. </font>
+<font color="green"> 921.             def _close_in_parent(fd):</font>
+<font color="red"> 922.                 os.close(fd)</font>
+<font color="red"> 923.                 to_close.remove(fd)</font>
+<font color="black"> 924. </font>
+<font color="black"> 925.             # For transferring possible exec failure from child to parent</font>
+<font color="black"> 926.             # The first char specifies the exception type: 0 means</font>
+<font color="black"> 927.             # OSError, 1 means some other error.</font>
+<font color="green"> 928.             errpipe_read, errpipe_write = self.pipe_cloexec()</font>
+<font color="green"> 929.             try:</font>
+<font color="green"> 930.                 try:</font>
+<font color="green"> 931.                     with self._disabling_gc_lock:</font>
+<font color="green"> 932.                         gc_was_enabled = gc.isenabled()</font>
+<font color="black"> 933.                         # Disable gc to avoid bug where gc -&gt; file_dealloc -&gt;</font>
+<font color="black"> 934.                         # write to stderr -&gt; hang.</font>
+<font color="black"> 935.                         # https://bugs.python.org/issue1336</font>
+<font color="green"> 936.                         gc.disable()</font>
+<font color="green"> 937.                     try:</font>
+<font color="green"> 938.                         self.pid = os.fork()</font>
+<font color="red"> 939.                     except:</font>
+<font color="red"> 940.                         if gc_was_enabled:</font>
+<font color="red"> 941.                             gc.enable()</font>
+<font color="red"> 942.                         raise</font>
+<font color="green"> 943.                     self._child_created = True</font>
+<font color="green"> 944.                     if self.pid == 0:</font>
+<font color="black"> 945.                         # Child</font>
+<font color="red"> 946.                         try:</font>
+<font color="black"> 947.                             # Close parent's pipe ends</font>
+<font color="red"> 948.                             if p2cwrite is not None:</font>
+<font color="red"> 949.                                 os.close(p2cwrite)</font>
+<font color="red"> 950.                             if c2pread is not None:</font>
+<font color="red"> 951.                                 os.close(c2pread)</font>
+<font color="red"> 952.                             if errread is not None:</font>
+<font color="red"> 953.                                 os.close(errread)</font>
+<font color="red"> 954.                             os.close(errpipe_read)</font>
+<font color="black"> 955. </font>
+<font color="black"> 956.                             # When duping fds, if there arises a situation</font>
+<font color="black"> 957.                             # where one of the fds is either 0, 1 or 2, it</font>
+<font color="black"> 958.                             # is possible that it is overwritten (#12607).</font>
+<font color="red"> 959.                             if c2pwrite == 0:</font>
+<font color="red"> 960.                                 c2pwrite = os.dup(c2pwrite)</font>
+<font color="red"> 961.                             if errwrite == 0 or errwrite == 1:</font>
+<font color="red"> 962.                                 errwrite = os.dup(errwrite)</font>
+<font color="black"> 963. </font>
+<font color="black"> 964.                             # Dup fds for child</font>
+<font color="red"> 965.                             def _dup2(a, b):</font>
+<font color="black"> 966.                                 # dup2() removes the CLOEXEC flag but</font>
+<font color="black"> 967.                                 # we must do it ourselves if dup2()</font>
+<font color="black"> 968.                                 # would be a no-op (issue #10806).</font>
+<font color="red"> 969.                                 if a == b:</font>
+<font color="red"> 970.                                     self._set_cloexec_flag(a, False)</font>
+<font color="red"> 971.                                 elif a is not None:</font>
+<font color="red"> 972.                                     os.dup2(a, b)</font>
+<font color="red"> 973.                             _dup2(p2cread, 0)</font>
+<font color="red"> 974.                             _dup2(c2pwrite, 1)</font>
+<font color="red"> 975.                             _dup2(errwrite, 2)</font>
+<font color="black"> 976. </font>
+<font color="black"> 977.                             # Close pipe fds.  Make sure we don't close the</font>
+<font color="black"> 978.                             # same fd more than once, or standard fds.</font>
+<font color="red"> 979.                             closed = { None }</font>
+<font color="red"> 980.                             for fd in [p2cread, c2pwrite, errwrite]:</font>
+<font color="red"> 981.                                 if fd not in closed and fd &gt; 2:</font>
+<font color="red"> 982.                                     os.close(fd)</font>
+<font color="red"> 983.                                     closed.add(fd)</font>
+<font color="black"> 984. </font>
+<font color="red"> 985.                             if cwd is not None:</font>
+<font color="red"> 986.                                 os.chdir(cwd)</font>
+<font color="black"> 987. </font>
+<font color="red"> 988.                             if preexec_fn:</font>
+<font color="red"> 989.                                 preexec_fn()</font>
+<font color="black"> 990. </font>
+<font color="black"> 991.                             # Close all other fds, if asked for - after</font>
+<font color="black"> 992.                             # preexec_fn(), which may open FDs.</font>
+<font color="red"> 993.                             if close_fds:</font>
+<font color="red"> 994.                                 self._close_fds(but=errpipe_write)</font>
+<font color="black"> 995. </font>
+<font color="red"> 996.                             if env is None:</font>
+<font color="red"> 997.                                 os.execvp(executable, args)</font>
+<font color="black"> 998.                             else:</font>
+<font color="red"> 999.                                 os.execvpe(executable, args, env)</font>
+<font color="black">1000. </font>
+<font color="red">1001.                         except:</font>
+<font color="red">1002.                             exc_type, exc_value, tb = sys.exc_info()</font>
+<font color="black">1003.                             # Save the traceback and attach it to the exception object</font>
+<font color="red">1004.                             exc_lines = traceback.format_exception(exc_type,</font>
+<font color="red">1005.                                                                    exc_value,</font>
+<font color="red">1006.                                                                    tb)</font>
+<font color="red">1007.                             exc_value.child_traceback = ''.join(exc_lines)</font>
+<font color="red">1008.                             os.write(errpipe_write, pickle.dumps(exc_value))</font>
+<font color="black">1009. </font>
+<font color="black">1010.                         finally:</font>
+<font color="black">1011.                             # This exitcode won't be reported to applications, so it</font>
+<font color="black">1012.                             # really doesn't matter what we return.</font>
+<font color="red">1013.                             os._exit(255)</font>
+<font color="black">1014. </font>
+<font color="black">1015.                     # Parent</font>
+<font color="green">1016.                     if gc_was_enabled:</font>
+<font color="green">1017.                         gc.enable()</font>
+<font color="black">1018.                 finally:</font>
+<font color="black">1019.                     # be sure the FD is closed no matter what</font>
+<font color="green">1020.                     os.close(errpipe_write)</font>
+<font color="black">1021. </font>
+<font color="black">1022.                 # Wait for exec to fail or succeed; possibly raising exception</font>
+<font color="green">1023.                 data = _eintr_retry_call(os.read, errpipe_read, 1048576)</font>
+<font color="green">1024.                 pickle_bits = []</font>
+<font color="green">1025.                 while data:</font>
+<font color="red">1026.                     pickle_bits.append(data)</font>
+<font color="red">1027.                     data = _eintr_retry_call(os.read, errpipe_read, 1048576)</font>
+<font color="green">1028.                 data = &quot;&quot;.join(pickle_bits)</font>
+<font color="black">1029.             finally:</font>
+<font color="green">1030.                 if p2cread is not None and p2cwrite is not None:</font>
+<font color="red">1031.                     _close_in_parent(p2cread)</font>
+<font color="green">1032.                 if c2pwrite is not None and c2pread is not None:</font>
+<font color="red">1033.                     _close_in_parent(c2pwrite)</font>
+<font color="green">1034.                 if errwrite is not None and errread is not None:</font>
+<font color="red">1035.                     _close_in_parent(errwrite)</font>
+<font color="black">1036. </font>
+<font color="black">1037.                 # be sure the FD is closed no matter what</font>
+<font color="green">1038.                 os.close(errpipe_read)</font>
+<font color="black">1039. </font>
+<font color="green">1040.             if data != &quot;&quot;:</font>
+<font color="red">1041.                 try:</font>
+<font color="red">1042.                     _eintr_retry_call(os.waitpid, self.pid, 0)</font>
+<font color="red">1043.                 except OSError as e:</font>
+<font color="red">1044.                     if e.errno != errno.ECHILD:</font>
+<font color="red">1045.                         raise</font>
+<font color="red">1046.                 child_exception = pickle.loads(data)</font>
+<font color="red">1047.                 raise child_exception</font>
+<font color="black">1048. </font>
+<font color="black">1049. </font>
+<font color="green">1050.         def _handle_exitstatus(self, sts, _WIFSIGNALED=os.WIFSIGNALED,</font>
+<font color="green">1051.                 _WTERMSIG=os.WTERMSIG, _WIFEXITED=os.WIFEXITED,</font>
+<font color="green">1052.                 _WEXITSTATUS=os.WEXITSTATUS, _WIFSTOPPED=os.WIFSTOPPED,</font>
+<font color="green">1053.                 _WSTOPSIG=os.WSTOPSIG):</font>
+<font color="black">1054.             # This method is called (indirectly) by __del__, so it cannot</font>
+<font color="black">1055.             # refer to anything outside of its local scope.</font>
+<font color="green">1056.             if _WIFSIGNALED(sts):</font>
+<font color="red">1057.                 self.returncode = -_WTERMSIG(sts)</font>
+<font color="green">1058.             elif _WIFEXITED(sts):</font>
+<font color="green">1059.                 self.returncode = _WEXITSTATUS(sts)</font>
+<font color="red">1060.             elif _WIFSTOPPED(sts):</font>
+<font color="red">1061.                 self.returncode = -_WSTOPSIG(sts)</font>
+<font color="black">1062.             else:</font>
+<font color="black">1063.                 # Should never happen</font>
+<font color="red">1064.                 raise RuntimeError(&quot;Unknown child exit status!&quot;)</font>
+<font color="black">1065. </font>
+<font color="black">1066. </font>
+<font color="green">1067.         def _internal_poll(self, _deadstate=None, _waitpid=os.waitpid,</font>
+<font color="green">1068.                 _WNOHANG=os.WNOHANG, _os_error=os.error, _ECHILD=errno.ECHILD):</font>
+<font color="black">1069.             &quot;&quot;&quot;Check if child process has terminated.  Returns returncode</font>
+<font color="black">1070.             attribute.</font>
+<font color="black">1071. </font>
+<font color="black">1072.             This method is called by __del__, so it cannot reference anything</font>
+<font color="black">1073.             outside of the local scope (nor can any methods it calls).</font>
+<font color="black">1074. </font>
+<font color="black">1075.             &quot;&quot;&quot;</font>
+<font color="green">1076.             if self.returncode is None:</font>
+<font color="red">1077.                 try:</font>
+<font color="red">1078.                     pid, sts = _waitpid(self.pid, _WNOHANG)</font>
+<font color="red">1079.                     if pid == self.pid:</font>
+<font color="red">1080.                         self._handle_exitstatus(sts)</font>
+<font color="red">1081.                 except _os_error as e:</font>
+<font color="red">1082.                     if _deadstate is not None:</font>
+<font color="red">1083.                         self.returncode = _deadstate</font>
+<font color="red">1084.                     if e.errno == _ECHILD:</font>
+<font color="black">1085.                         # This happens if SIGCLD is set to be ignored or</font>
+<font color="black">1086.                         # waiting for child processes has otherwise been</font>
+<font color="black">1087.                         # disabled for our process.  This child is dead, we</font>
+<font color="black">1088.                         # can't get the status.</font>
+<font color="black">1089.                         # http://bugs.python.org/issue15756</font>
+<font color="red">1090.                         self.returncode = 0</font>
+<font color="green">1091.             return self.returncode</font>
+<font color="black">1092. </font>
+<font color="black">1093. </font>
+<font color="green">1094.         def wait(self):</font>
+<font color="black">1095.             &quot;&quot;&quot;Wait for child process to terminate.  Returns returncode</font>
+<font color="black">1096.             attribute.&quot;&quot;&quot;</font>
+<font color="green">1097.             while self.returncode is None:</font>
+<font color="green">1098.                 try:</font>
+<font color="green">1099.                     pid, sts = _eintr_retry_call(os.waitpid, self.pid, 0)</font>
+<font color="red">1100.                 except OSError as e:</font>
+<font color="red">1101.                     if e.errno != errno.ECHILD:</font>
+<font color="red">1102.                         raise</font>
+<font color="black">1103.                     # This happens if SIGCLD is set to be ignored or waiting</font>
+<font color="black">1104.                     # for child processes has otherwise been disabled for our</font>
+<font color="black">1105.                     # process.  This child is dead, we can't get the status.</font>
+<font color="red">1106.                     pid = self.pid</font>
+<font color="red">1107.                     sts = 0</font>
+<font color="black">1108.                 # Check the pid and loop as waitpid has been known to return</font>
+<font color="black">1109.                 # 0 even without WNOHANG in odd situations.  issue14396.</font>
+<font color="green">1110.                 if pid == self.pid:</font>
+<font color="green">1111.                     self._handle_exitstatus(sts)</font>
+<font color="green">1112.             return self.returncode</font>
+<font color="black">1113. </font>
+<font color="black">1114. </font>
+<font color="green">1115.         def _communicate(self, input):</font>
+<font color="red">1116.             if self.stdin:</font>
+<font color="black">1117.                 # Flush stdio buffer.  This might block, if the user has</font>
+<font color="black">1118.                 # been writing to .stdin in an uncontrolled fashion.</font>
+<font color="red">1119.                 self.stdin.flush()</font>
+<font color="red">1120.                 if not input:</font>
+<font color="red">1121.                     self.stdin.close()</font>
+<font color="black">1122. </font>
+<font color="red">1123.             if _has_poll:</font>
+<font color="red">1124.                 stdout, stderr = self._communicate_with_poll(input)</font>
+<font color="black">1125.             else:</font>
+<font color="red">1126.                 stdout, stderr = self._communicate_with_select(input)</font>
+<font color="black">1127. </font>
+<font color="black">1128.             # All data exchanged.  Translate lists into strings.</font>
+<font color="red">1129.             if stdout is not None:</font>
+<font color="red">1130.                 stdout = ''.join(stdout)</font>
+<font color="red">1131.             if stderr is not None:</font>
+<font color="red">1132.                 stderr = ''.join(stderr)</font>
+<font color="black">1133. </font>
+<font color="black">1134.             # Translate newlines, if requested.  We cannot let the file</font>
+<font color="black">1135.             # object do the translation: It is based on stdio, which is</font>
+<font color="black">1136.             # impossible to combine with select (unless forcing no</font>
+<font color="black">1137.             # buffering).</font>
+<font color="red">1138.             if self.universal_newlines and hasattr(file, 'newlines'):</font>
+<font color="red">1139.                 if stdout:</font>
+<font color="red">1140.                     stdout = self._translate_newlines(stdout)</font>
+<font color="red">1141.                 if stderr:</font>
+<font color="red">1142.                     stderr = self._translate_newlines(stderr)</font>
+<font color="black">1143. </font>
+<font color="red">1144.             self.wait()</font>
+<font color="red">1145.             return (stdout, stderr)</font>
+<font color="black">1146. </font>
+<font color="black">1147. </font>
+<font color="green">1148.         def _communicate_with_poll(self, input):</font>
+<font color="red">1149.             stdout = None # Return</font>
+<font color="red">1150.             stderr = None # Return</font>
+<font color="red">1151.             fd2file = {}</font>
+<font color="red">1152.             fd2output = {}</font>
+<font color="black">1153. </font>
+<font color="red">1154.             poller = select.poll()</font>
+<font color="red">1155.             def register_and_append(file_obj, eventmask):</font>
+<font color="red">1156.                 poller.register(file_obj.fileno(), eventmask)</font>
+<font color="red">1157.                 fd2file[file_obj.fileno()] = file_obj</font>
+<font color="black">1158. </font>
+<font color="red">1159.             def close_unregister_and_remove(fd):</font>
+<font color="red">1160.                 poller.unregister(fd)</font>
+<font color="red">1161.                 fd2file[fd].close()</font>
+<font color="red">1162.                 fd2file.pop(fd)</font>
+<font color="black">1163. </font>
+<font color="red">1164.             if self.stdin and input:</font>
+<font color="red">1165.                 register_and_append(self.stdin, select.POLLOUT)</font>
+<font color="black">1166. </font>
+<font color="red">1167.             select_POLLIN_POLLPRI = select.POLLIN | select.POLLPRI</font>
+<font color="red">1168.             if self.stdout:</font>
+<font color="red">1169.                 register_and_append(self.stdout, select_POLLIN_POLLPRI)</font>
+<font color="red">1170.                 fd2output[self.stdout.fileno()] = stdout = []</font>
+<font color="red">1171.             if self.stderr:</font>
+<font color="red">1172.                 register_and_append(self.stderr, select_POLLIN_POLLPRI)</font>
+<font color="red">1173.                 fd2output[self.stderr.fileno()] = stderr = []</font>
+<font color="black">1174. </font>
+<font color="red">1175.             input_offset = 0</font>
+<font color="red">1176.             while fd2file:</font>
+<font color="red">1177.                 try:</font>
+<font color="red">1178.                     ready = poller.poll()</font>
+<font color="red">1179.                 except select.error, e:</font>
+<font color="red">1180.                     if e.args[0] == errno.EINTR:</font>
+<font color="red">1181.                         continue</font>
+<font color="red">1182.                     raise</font>
+<font color="black">1183. </font>
+<font color="red">1184.                 for fd, mode in ready:</font>
+<font color="red">1185.                     if mode &amp; select.POLLOUT:</font>
+<font color="red">1186.                         chunk = input[input_offset : input_offset + _PIPE_BUF]</font>
+<font color="red">1187.                         try:</font>
+<font color="red">1188.                             input_offset += os.write(fd, chunk)</font>
+<font color="red">1189.                         except OSError as e:</font>
+<font color="red">1190.                             if e.errno == errno.EPIPE:</font>
+<font color="red">1191.                                 close_unregister_and_remove(fd)</font>
+<font color="black">1192.                             else:</font>
+<font color="red">1193.                                 raise</font>
+<font color="black">1194.                         else:</font>
+<font color="red">1195.                             if input_offset &gt;= len(input):</font>
+<font color="red">1196.                                 close_unregister_and_remove(fd)</font>
+<font color="red">1197.                     elif mode &amp; select_POLLIN_POLLPRI:</font>
+<font color="red">1198.                         data = os.read(fd, 4096)</font>
+<font color="red">1199.                         if not data:</font>
+<font color="red">1200.                             close_unregister_and_remove(fd)</font>
+<font color="red">1201.                         fd2output[fd].append(data)</font>
+<font color="black">1202.                     else:</font>
+<font color="black">1203.                         # Ignore hang up or errors.</font>
+<font color="red">1204.                         close_unregister_and_remove(fd)</font>
+<font color="black">1205. </font>
+<font color="red">1206.             return (stdout, stderr)</font>
+<font color="black">1207. </font>
+<font color="black">1208. </font>
+<font color="green">1209.         def _communicate_with_select(self, input):</font>
+<font color="red">1210.             read_set = []</font>
+<font color="red">1211.             write_set = []</font>
+<font color="red">1212.             stdout = None # Return</font>
+<font color="red">1213.             stderr = None # Return</font>
+<font color="black">1214. </font>
+<font color="red">1215.             if self.stdin and input:</font>
+<font color="red">1216.                 write_set.append(self.stdin)</font>
+<font color="red">1217.             if self.stdout:</font>
+<font color="red">1218.                 read_set.append(self.stdout)</font>
+<font color="red">1219.                 stdout = []</font>
+<font color="red">1220.             if self.stderr:</font>
+<font color="red">1221.                 read_set.append(self.stderr)</font>
+<font color="red">1222.                 stderr = []</font>
+<font color="black">1223. </font>
+<font color="red">1224.             input_offset = 0</font>
+<font color="red">1225.             while read_set or write_set:</font>
+<font color="red">1226.                 try:</font>
+<font color="red">1227.                     rlist, wlist, xlist = select.select(read_set, write_set, [])</font>
+<font color="red">1228.                 except select.error, e:</font>
+<font color="red">1229.                     if e.args[0] == errno.EINTR:</font>
+<font color="red">1230.                         continue</font>
+<font color="red">1231.                     raise</font>
+<font color="black">1232. </font>
+<font color="red">1233.                 if self.stdin in wlist:</font>
+<font color="red">1234.                     chunk = input[input_offset : input_offset + _PIPE_BUF]</font>
+<font color="red">1235.                     try:</font>
+<font color="red">1236.                         bytes_written = os.write(self.stdin.fileno(), chunk)</font>
+<font color="red">1237.                     except OSError as e:</font>
+<font color="red">1238.                         if e.errno == errno.EPIPE:</font>
+<font color="red">1239.                             self.stdin.close()</font>
+<font color="red">1240.                             write_set.remove(self.stdin)</font>
+<font color="black">1241.                         else:</font>
+<font color="red">1242.                             raise</font>
+<font color="black">1243.                     else:</font>
+<font color="red">1244.                         input_offset += bytes_written</font>
+<font color="red">1245.                         if input_offset &gt;= len(input):</font>
+<font color="red">1246.                             self.stdin.close()</font>
+<font color="red">1247.                             write_set.remove(self.stdin)</font>
+<font color="black">1248. </font>
+<font color="red">1249.                 if self.stdout in rlist:</font>
+<font color="red">1250.                     data = os.read(self.stdout.fileno(), 1024)</font>
+<font color="red">1251.                     if data == &quot;&quot;:</font>
+<font color="red">1252.                         self.stdout.close()</font>
+<font color="red">1253.                         read_set.remove(self.stdout)</font>
+<font color="red">1254.                     stdout.append(data)</font>
+<font color="black">1255. </font>
+<font color="red">1256.                 if self.stderr in rlist:</font>
+<font color="red">1257.                     data = os.read(self.stderr.fileno(), 1024)</font>
+<font color="red">1258.                     if data == &quot;&quot;:</font>
+<font color="red">1259.                         self.stderr.close()</font>
+<font color="red">1260.                         read_set.remove(self.stderr)</font>
+<font color="red">1261.                     stderr.append(data)</font>
+<font color="black">1262. </font>
+<font color="red">1263.             return (stdout, stderr)</font>
+<font color="black">1264. </font>
+<font color="black">1265. </font>
+<font color="green">1266.         def send_signal(self, sig):</font>
+<font color="black">1267.             &quot;&quot;&quot;Send a signal to the process</font>
+<font color="black">1268.             &quot;&quot;&quot;</font>
+<font color="red">1269.             os.kill(self.pid, sig)</font>
+<font color="black">1270. </font>
+<font color="green">1271.         def terminate(self):</font>
+<font color="black">1272.             &quot;&quot;&quot;Terminate the process with SIGTERM</font>
+<font color="black">1273.             &quot;&quot;&quot;</font>
+<font color="red">1274.             self.send_signal(signal.SIGTERM)</font>
+<font color="black">1275. </font>
+<font color="green">1276.         def kill(self):</font>
+<font color="black">1277.             &quot;&quot;&quot;Kill the process with SIGKILL</font>
+<font color="black">1278.             &quot;&quot;&quot;</font>
+<font color="red">1279.             self.send_signal(signal.SIGKILL)</font>
+<font color="black">1280. </font>
+<font color="black">1281. </font>
+<font color="green">1282. def _demo_posix():</font>
+<font color="black">1283.     #</font>
+<font color="black">1284.     # Example 1: Simple redirection: Get process list</font>
+<font color="black">1285.     #</font>
+<font color="red">1286.     plist = Popen([&quot;ps&quot;], stdout=PIPE).communicate()[0]</font>
+<font color="red">1287.     print &quot;Process list:&quot;</font>
+<font color="red">1288.     print plist</font>
+<font color="black">1289. </font>
+<font color="black">1290.     #</font>
+<font color="black">1291.     # Example 2: Change uid before executing child</font>
+<font color="black">1292.     #</font>
+<font color="red">1293.     if os.getuid() == 0:</font>
+<font color="red">1294.         p = Popen([&quot;id&quot;], preexec_fn=lambda: os.setuid(100))</font>
+<font color="red">1295.         p.wait()</font>
+<font color="black">1296. </font>
+<font color="black">1297.     #</font>
+<font color="black">1298.     # Example 3: Connecting several subprocesses</font>
+<font color="black">1299.     #</font>
+<font color="red">1300.     print &quot;Looking for 'hda'...&quot;</font>
+<font color="red">1301.     p1 = Popen([&quot;dmesg&quot;], stdout=PIPE)</font>
+<font color="red">1302.     p2 = Popen([&quot;grep&quot;, &quot;hda&quot;], stdin=p1.stdout, stdout=PIPE)</font>
+<font color="red">1303.     print repr(p2.communicate()[0])</font>
+<font color="black">1304. </font>
+<font color="black">1305.     #</font>
+<font color="black">1306.     # Example 4: Catch execution error</font>
+<font color="black">1307.     #</font>
+<font color="red">1308.     print</font>
+<font color="red">1309.     print &quot;Trying a weird file...&quot;</font>
+<font color="red">1310.     try:</font>
+<font color="red">1311.         print Popen([&quot;/this/path/does/not/exist&quot;]).communicate()</font>
+<font color="red">1312.     except OSError, e:</font>
+<font color="red">1313.         if e.errno == errno.ENOENT:</font>
+<font color="red">1314.             print &quot;The file didn't exist.  I thought so...&quot;</font>
+<font color="red">1315.             print &quot;Child traceback:&quot;</font>
+<font color="red">1316.             print e.child_traceback</font>
+<font color="black">1317.         else:</font>
+<font color="red">1318.             print &quot;Error&quot;, e.errno</font>
+<font color="black">1319.     else:</font>
+<font color="red">1320.         print &gt;&gt;sys.stderr, &quot;Gosh.  No error.&quot;</font>
+<font color="black">1321. </font>
+<font color="black">1322. </font>
+<font color="green">1323. def _demo_windows():</font>
+<font color="black">1324.     #</font>
+<font color="black">1325.     # Example 1: Connecting several subprocesses</font>
+<font color="black">1326.     #</font>
+<font color="red">1327.     print &quot;Looking for 'PROMPT' in set output...&quot;</font>
+<font color="red">1328.     p1 = Popen(&quot;set&quot;, stdout=PIPE, shell=True)</font>
+<font color="red">1329.     p2 = Popen('find &quot;PROMPT&quot;', stdin=p1.stdout, stdout=PIPE)</font>
+<font color="red">1330.     print repr(p2.communicate()[0])</font>
+<font color="black">1331. </font>
+<font color="black">1332.     #</font>
+<font color="black">1333.     # Example 2: Simple execution of program</font>
+<font color="black">1334.     #</font>
+<font color="red">1335.     print &quot;Executing calc...&quot;</font>
+<font color="red">1336.     p = Popen(&quot;calc&quot;)</font>
+<font color="red">1337.     p.wait()</font>
+<font color="black">1338. </font>
+<font color="black">1339. </font>
+<font color="green">1340. if __name__ == &quot;__main__&quot;:</font>
+<font color="red">1341.     if mswindows:</font>
+<font color="red">1342.         _demo_windows()</font>
+<font color="black">1343.     else:</font>
+<font color="red">1344.         _demo_posix()</font>
+</pre>
+

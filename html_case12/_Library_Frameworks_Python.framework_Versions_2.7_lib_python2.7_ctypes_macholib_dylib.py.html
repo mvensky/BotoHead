@@ -1,0 +1,70 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/ctypes/macholib/dylib.py</b><br>
+
+
+file stats: <b>27 lines, 8 executed: 29.6% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;</font>
+<font color="black">   2. Generic dylib path manipulation</font>
+<font color="green">   3. &quot;&quot;&quot;</font>
+<font color="black">   4. </font>
+<font color="green">   5. import re</font>
+<font color="black">   6. </font>
+<font color="green">   7. __all__ = ['dylib_info']</font>
+<font color="black">   8. </font>
+<font color="green">   9. DYLIB_RE = re.compile(r&quot;&quot;&quot;(?x)</font>
+<font color="black">  10. (?P&lt;location&gt;^.*)(?:^|/)</font>
+<font color="black">  11. (?P&lt;name&gt;</font>
+<font color="black">  12.     (?P&lt;shortname&gt;\w+?)</font>
+<font color="black">  13.     (?:\.(?P&lt;version&gt;[^._]+))?</font>
+<font color="black">  14.     (?:_(?P&lt;suffix&gt;[^._]+))?</font>
+<font color="black">  15.     \.dylib$</font>
+<font color="black">  16. )</font>
+<font color="green">  17. &quot;&quot;&quot;)</font>
+<font color="black">  18. </font>
+<font color="green">  19. def dylib_info(filename):</font>
+<font color="black">  20.     &quot;&quot;&quot;</font>
+<font color="black">  21.     A dylib name can take one of the following four forms:</font>
+<font color="black">  22.         Location/Name.SomeVersion_Suffix.dylib</font>
+<font color="black">  23.         Location/Name.SomeVersion.dylib</font>
+<font color="black">  24.         Location/Name_Suffix.dylib</font>
+<font color="black">  25.         Location/Name.dylib</font>
+<font color="black">  26. </font>
+<font color="black">  27.     returns None if not found or a mapping equivalent to:</font>
+<font color="black">  28.         dict(</font>
+<font color="black">  29.             location='Location',</font>
+<font color="black">  30.             name='Name.SomeVersion_Suffix.dylib',</font>
+<font color="black">  31.             shortname='Name',</font>
+<font color="black">  32.             version='SomeVersion',</font>
+<font color="black">  33.             suffix='Suffix',</font>
+<font color="black">  34.         )</font>
+<font color="black">  35. </font>
+<font color="black">  36.     Note that SomeVersion and Suffix are optional and may be None</font>
+<font color="black">  37.     if not present.</font>
+<font color="black">  38.     &quot;&quot;&quot;</font>
+<font color="red">  39.     is_dylib = DYLIB_RE.match(filename)</font>
+<font color="red">  40.     if not is_dylib:</font>
+<font color="red">  41.         return None</font>
+<font color="red">  42.     return is_dylib.groupdict()</font>
+<font color="black">  43. </font>
+<font color="black">  44. </font>
+<font color="green">  45. def test_dylib_info():</font>
+<font color="red">  46.     def d(location=None, name=None, shortname=None, version=None, suffix=None):</font>
+<font color="red">  47.         return dict(</font>
+<font color="red">  48.             location=location,</font>
+<font color="red">  49.             name=name,</font>
+<font color="red">  50.             shortname=shortname,</font>
+<font color="red">  51.             version=version,</font>
+<font color="red">  52.             suffix=suffix</font>
+<font color="black">  53.         )</font>
+<font color="red">  54.     assert dylib_info('completely/invalid') is None</font>
+<font color="red">  55.     assert dylib_info('completely/invalide_debug') is None</font>
+<font color="red">  56.     assert dylib_info('P/Foo.dylib') == d('P', 'Foo.dylib', 'Foo')</font>
+<font color="red">  57.     assert dylib_info('P/Foo_debug.dylib') == d('P', 'Foo_debug.dylib', 'Foo', suffix='debug')</font>
+<font color="red">  58.     assert dylib_info('P/Foo.A.dylib') == d('P', 'Foo.A.dylib', 'Foo', 'A')</font>
+<font color="red">  59.     assert dylib_info('P/Foo_debug.A.dylib') == d('P', 'Foo_debug.A.dylib', 'Foo_debug', 'A')</font>
+<font color="red">  60.     assert dylib_info('P/Foo.A_debug.dylib') == d('P', 'Foo.A_debug.dylib', 'Foo', 'A', 'debug')</font>
+<font color="black">  61. </font>
+<font color="green">  62. if __name__ == '__main__':</font>
+<font color="red">  63.     test_dylib_info()</font>
+</pre>
+

@@ -1,0 +1,435 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/urlparse.py</b><br>
+
+
+file stats: <b>264 lines, 61 executed: 23.1% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Parse (absolute and relative) URLs.</font>
+<font color="black">   2. </font>
+<font color="black">   3. urlparse module is based upon the following RFC specifications.</font>
+<font color="black">   4. </font>
+<font color="black">   5. RFC 3986 (STD66): &quot;Uniform Resource Identifiers&quot; by T. Berners-Lee, R. Fielding</font>
+<font color="black">   6. and L.  Masinter, January 2005.</font>
+<font color="black">   7. </font>
+<font color="black">   8. RFC 2732 : &quot;Format for Literal IPv6 Addresses in URL's by R.Hinden, B.Carpenter</font>
+<font color="black">   9. and L.Masinter, December 1999.</font>
+<font color="black">  10. </font>
+<font color="black">  11. RFC 2396:  &quot;Uniform Resource Identifiers (URI)&quot;: Generic Syntax by T.</font>
+<font color="black">  12. Berners-Lee, R. Fielding, and L. Masinter, August 1998.</font>
+<font color="black">  13. </font>
+<font color="black">  14. RFC 2368: &quot;The mailto URL scheme&quot;, by P.Hoffman , L Masinter, J. Zwinski, July 1998.</font>
+<font color="black">  15. </font>
+<font color="black">  16. RFC 1808: &quot;Relative Uniform Resource Locators&quot;, by R. Fielding, UC Irvine, June</font>
+<font color="black">  17. 1995.</font>
+<font color="black">  18. </font>
+<font color="black">  19. RFC 1738: &quot;Uniform Resource Locators (URL)&quot; by T. Berners-Lee, L. Masinter, M.</font>
+<font color="black">  20. McCahill, December 1994</font>
+<font color="black">  21. </font>
+<font color="black">  22. RFC 3986 is considered the current standard and any future changes to</font>
+<font color="black">  23. urlparse module should conform with it.  The urlparse module is</font>
+<font color="black">  24. currently not entirely compliant with this RFC due to defacto</font>
+<font color="black">  25. scenarios for parsing, and for backward compatibility purposes, some</font>
+<font color="black">  26. parsing quirks from older RFCs are retained. The testcases in</font>
+<font color="black">  27. test_urlparse.py provides a good indicator of parsing behavior.</font>
+<font color="black">  28. </font>
+<font color="red">  29. &quot;&quot;&quot;</font>
+<font color="black">  30. </font>
+<font color="red">  31. import re</font>
+<font color="black">  32. </font>
+<font color="red">  33. __all__ = [&quot;urlparse&quot;, &quot;urlunparse&quot;, &quot;urljoin&quot;, &quot;urldefrag&quot;,</font>
+<font color="red">  34.            &quot;urlsplit&quot;, &quot;urlunsplit&quot;, &quot;parse_qs&quot;, &quot;parse_qsl&quot;]</font>
+<font color="black">  35. </font>
+<font color="black">  36. # A classification of schemes ('' means apply by default)</font>
+<font color="red">  37. uses_relative = ['ftp', 'http', 'gopher', 'nntp', 'imap',</font>
+<font color="red">  38.                  'wais', 'file', 'https', 'shttp', 'mms',</font>
+<font color="red">  39.                  'prospero', 'rtsp', 'rtspu', '', 'sftp',</font>
+<font color="red">  40.                  'svn', 'svn+ssh']</font>
+<font color="red">  41. uses_netloc = ['ftp', 'http', 'gopher', 'nntp', 'telnet',</font>
+<font color="red">  42.                'imap', 'wais', 'file', 'mms', 'https', 'shttp',</font>
+<font color="red">  43.                'snews', 'prospero', 'rtsp', 'rtspu', 'rsync', '',</font>
+<font color="red">  44.                'svn', 'svn+ssh', 'sftp','nfs','git', 'git+ssh']</font>
+<font color="red">  45. uses_params = ['ftp', 'hdl', 'prospero', 'http', 'imap',</font>
+<font color="red">  46.                'https', 'shttp', 'rtsp', 'rtspu', 'sip', 'sips',</font>
+<font color="red">  47.                'mms', '', 'sftp', 'tel']</font>
+<font color="black">  48. </font>
+<font color="black">  49. # These are not actually used anymore, but should stay for backwards</font>
+<font color="black">  50. # compatibility.  (They are undocumented, but have a public-looking name.)</font>
+<font color="red">  51. non_hierarchical = ['gopher', 'hdl', 'mailto', 'news',</font>
+<font color="red">  52.                     'telnet', 'wais', 'imap', 'snews', 'sip', 'sips']</font>
+<font color="red">  53. uses_query = ['http', 'wais', 'imap', 'https', 'shttp', 'mms',</font>
+<font color="red">  54.               'gopher', 'rtsp', 'rtspu', 'sip', 'sips', '']</font>
+<font color="red">  55. uses_fragment = ['ftp', 'hdl', 'http', 'gopher', 'news',</font>
+<font color="red">  56.                  'nntp', 'wais', 'https', 'shttp', 'snews',</font>
+<font color="red">  57.                  'file', 'prospero', '']</font>
+<font color="black">  58. </font>
+<font color="black">  59. # Characters valid in scheme names</font>
+<font color="red">  60. scheme_chars = ('abcdefghijklmnopqrstuvwxyz'</font>
+<font color="black">  61.                 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'</font>
+<font color="black">  62.                 '0123456789'</font>
+<font color="black">  63.                 '+-.')</font>
+<font color="black">  64. </font>
+<font color="red">  65. MAX_CACHE_SIZE = 20</font>
+<font color="red">  66. _parse_cache = {}</font>
+<font color="black">  67. </font>
+<font color="red">  68. def clear_cache():</font>
+<font color="black">  69.     &quot;&quot;&quot;Clear the parse cache.&quot;&quot;&quot;</font>
+<font color="red">  70.     _parse_cache.clear()</font>
+<font color="black">  71. </font>
+<font color="black">  72. </font>
+<font color="red">  73. class ResultMixin(object):</font>
+<font color="red">  74.     &quot;&quot;&quot;Shared methods for the parsed result objects.&quot;&quot;&quot;</font>
+<font color="black">  75. </font>
+<font color="red">  76.     @property</font>
+<font color="black">  77.     def username(self):</font>
+<font color="green">  78.         netloc = self.netloc</font>
+<font color="green">  79.         if &quot;@&quot; in netloc:</font>
+<font color="red">  80.             userinfo = netloc.rsplit(&quot;@&quot;, 1)[0]</font>
+<font color="red">  81.             if &quot;:&quot; in userinfo:</font>
+<font color="red">  82.                 userinfo = userinfo.split(&quot;:&quot;, 1)[0]</font>
+<font color="red">  83.             return userinfo</font>
+<font color="green">  84.         return None</font>
+<font color="black">  85. </font>
+<font color="red">  86.     @property</font>
+<font color="black">  87.     def password(self):</font>
+<font color="red">  88.         netloc = self.netloc</font>
+<font color="red">  89.         if &quot;@&quot; in netloc:</font>
+<font color="red">  90.             userinfo = netloc.rsplit(&quot;@&quot;, 1)[0]</font>
+<font color="red">  91.             if &quot;:&quot; in userinfo:</font>
+<font color="red">  92.                 return userinfo.split(&quot;:&quot;, 1)[1]</font>
+<font color="red">  93.         return None</font>
+<font color="black">  94. </font>
+<font color="red">  95.     @property</font>
+<font color="black">  96.     def hostname(self):</font>
+<font color="green">  97.         netloc = self.netloc.split('@')[-1]</font>
+<font color="green">  98.         if '[' in netloc and ']' in netloc:</font>
+<font color="red">  99.             return netloc.split(']')[0][1:].lower()</font>
+<font color="green"> 100.         elif ':' in netloc:</font>
+<font color="red"> 101.             return netloc.split(':')[0].lower()</font>
+<font color="green"> 102.         elif netloc == '':</font>
+<font color="red"> 103.             return None</font>
+<font color="black"> 104.         else:</font>
+<font color="green"> 105.             return netloc.lower()</font>
+<font color="black"> 106. </font>
+<font color="red"> 107.     @property</font>
+<font color="black"> 108.     def port(self):</font>
+<font color="green"> 109.         netloc = self.netloc.split('@')[-1].split(']')[-1]</font>
+<font color="green"> 110.         if ':' in netloc:</font>
+<font color="red"> 111.             port = netloc.split(':')[1]</font>
+<font color="red"> 112.             if port:</font>
+<font color="red"> 113.                 port = int(port, 10)</font>
+<font color="black"> 114.                 # verify legal port</font>
+<font color="red"> 115.                 if (0 &lt;= port &lt;= 65535):</font>
+<font color="red"> 116.                     return port</font>
+<font color="green"> 117.         return None</font>
+<font color="black"> 118. </font>
+<font color="red"> 119. from collections import namedtuple</font>
+<font color="black"> 120. </font>
+<font color="red"> 121. class SplitResult(namedtuple('SplitResult', 'scheme netloc path query fragment'), ResultMixin):</font>
+<font color="black"> 122. </font>
+<font color="red"> 123.     __slots__ = ()</font>
+<font color="black"> 124. </font>
+<font color="red"> 125.     def geturl(self):</font>
+<font color="red"> 126.         return urlunsplit(self)</font>
+<font color="black"> 127. </font>
+<font color="black"> 128. </font>
+<font color="red"> 129. class ParseResult(namedtuple('ParseResult', 'scheme netloc path params query fragment'), ResultMixin):</font>
+<font color="black"> 130. </font>
+<font color="red"> 131.     __slots__ = ()</font>
+<font color="black"> 132. </font>
+<font color="red"> 133.     def geturl(self):</font>
+<font color="green"> 134.         return urlunparse(self)</font>
+<font color="black"> 135. </font>
+<font color="black"> 136. </font>
+<font color="red"> 137. def urlparse(url, scheme='', allow_fragments=True):</font>
+<font color="black"> 138.     &quot;&quot;&quot;Parse a URL into 6 components:</font>
+<font color="black"> 139.     &lt;scheme&gt;://&lt;netloc&gt;/&lt;path&gt;;&lt;params&gt;?&lt;query&gt;#&lt;fragment&gt;</font>
+<font color="black"> 140.     Return a 6-tuple: (scheme, netloc, path, params, query, fragment).</font>
+<font color="black"> 141.     Note that we don't break the components up in smaller bits</font>
+<font color="black"> 142.     (e.g. netloc is a single string) and we don't expand % escapes.&quot;&quot;&quot;</font>
+<font color="green"> 143.     tuple = urlsplit(url, scheme, allow_fragments)</font>
+<font color="green"> 144.     scheme, netloc, url, query, fragment = tuple</font>
+<font color="green"> 145.     if scheme in uses_params and ';' in url:</font>
+<font color="red"> 146.         url, params = _splitparams(url)</font>
+<font color="black"> 147.     else:</font>
+<font color="green"> 148.         params = ''</font>
+<font color="green"> 149.     return ParseResult(scheme, netloc, url, params, query, fragment)</font>
+<font color="black"> 150. </font>
+<font color="red"> 151. def _splitparams(url):</font>
+<font color="red"> 152.     if '/'  in url:</font>
+<font color="red"> 153.         i = url.find(';', url.rfind('/'))</font>
+<font color="red"> 154.         if i &lt; 0:</font>
+<font color="red"> 155.             return url, ''</font>
+<font color="black"> 156.     else:</font>
+<font color="red"> 157.         i = url.find(';')</font>
+<font color="red"> 158.     return url[:i], url[i+1:]</font>
+<font color="black"> 159. </font>
+<font color="red"> 160. def _splitnetloc(url, start=0):</font>
+<font color="green"> 161.     delim = len(url)   # position of end of domain part of url, default is end</font>
+<font color="green"> 162.     for c in '/?#':    # look for delimiters; the order is NOT important</font>
+<font color="green"> 163.         wdelim = url.find(c, start)        # find first of this delim</font>
+<font color="green"> 164.         if wdelim &gt;= 0:                    # if found</font>
+<font color="green"> 165.             delim = min(delim, wdelim)     # use earliest delim position</font>
+<font color="green"> 166.     return url[start:delim], url[delim:]   # return (domain, rest)</font>
+<font color="black"> 167. </font>
+<font color="red"> 168. def urlsplit(url, scheme='', allow_fragments=True):</font>
+<font color="black"> 169.     &quot;&quot;&quot;Parse a URL into 5 components:</font>
+<font color="black"> 170.     &lt;scheme&gt;://&lt;netloc&gt;/&lt;path&gt;?&lt;query&gt;#&lt;fragment&gt;</font>
+<font color="black"> 171.     Return a 5-tuple: (scheme, netloc, path, query, fragment).</font>
+<font color="black"> 172.     Note that we don't break the components up in smaller bits</font>
+<font color="black"> 173.     (e.g. netloc is a single string) and we don't expand % escapes.&quot;&quot;&quot;</font>
+<font color="green"> 174.     allow_fragments = bool(allow_fragments)</font>
+<font color="green"> 175.     key = url, scheme, allow_fragments, type(url), type(scheme)</font>
+<font color="green"> 176.     cached = _parse_cache.get(key, None)</font>
+<font color="green"> 177.     if cached:</font>
+<font color="green"> 178.         return cached</font>
+<font color="green"> 179.     if len(_parse_cache) &gt;= MAX_CACHE_SIZE: # avoid runaway growth</font>
+<font color="red"> 180.         clear_cache()</font>
+<font color="green"> 181.     netloc = query = fragment = ''</font>
+<font color="green"> 182.     i = url.find(':')</font>
+<font color="green"> 183.     if i &gt; 0:</font>
+<font color="green"> 184.         if url[:i] == 'http': # optimize the common case</font>
+<font color="red"> 185.             scheme = url[:i].lower()</font>
+<font color="red"> 186.             url = url[i+1:]</font>
+<font color="red"> 187.             if url[:2] == '//':</font>
+<font color="red"> 188.                 netloc, url = _splitnetloc(url, 2)</font>
+<font color="red"> 189.                 if (('[' in netloc and ']' not in netloc) or</font>
+<font color="red"> 190.                         (']' in netloc and '[' not in netloc)):</font>
+<font color="red"> 191.                     raise ValueError(&quot;Invalid IPv6 URL&quot;)</font>
+<font color="red"> 192.             if allow_fragments and '#' in url:</font>
+<font color="red"> 193.                 url, fragment = url.split('#', 1)</font>
+<font color="red"> 194.             if '?' in url:</font>
+<font color="red"> 195.                 url, query = url.split('?', 1)</font>
+<font color="red"> 196.             v = SplitResult(scheme, netloc, url, query, fragment)</font>
+<font color="red"> 197.             _parse_cache[key] = v</font>
+<font color="red"> 198.             return v</font>
+<font color="green"> 199.         for c in url[:i]:</font>
+<font color="green"> 200.             if c not in scheme_chars:</font>
+<font color="red"> 201.                 break</font>
+<font color="black"> 202.         else:</font>
+<font color="black"> 203.             # make sure &quot;url&quot; is not actually a port number (in which case</font>
+<font color="black"> 204.             # &quot;scheme&quot; is really part of the path)</font>
+<font color="green"> 205.             rest = url[i+1:]</font>
+<font color="green"> 206.             if not rest or any(c not in '0123456789' for c in rest):</font>
+<font color="black"> 207.                 # not a port number</font>
+<font color="green"> 208.                 scheme, url = url[:i].lower(), rest</font>
+<font color="black"> 209. </font>
+<font color="green"> 210.     if url[:2] == '//':</font>
+<font color="green"> 211.         netloc, url = _splitnetloc(url, 2)</font>
+<font color="green"> 212.         if (('[' in netloc and ']' not in netloc) or</font>
+<font color="green"> 213.                 (']' in netloc and '[' not in netloc)):</font>
+<font color="red"> 214.             raise ValueError(&quot;Invalid IPv6 URL&quot;)</font>
+<font color="green"> 215.     if allow_fragments and '#' in url:</font>
+<font color="red"> 216.         url, fragment = url.split('#', 1)</font>
+<font color="green"> 217.     if '?' in url:</font>
+<font color="green"> 218.         url, query = url.split('?', 1)</font>
+<font color="green"> 219.     v = SplitResult(scheme, netloc, url, query, fragment)</font>
+<font color="green"> 220.     _parse_cache[key] = v</font>
+<font color="green"> 221.     return v</font>
+<font color="black"> 222. </font>
+<font color="red"> 223. def urlunparse(data):</font>
+<font color="black"> 224.     &quot;&quot;&quot;Put a parsed URL back together again.  This may result in a</font>
+<font color="black"> 225.     slightly different, but equivalent URL, if the URL that was parsed</font>
+<font color="black"> 226.     originally had redundant delimiters, e.g. a ? with an empty query</font>
+<font color="black"> 227.     (the draft states that these are equivalent).&quot;&quot;&quot;</font>
+<font color="green"> 228.     scheme, netloc, url, params, query, fragment = data</font>
+<font color="green"> 229.     if params:</font>
+<font color="red"> 230.         url = &quot;%s;%s&quot; % (url, params)</font>
+<font color="green"> 231.     return urlunsplit((scheme, netloc, url, query, fragment))</font>
+<font color="black"> 232. </font>
+<font color="red"> 233. def urlunsplit(data):</font>
+<font color="black"> 234.     &quot;&quot;&quot;Combine the elements of a tuple as returned by urlsplit() into a</font>
+<font color="black"> 235.     complete URL as a string. The data argument can be any five-item iterable.</font>
+<font color="black"> 236.     This may result in a slightly different, but equivalent URL, if the URL that</font>
+<font color="black"> 237.     was parsed originally had unnecessary delimiters (for example, a ? with an</font>
+<font color="black"> 238.     empty query; the RFC states that these are equivalent).&quot;&quot;&quot;</font>
+<font color="green"> 239.     scheme, netloc, url, query, fragment = data</font>
+<font color="green"> 240.     if netloc or (scheme and scheme in uses_netloc and url[:2] != '//'):</font>
+<font color="green"> 241.         if url and url[:1] != '/': url = '/' + url</font>
+<font color="green"> 242.         url = '//' + (netloc or '') + url</font>
+<font color="green"> 243.     if scheme:</font>
+<font color="green"> 244.         url = scheme + ':' + url</font>
+<font color="green"> 245.     if query:</font>
+<font color="green"> 246.         url = url + '?' + query</font>
+<font color="green"> 247.     if fragment:</font>
+<font color="red"> 248.         url = url + '#' + fragment</font>
+<font color="green"> 249.     return url</font>
+<font color="black"> 250. </font>
+<font color="red"> 251. def urljoin(base, url, allow_fragments=True):</font>
+<font color="black"> 252.     &quot;&quot;&quot;Join a base URL and a possibly relative URL to form an absolute</font>
+<font color="black"> 253.     interpretation of the latter.&quot;&quot;&quot;</font>
+<font color="red"> 254.     if not base:</font>
+<font color="red"> 255.         return url</font>
+<font color="red"> 256.     if not url:</font>
+<font color="red"> 257.         return base</font>
+<font color="black"> 258.     bscheme, bnetloc, bpath, bparams, bquery, bfragment = \</font>
+<font color="red"> 259.             urlparse(base, '', allow_fragments)</font>
+<font color="black"> 260.     scheme, netloc, path, params, query, fragment = \</font>
+<font color="red"> 261.             urlparse(url, bscheme, allow_fragments)</font>
+<font color="red"> 262.     if scheme != bscheme or scheme not in uses_relative:</font>
+<font color="red"> 263.         return url</font>
+<font color="red"> 264.     if scheme in uses_netloc:</font>
+<font color="red"> 265.         if netloc:</font>
+<font color="red"> 266.             return urlunparse((scheme, netloc, path,</font>
+<font color="red"> 267.                                params, query, fragment))</font>
+<font color="red"> 268.         netloc = bnetloc</font>
+<font color="red"> 269.     if path[:1] == '/':</font>
+<font color="red"> 270.         return urlunparse((scheme, netloc, path,</font>
+<font color="red"> 271.                            params, query, fragment))</font>
+<font color="red"> 272.     if not path and not params:</font>
+<font color="red"> 273.         path = bpath</font>
+<font color="red"> 274.         params = bparams</font>
+<font color="red"> 275.         if not query:</font>
+<font color="red"> 276.             query = bquery</font>
+<font color="red"> 277.         return urlunparse((scheme, netloc, path,</font>
+<font color="red"> 278.                            params, query, fragment))</font>
+<font color="red"> 279.     segments = bpath.split('/')[:-1] + path.split('/')</font>
+<font color="black"> 280.     # XXX The stuff below is bogus in various ways...</font>
+<font color="red"> 281.     if segments[-1] == '.':</font>
+<font color="red"> 282.         segments[-1] = ''</font>
+<font color="red"> 283.     while '.' in segments:</font>
+<font color="red"> 284.         segments.remove('.')</font>
+<font color="red"> 285.     while 1:</font>
+<font color="red"> 286.         i = 1</font>
+<font color="red"> 287.         n = len(segments) - 1</font>
+<font color="red"> 288.         while i &lt; n:</font>
+<font color="red"> 289.             if (segments[i] == '..'</font>
+<font color="red"> 290.                 and segments[i-1] not in ('', '..')):</font>
+<font color="red"> 291.                 del segments[i-1:i+1]</font>
+<font color="red"> 292.                 break</font>
+<font color="red"> 293.             i = i+1</font>
+<font color="black"> 294.         else:</font>
+<font color="red"> 295.             break</font>
+<font color="red"> 296.     if segments == ['', '..']:</font>
+<font color="red"> 297.         segments[-1] = ''</font>
+<font color="red"> 298.     elif len(segments) &gt;= 2 and segments[-1] == '..':</font>
+<font color="red"> 299.         segments[-2:] = ['']</font>
+<font color="red"> 300.     return urlunparse((scheme, netloc, '/'.join(segments),</font>
+<font color="red"> 301.                        params, query, fragment))</font>
+<font color="black"> 302. </font>
+<font color="red"> 303. def urldefrag(url):</font>
+<font color="black"> 304.     &quot;&quot;&quot;Removes any existing fragment from URL.</font>
+<font color="black"> 305. </font>
+<font color="black"> 306.     Returns a tuple of the defragmented URL and the fragment.  If</font>
+<font color="black"> 307.     the URL contained no fragments, the second element is the</font>
+<font color="black"> 308.     empty string.</font>
+<font color="black"> 309.     &quot;&quot;&quot;</font>
+<font color="red"> 310.     if '#' in url:</font>
+<font color="red"> 311.         s, n, p, a, q, frag = urlparse(url)</font>
+<font color="red"> 312.         defrag = urlunparse((s, n, p, a, q, ''))</font>
+<font color="red"> 313.         return defrag, frag</font>
+<font color="black"> 314.     else:</font>
+<font color="red"> 315.         return url, ''</font>
+<font color="black"> 316. </font>
+<font color="red"> 317. try:</font>
+<font color="red"> 318.     unicode</font>
+<font color="red"> 319. except NameError:</font>
+<font color="red"> 320.     def _is_unicode(x):</font>
+<font color="red"> 321.         return 0</font>
+<font color="black"> 322. else:</font>
+<font color="red"> 323.     def _is_unicode(x):</font>
+<font color="red"> 324.         return isinstance(x, unicode)</font>
+<font color="black"> 325. </font>
+<font color="black"> 326. # unquote method for parse_qs and parse_qsl</font>
+<font color="black"> 327. # Cannot use directly from urllib as it would create a circular reference</font>
+<font color="black"> 328. # because urllib uses urlparse methods (urljoin).  If you update this function,</font>
+<font color="black"> 329. # update it also in urllib.  This code duplication does not existin in Python3.</font>
+<font color="black"> 330. </font>
+<font color="red"> 331. _hexdig = '0123456789ABCDEFabcdef'</font>
+<font color="red"> 332. _hextochr = dict((a+b, chr(int(a+b,16)))</font>
+<font color="red"> 333.                  for a in _hexdig for b in _hexdig)</font>
+<font color="red"> 334. _asciire = re.compile('([\x00-\x7f]+)')</font>
+<font color="black"> 335. </font>
+<font color="red"> 336. def unquote(s):</font>
+<font color="black"> 337.     &quot;&quot;&quot;unquote('abc%20def') -&gt; 'abc def'.&quot;&quot;&quot;</font>
+<font color="red"> 338.     if _is_unicode(s):</font>
+<font color="red"> 339.         if '%' not in s:</font>
+<font color="red"> 340.             return s</font>
+<font color="red"> 341.         bits = _asciire.split(s)</font>
+<font color="red"> 342.         res = [bits[0]]</font>
+<font color="red"> 343.         append = res.append</font>
+<font color="red"> 344.         for i in range(1, len(bits), 2):</font>
+<font color="red"> 345.             append(unquote(str(bits[i])).decode('latin1'))</font>
+<font color="red"> 346.             append(bits[i + 1])</font>
+<font color="red"> 347.         return ''.join(res)</font>
+<font color="black"> 348. </font>
+<font color="red"> 349.     bits = s.split('%')</font>
+<font color="black"> 350.     # fastpath</font>
+<font color="red"> 351.     if len(bits) == 1:</font>
+<font color="red"> 352.         return s</font>
+<font color="red"> 353.     res = [bits[0]]</font>
+<font color="red"> 354.     append = res.append</font>
+<font color="red"> 355.     for item in bits[1:]:</font>
+<font color="red"> 356.         try:</font>
+<font color="red"> 357.             append(_hextochr[item[:2]])</font>
+<font color="red"> 358.             append(item[2:])</font>
+<font color="red"> 359.         except KeyError:</font>
+<font color="red"> 360.             append('%')</font>
+<font color="red"> 361.             append(item)</font>
+<font color="red"> 362.     return ''.join(res)</font>
+<font color="black"> 363. </font>
+<font color="red"> 364. def parse_qs(qs, keep_blank_values=0, strict_parsing=0):</font>
+<font color="black"> 365.     &quot;&quot;&quot;Parse a query given as a string argument.</font>
+<font color="black"> 366. </font>
+<font color="black"> 367.         Arguments:</font>
+<font color="black"> 368. </font>
+<font color="black"> 369.         qs: percent-encoded query string to be parsed</font>
+<font color="black"> 370. </font>
+<font color="black"> 371.         keep_blank_values: flag indicating whether blank values in</font>
+<font color="black"> 372.             percent-encoded queries should be treated as blank strings.</font>
+<font color="black"> 373.             A true value indicates that blanks should be retained as</font>
+<font color="black"> 374.             blank strings.  The default false value indicates that</font>
+<font color="black"> 375.             blank values are to be ignored and treated as if they were</font>
+<font color="black"> 376.             not included.</font>
+<font color="black"> 377. </font>
+<font color="black"> 378.         strict_parsing: flag indicating what to do with parsing errors.</font>
+<font color="black"> 379.             If false (the default), errors are silently ignored.</font>
+<font color="black"> 380.             If true, errors raise a ValueError exception.</font>
+<font color="black"> 381.     &quot;&quot;&quot;</font>
+<font color="red"> 382.     dict = {}</font>
+<font color="red"> 383.     for name, value in parse_qsl(qs, keep_blank_values, strict_parsing):</font>
+<font color="red"> 384.         if name in dict:</font>
+<font color="red"> 385.             dict[name].append(value)</font>
+<font color="black"> 386.         else:</font>
+<font color="red"> 387.             dict[name] = [value]</font>
+<font color="red"> 388.     return dict</font>
+<font color="black"> 389. </font>
+<font color="red"> 390. def parse_qsl(qs, keep_blank_values=0, strict_parsing=0):</font>
+<font color="black"> 391.     &quot;&quot;&quot;Parse a query given as a string argument.</font>
+<font color="black"> 392. </font>
+<font color="black"> 393.     Arguments:</font>
+<font color="black"> 394. </font>
+<font color="black"> 395.     qs: percent-encoded query string to be parsed</font>
+<font color="black"> 396. </font>
+<font color="black"> 397.     keep_blank_values: flag indicating whether blank values in</font>
+<font color="black"> 398.         percent-encoded queries should be treated as blank strings.  A</font>
+<font color="black"> 399.         true value indicates that blanks should be retained as blank</font>
+<font color="black"> 400.         strings.  The default false value indicates that blank values</font>
+<font color="black"> 401.         are to be ignored and treated as if they were  not included.</font>
+<font color="black"> 402. </font>
+<font color="black"> 403.     strict_parsing: flag indicating what to do with parsing errors. If</font>
+<font color="black"> 404.         false (the default), errors are silently ignored. If true,</font>
+<font color="black"> 405.         errors raise a ValueError exception.</font>
+<font color="black"> 406. </font>
+<font color="black"> 407.     Returns a list, as G-d intended.</font>
+<font color="black"> 408.     &quot;&quot;&quot;</font>
+<font color="red"> 409.     pairs = [s2 for s1 in qs.split('&amp;') for s2 in s1.split(';')]</font>
+<font color="red"> 410.     r = []</font>
+<font color="red"> 411.     for name_value in pairs:</font>
+<font color="red"> 412.         if not name_value and not strict_parsing:</font>
+<font color="red"> 413.             continue</font>
+<font color="red"> 414.         nv = name_value.split('=', 1)</font>
+<font color="red"> 415.         if len(nv) != 2:</font>
+<font color="red"> 416.             if strict_parsing:</font>
+<font color="red"> 417.                 raise ValueError, &quot;bad query field: %r&quot; % (name_value,)</font>
+<font color="black"> 418.             # Handle case of a control-name with no equal sign</font>
+<font color="red"> 419.             if keep_blank_values:</font>
+<font color="red"> 420.                 nv.append('')</font>
+<font color="black"> 421.             else:</font>
+<font color="red"> 422.                 continue</font>
+<font color="red"> 423.         if len(nv[1]) or keep_blank_values:</font>
+<font color="red"> 424.             name = unquote(nv[0].replace('+', ' '))</font>
+<font color="red"> 425.             value = unquote(nv[1].replace('+', ' '))</font>
+<font color="red"> 426.             r.append((name, value))</font>
+<font color="black"> 427. </font>
+<font color="red"> 428.     return r</font>
+</pre>
+

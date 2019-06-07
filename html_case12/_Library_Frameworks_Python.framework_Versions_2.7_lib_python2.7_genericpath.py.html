@@ -1,0 +1,120 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/genericpath.py</b><br>
+
+
+file stats: <b>57 lines, 14 executed: 24.6% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;</font>
+<font color="black">   2. Path operations common to more than one OS</font>
+<font color="black">   3. Do not use directly.  The OS specific modules import the appropriate</font>
+<font color="black">   4. functions from this module themselves.</font>
+<font color="red">   5. &quot;&quot;&quot;</font>
+<font color="red">   6. import os</font>
+<font color="red">   7. import stat</font>
+<font color="black">   8. </font>
+<font color="red">   9. __all__ = ['commonprefix', 'exists', 'getatime', 'getctime', 'getmtime',</font>
+<font color="red">  10.            'getsize', 'isdir', 'isfile']</font>
+<font color="black">  11. </font>
+<font color="black">  12. </font>
+<font color="red">  13. try:</font>
+<font color="red">  14.     _unicode = unicode</font>
+<font color="red">  15. except NameError:</font>
+<font color="black">  16.     # If Python is built without Unicode support, the unicode type</font>
+<font color="black">  17.     # will not exist. Fake one.</font>
+<font color="red">  18.     class _unicode(object):</font>
+<font color="red">  19.         pass</font>
+<font color="black">  20. </font>
+<font color="black">  21. # Does a path exist?</font>
+<font color="black">  22. # This is false for dangling symbolic links on systems that support them.</font>
+<font color="red">  23. def exists(path):</font>
+<font color="black">  24.     &quot;&quot;&quot;Test whether a path exists.  Returns False for broken symbolic links&quot;&quot;&quot;</font>
+<font color="green">  25.     try:</font>
+<font color="green">  26.         os.stat(path)</font>
+<font color="green">  27.     except os.error:</font>
+<font color="green">  28.         return False</font>
+<font color="red">  29.     return True</font>
+<font color="black">  30. </font>
+<font color="black">  31. </font>
+<font color="black">  32. # This follows symbolic links, so both islink() and isdir() can be true</font>
+<font color="black">  33. # for the same path on systems that support symlinks</font>
+<font color="red">  34. def isfile(path):</font>
+<font color="black">  35.     &quot;&quot;&quot;Test whether a path is a regular file&quot;&quot;&quot;</font>
+<font color="green">  36.     try:</font>
+<font color="green">  37.         st = os.stat(path)</font>
+<font color="green">  38.     except os.error:</font>
+<font color="green">  39.         return False</font>
+<font color="green">  40.     return stat.S_ISREG(st.st_mode)</font>
+<font color="black">  41. </font>
+<font color="black">  42. </font>
+<font color="black">  43. # Is a path a directory?</font>
+<font color="black">  44. # This follows symbolic links, so both islink() and isdir()</font>
+<font color="black">  45. # can be true for the same path on systems that support symlinks</font>
+<font color="red">  46. def isdir(s):</font>
+<font color="black">  47.     &quot;&quot;&quot;Return true if the pathname refers to an existing directory.&quot;&quot;&quot;</font>
+<font color="green">  48.     try:</font>
+<font color="green">  49.         st = os.stat(s)</font>
+<font color="green">  50.     except os.error:</font>
+<font color="green">  51.         return False</font>
+<font color="green">  52.     return stat.S_ISDIR(st.st_mode)</font>
+<font color="black">  53. </font>
+<font color="black">  54. </font>
+<font color="red">  55. def getsize(filename):</font>
+<font color="black">  56.     &quot;&quot;&quot;Return the size of a file, reported by os.stat().&quot;&quot;&quot;</font>
+<font color="red">  57.     return os.stat(filename).st_size</font>
+<font color="black">  58. </font>
+<font color="black">  59. </font>
+<font color="red">  60. def getmtime(filename):</font>
+<font color="black">  61.     &quot;&quot;&quot;Return the last modification time of a file, reported by os.stat().&quot;&quot;&quot;</font>
+<font color="red">  62.     return os.stat(filename).st_mtime</font>
+<font color="black">  63. </font>
+<font color="black">  64. </font>
+<font color="red">  65. def getatime(filename):</font>
+<font color="black">  66.     &quot;&quot;&quot;Return the last access time of a file, reported by os.stat().&quot;&quot;&quot;</font>
+<font color="red">  67.     return os.stat(filename).st_atime</font>
+<font color="black">  68. </font>
+<font color="black">  69. </font>
+<font color="red">  70. def getctime(filename):</font>
+<font color="black">  71.     &quot;&quot;&quot;Return the metadata change time of a file, reported by os.stat().&quot;&quot;&quot;</font>
+<font color="red">  72.     return os.stat(filename).st_ctime</font>
+<font color="black">  73. </font>
+<font color="black">  74. </font>
+<font color="black">  75. # Return the longest prefix of all list elements.</font>
+<font color="red">  76. def commonprefix(m):</font>
+<font color="black">  77.     &quot;Given a list of pathnames, returns the longest common leading component&quot;</font>
+<font color="red">  78.     if not m: return ''</font>
+<font color="red">  79.     s1 = min(m)</font>
+<font color="red">  80.     s2 = max(m)</font>
+<font color="red">  81.     for i, c in enumerate(s1):</font>
+<font color="red">  82.         if c != s2[i]:</font>
+<font color="red">  83.             return s1[:i]</font>
+<font color="red">  84.     return s1</font>
+<font color="black">  85. </font>
+<font color="black">  86. # Split a path in root and extension.</font>
+<font color="black">  87. # The extension is everything starting at the last dot in the last</font>
+<font color="black">  88. # pathname component; the root is everything before that.</font>
+<font color="black">  89. # It is always true that root + ext == p.</font>
+<font color="black">  90. </font>
+<font color="black">  91. # Generic implementation of splitext, to be parametrized with</font>
+<font color="black">  92. # the separators</font>
+<font color="red">  93. def _splitext(p, sep, altsep, extsep):</font>
+<font color="black">  94.     &quot;&quot;&quot;Split the extension from a pathname.</font>
+<font color="black">  95. </font>
+<font color="black">  96.     Extension is everything from the last dot to the end, ignoring</font>
+<font color="black">  97.     leading dots.  Returns &quot;(root, ext)&quot;; ext may be empty.&quot;&quot;&quot;</font>
+<font color="black">  98. </font>
+<font color="red">  99.     sepIndex = p.rfind(sep)</font>
+<font color="red"> 100.     if altsep:</font>
+<font color="red"> 101.         altsepIndex = p.rfind(altsep)</font>
+<font color="red"> 102.         sepIndex = max(sepIndex, altsepIndex)</font>
+<font color="black"> 103. </font>
+<font color="red"> 104.     dotIndex = p.rfind(extsep)</font>
+<font color="red"> 105.     if dotIndex &gt; sepIndex:</font>
+<font color="black"> 106.         # skip all leading dots</font>
+<font color="red"> 107.         filenameIndex = sepIndex + 1</font>
+<font color="red"> 108.         while filenameIndex &lt; dotIndex:</font>
+<font color="red"> 109.             if p[filenameIndex] != extsep:</font>
+<font color="red"> 110.                 return p[:dotIndex], p[dotIndex:]</font>
+<font color="red"> 111.             filenameIndex += 1</font>
+<font color="black"> 112. </font>
+<font color="red"> 113.     return p, ''</font>
+</pre>
+

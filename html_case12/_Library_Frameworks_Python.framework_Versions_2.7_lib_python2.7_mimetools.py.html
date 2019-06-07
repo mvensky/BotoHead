@@ -1,0 +1,257 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/mimetools.py</b><br>
+
+
+file stats: <b>180 lines, 73 executed: 40.6% covered</b>
+<pre>
+<font color="green">   1. &quot;&quot;&quot;Various tools used by MIME-reading or MIME-writing programs.&quot;&quot;&quot;</font>
+<font color="black">   2. </font>
+<font color="black">   3. </font>
+<font color="green">   4. import os</font>
+<font color="green">   5. import sys</font>
+<font color="green">   6. import tempfile</font>
+<font color="green">   7. from warnings import filterwarnings, catch_warnings</font>
+<font color="green">   8. with catch_warnings():</font>
+<font color="green">   9.     if sys.py3kwarning:</font>
+<font color="red">  10.         filterwarnings(&quot;ignore&quot;, &quot;.*rfc822 has been removed&quot;, DeprecationWarning)</font>
+<font color="green">  11.     import rfc822</font>
+<font color="black">  12. </font>
+<font color="green">  13. from warnings import warnpy3k</font>
+<font color="green">  14. warnpy3k(&quot;in 3.x, mimetools has been removed in favor of the email package&quot;,</font>
+<font color="green">  15.          stacklevel=2)</font>
+<font color="black">  16. </font>
+<font color="green">  17. __all__ = [&quot;Message&quot;,&quot;choose_boundary&quot;,&quot;encode&quot;,&quot;decode&quot;,&quot;copyliteral&quot;,</font>
+<font color="green">  18.            &quot;copybinary&quot;]</font>
+<font color="black">  19. </font>
+<font color="green">  20. class Message(rfc822.Message):</font>
+<font color="black">  21.     &quot;&quot;&quot;A derived class of rfc822.Message that knows about MIME headers and</font>
+<font color="green">  22.     contains some hooks for decoding encoded and multipart messages.&quot;&quot;&quot;</font>
+<font color="black">  23. </font>
+<font color="green">  24.     def __init__(self, fp, seekable = 1):</font>
+<font color="green">  25.         rfc822.Message.__init__(self, fp, seekable)</font>
+<font color="black">  26.         self.encodingheader = \</font>
+<font color="green">  27.                 self.getheader('content-transfer-encoding')</font>
+<font color="black">  28.         self.typeheader = \</font>
+<font color="green">  29.                 self.getheader('content-type')</font>
+<font color="green">  30.         self.parsetype()</font>
+<font color="green">  31.         self.parseplist()</font>
+<font color="black">  32. </font>
+<font color="green">  33.     def parsetype(self):</font>
+<font color="green">  34.         str = self.typeheader</font>
+<font color="green">  35.         if str is None:</font>
+<font color="green">  36.             str = 'text/plain'</font>
+<font color="green">  37.         if ';' in str:</font>
+<font color="red">  38.             i = str.index(';')</font>
+<font color="red">  39.             self.plisttext = str[i:]</font>
+<font color="red">  40.             str = str[:i]</font>
+<font color="black">  41.         else:</font>
+<font color="green">  42.             self.plisttext = ''</font>
+<font color="green">  43.         fields = str.split('/')</font>
+<font color="green">  44.         for i in range(len(fields)):</font>
+<font color="green">  45.             fields[i] = fields[i].strip().lower()</font>
+<font color="green">  46.         self.type = '/'.join(fields)</font>
+<font color="green">  47.         self.maintype = fields[0]</font>
+<font color="green">  48.         self.subtype = '/'.join(fields[1:])</font>
+<font color="black">  49. </font>
+<font color="green">  50.     def parseplist(self):</font>
+<font color="green">  51.         str = self.plisttext</font>
+<font color="green">  52.         self.plist = []</font>
+<font color="green">  53.         while str[:1] == ';':</font>
+<font color="red">  54.             str = str[1:]</font>
+<font color="red">  55.             if ';' in str:</font>
+<font color="black">  56.                 # XXX Should parse quotes!</font>
+<font color="red">  57.                 end = str.index(';')</font>
+<font color="black">  58.             else:</font>
+<font color="red">  59.                 end = len(str)</font>
+<font color="red">  60.             f = str[:end]</font>
+<font color="red">  61.             if '=' in f:</font>
+<font color="red">  62.                 i = f.index('=')</font>
+<font color="black">  63.                 f = f[:i].strip().lower() + \</font>
+<font color="red">  64.                         '=' + f[i+1:].strip()</font>
+<font color="red">  65.             self.plist.append(f.strip())</font>
+<font color="red">  66.             str = str[end:]</font>
+<font color="black">  67. </font>
+<font color="green">  68.     def getplist(self):</font>
+<font color="red">  69.         return self.plist</font>
+<font color="black">  70. </font>
+<font color="green">  71.     def getparam(self, name):</font>
+<font color="red">  72.         name = name.lower() + '='</font>
+<font color="red">  73.         n = len(name)</font>
+<font color="red">  74.         for p in self.plist:</font>
+<font color="red">  75.             if p[:n] == name:</font>
+<font color="red">  76.                 return rfc822.unquote(p[n:])</font>
+<font color="red">  77.         return None</font>
+<font color="black">  78. </font>
+<font color="green">  79.     def getparamnames(self):</font>
+<font color="red">  80.         result = []</font>
+<font color="red">  81.         for p in self.plist:</font>
+<font color="red">  82.             i = p.find('=')</font>
+<font color="red">  83.             if i &gt;= 0:</font>
+<font color="red">  84.                 result.append(p[:i].lower())</font>
+<font color="red">  85.         return result</font>
+<font color="black">  86. </font>
+<font color="green">  87.     def getencoding(self):</font>
+<font color="red">  88.         if self.encodingheader is None:</font>
+<font color="red">  89.             return '7bit'</font>
+<font color="red">  90.         return self.encodingheader.lower()</font>
+<font color="black">  91. </font>
+<font color="green">  92.     def gettype(self):</font>
+<font color="red">  93.         return self.type</font>
+<font color="black">  94. </font>
+<font color="green">  95.     def getmaintype(self):</font>
+<font color="red">  96.         return self.maintype</font>
+<font color="black">  97. </font>
+<font color="green">  98.     def getsubtype(self):</font>
+<font color="red">  99.         return self.subtype</font>
+<font color="black"> 100. </font>
+<font color="black"> 101. </font>
+<font color="black"> 102. </font>
+<font color="black"> 103. </font>
+<font color="black"> 104. # Utility functions</font>
+<font color="black"> 105. # -----------------</font>
+<font color="black"> 106. </font>
+<font color="green"> 107. try:</font>
+<font color="green"> 108.     import thread</font>
+<font color="red"> 109. except ImportError:</font>
+<font color="red"> 110.     import dummy_thread as thread</font>
+<font color="green"> 111. _counter_lock = thread.allocate_lock()</font>
+<font color="green"> 112. del thread</font>
+<font color="black"> 113. </font>
+<font color="green"> 114. _counter = 0</font>
+<font color="green"> 115. def _get_next_counter():</font>
+<font color="black"> 116.     global _counter</font>
+<font color="red"> 117.     _counter_lock.acquire()</font>
+<font color="red"> 118.     _counter += 1</font>
+<font color="red"> 119.     result = _counter</font>
+<font color="red"> 120.     _counter_lock.release()</font>
+<font color="red"> 121.     return result</font>
+<font color="black"> 122. </font>
+<font color="green"> 123. _prefix = None</font>
+<font color="black"> 124. </font>
+<font color="green"> 125. def choose_boundary():</font>
+<font color="black"> 126.     &quot;&quot;&quot;Return a string usable as a multipart boundary.</font>
+<font color="black"> 127. </font>
+<font color="black"> 128.     The string chosen is unique within a single program run, and</font>
+<font color="black"> 129.     incorporates the user id (if available), process id (if available),</font>
+<font color="black"> 130.     and current time.  So it's very unlikely the returned string appears</font>
+<font color="black"> 131.     in message text, but there's no guarantee.</font>
+<font color="black"> 132. </font>
+<font color="black"> 133.     The boundary contains dots so you have to quote it in the header.&quot;&quot;&quot;</font>
+<font color="black"> 134. </font>
+<font color="black"> 135.     global _prefix</font>
+<font color="red"> 136.     import time</font>
+<font color="red"> 137.     if _prefix is None:</font>
+<font color="red"> 138.         import socket</font>
+<font color="red"> 139.         try:</font>
+<font color="red"> 140.             hostid = socket.gethostbyname(socket.gethostname())</font>
+<font color="red"> 141.         except socket.gaierror:</font>
+<font color="red"> 142.             hostid = '127.0.0.1'</font>
+<font color="red"> 143.         try:</font>
+<font color="red"> 144.             uid = repr(os.getuid())</font>
+<font color="red"> 145.         except AttributeError:</font>
+<font color="red"> 146.             uid = '1'</font>
+<font color="red"> 147.         try:</font>
+<font color="red"> 148.             pid = repr(os.getpid())</font>
+<font color="red"> 149.         except AttributeError:</font>
+<font color="red"> 150.             pid = '1'</font>
+<font color="red"> 151.         _prefix = hostid + '.' + uid + '.' + pid</font>
+<font color="red"> 152.     return &quot;%s.%.3f.%d&quot; % (_prefix, time.time(), _get_next_counter())</font>
+<font color="black"> 153. </font>
+<font color="black"> 154. </font>
+<font color="black"> 155. # Subroutines for decoding some common content-transfer-types</font>
+<font color="black"> 156. </font>
+<font color="green"> 157. def decode(input, output, encoding):</font>
+<font color="black"> 158.     &quot;&quot;&quot;Decode common content-transfer-encodings (base64, quopri, uuencode).&quot;&quot;&quot;</font>
+<font color="red"> 159.     if encoding == 'base64':</font>
+<font color="red"> 160.         import base64</font>
+<font color="red"> 161.         return base64.decode(input, output)</font>
+<font color="red"> 162.     if encoding == 'quoted-printable':</font>
+<font color="red"> 163.         import quopri</font>
+<font color="red"> 164.         return quopri.decode(input, output)</font>
+<font color="red"> 165.     if encoding in ('uuencode', 'x-uuencode', 'uue', 'x-uue'):</font>
+<font color="red"> 166.         import uu</font>
+<font color="red"> 167.         return uu.decode(input, output)</font>
+<font color="red"> 168.     if encoding in ('7bit', '8bit'):</font>
+<font color="red"> 169.         return output.write(input.read())</font>
+<font color="red"> 170.     if encoding in decodetab:</font>
+<font color="red"> 171.         pipethrough(input, decodetab[encoding], output)</font>
+<font color="black"> 172.     else:</font>
+<font color="red"> 173.         raise ValueError, \</font>
+<font color="red"> 174.               'unknown Content-Transfer-Encoding: %s' % encoding</font>
+<font color="black"> 175. </font>
+<font color="green"> 176. def encode(input, output, encoding):</font>
+<font color="black"> 177.     &quot;&quot;&quot;Encode common content-transfer-encodings (base64, quopri, uuencode).&quot;&quot;&quot;</font>
+<font color="red"> 178.     if encoding == 'base64':</font>
+<font color="red"> 179.         import base64</font>
+<font color="red"> 180.         return base64.encode(input, output)</font>
+<font color="red"> 181.     if encoding == 'quoted-printable':</font>
+<font color="red"> 182.         import quopri</font>
+<font color="red"> 183.         return quopri.encode(input, output, 0)</font>
+<font color="red"> 184.     if encoding in ('uuencode', 'x-uuencode', 'uue', 'x-uue'):</font>
+<font color="red"> 185.         import uu</font>
+<font color="red"> 186.         return uu.encode(input, output)</font>
+<font color="red"> 187.     if encoding in ('7bit', '8bit'):</font>
+<font color="red"> 188.         return output.write(input.read())</font>
+<font color="red"> 189.     if encoding in encodetab:</font>
+<font color="red"> 190.         pipethrough(input, encodetab[encoding], output)</font>
+<font color="black"> 191.     else:</font>
+<font color="red"> 192.         raise ValueError, \</font>
+<font color="red"> 193.               'unknown Content-Transfer-Encoding: %s' % encoding</font>
+<font color="black"> 194. </font>
+<font color="black"> 195. # The following is no longer used for standard encodings</font>
+<font color="black"> 196. </font>
+<font color="black"> 197. # XXX This requires that uudecode and mmencode are in $PATH</font>
+<font color="black"> 198. </font>
+<font color="black"> 199. uudecode_pipe = '''(</font>
+<font color="black"> 200. TEMP=/tmp/@uu.$$</font>
+<font color="black"> 201. sed &quot;s%^begin [0-7][0-7]* .*%begin 600 $TEMP%&quot; | uudecode</font>
+<font color="black"> 202. cat $TEMP</font>
+<font color="black"> 203. rm $TEMP</font>
+<font color="green"> 204. )'''</font>
+<font color="black"> 205. </font>
+<font color="green"> 206. decodetab = {</font>
+<font color="green"> 207.         'uuencode':             uudecode_pipe,</font>
+<font color="green"> 208.         'x-uuencode':           uudecode_pipe,</font>
+<font color="green"> 209.         'uue':                  uudecode_pipe,</font>
+<font color="green"> 210.         'x-uue':                uudecode_pipe,</font>
+<font color="green"> 211.         'quoted-printable':     'mmencode -u -q',</font>
+<font color="green"> 212.         'base64':               'mmencode -u -b',</font>
+<font color="black"> 213. }</font>
+<font color="black"> 214. </font>
+<font color="green"> 215. encodetab = {</font>
+<font color="green"> 216.         'x-uuencode':           'uuencode tempfile',</font>
+<font color="green"> 217.         'uuencode':             'uuencode tempfile',</font>
+<font color="green"> 218.         'x-uue':                'uuencode tempfile',</font>
+<font color="green"> 219.         'uue':                  'uuencode tempfile',</font>
+<font color="green"> 220.         'quoted-printable':     'mmencode -q',</font>
+<font color="green"> 221.         'base64':               'mmencode -b',</font>
+<font color="black"> 222. }</font>
+<font color="black"> 223. </font>
+<font color="green"> 224. def pipeto(input, command):</font>
+<font color="red"> 225.     pipe = os.popen(command, 'w')</font>
+<font color="red"> 226.     copyliteral(input, pipe)</font>
+<font color="red"> 227.     pipe.close()</font>
+<font color="black"> 228. </font>
+<font color="green"> 229. def pipethrough(input, command, output):</font>
+<font color="red"> 230.     (fd, tempname) = tempfile.mkstemp()</font>
+<font color="red"> 231.     temp = os.fdopen(fd, 'w')</font>
+<font color="red"> 232.     copyliteral(input, temp)</font>
+<font color="red"> 233.     temp.close()</font>
+<font color="red"> 234.     pipe = os.popen(command + ' &lt;' + tempname, 'r')</font>
+<font color="red"> 235.     copybinary(pipe, output)</font>
+<font color="red"> 236.     pipe.close()</font>
+<font color="red"> 237.     os.unlink(tempname)</font>
+<font color="black"> 238. </font>
+<font color="green"> 239. def copyliteral(input, output):</font>
+<font color="red"> 240.     while 1:</font>
+<font color="red"> 241.         line = input.readline()</font>
+<font color="red"> 242.         if not line: break</font>
+<font color="red"> 243.         output.write(line)</font>
+<font color="black"> 244. </font>
+<font color="green"> 245. def copybinary(input, output):</font>
+<font color="red"> 246.     BUFSIZE = 8192</font>
+<font color="red"> 247.     while 1:</font>
+<font color="red"> 248.         line = input.read(BUFSIZE)</font>
+<font color="red"> 249.         if not line: break</font>
+<font color="red"> 250.         output.write(line)</font>
+</pre>
+

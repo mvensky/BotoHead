@@ -1,0 +1,72 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/atexit.py</b><br>
+
+
+file stats: <b>36 lines, 11 executed: 30.6% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;</font>
+<font color="black">   2. atexit.py - allow programmer to define multiple exit functions to be executed</font>
+<font color="black">   3. upon normal program termination.</font>
+<font color="black">   4. </font>
+<font color="black">   5. One public function, register, is defined.</font>
+<font color="green">   6. &quot;&quot;&quot;</font>
+<font color="black">   7. </font>
+<font color="green">   8. __all__ = [&quot;register&quot;]</font>
+<font color="black">   9. </font>
+<font color="green">  10. import sys</font>
+<font color="black">  11. </font>
+<font color="green">  12. _exithandlers = []</font>
+<font color="green">  13. def _run_exitfuncs():</font>
+<font color="black">  14.     &quot;&quot;&quot;run any registered exit functions</font>
+<font color="black">  15. </font>
+<font color="black">  16.     _exithandlers is traversed in reverse order so functions are executed</font>
+<font color="black">  17.     last in, first out.</font>
+<font color="black">  18.     &quot;&quot;&quot;</font>
+<font color="black">  19. </font>
+<font color="red">  20.     exc_info = None</font>
+<font color="red">  21.     while _exithandlers:</font>
+<font color="red">  22.         func, targs, kargs = _exithandlers.pop()</font>
+<font color="red">  23.         try:</font>
+<font color="red">  24.             func(*targs, **kargs)</font>
+<font color="red">  25.         except SystemExit:</font>
+<font color="red">  26.             exc_info = sys.exc_info()</font>
+<font color="red">  27.         except:</font>
+<font color="red">  28.             import traceback</font>
+<font color="red">  29.             print &gt;&gt; sys.stderr, &quot;Error in atexit._run_exitfuncs:&quot;</font>
+<font color="red">  30.             traceback.print_exc()</font>
+<font color="red">  31.             exc_info = sys.exc_info()</font>
+<font color="black">  32. </font>
+<font color="red">  33.     if exc_info is not None:</font>
+<font color="red">  34.         raise exc_info[0], exc_info[1], exc_info[2]</font>
+<font color="black">  35. </font>
+<font color="black">  36. </font>
+<font color="green">  37. def register(func, *targs, **kargs):</font>
+<font color="black">  38.     &quot;&quot;&quot;register a function to be executed upon normal program termination</font>
+<font color="black">  39. </font>
+<font color="black">  40.     func - function to be called at exit</font>
+<font color="black">  41.     targs - optional arguments to pass to func</font>
+<font color="black">  42.     kargs - optional keyword arguments to pass to func</font>
+<font color="black">  43. </font>
+<font color="black">  44.     func is returned to facilitate usage as a decorator.</font>
+<font color="black">  45.     &quot;&quot;&quot;</font>
+<font color="green">  46.     _exithandlers.append((func, targs, kargs))</font>
+<font color="green">  47.     return func</font>
+<font color="black">  48. </font>
+<font color="green">  49. if hasattr(sys, &quot;exitfunc&quot;):</font>
+<font color="black">  50.     # Assume it's another registered exit function - append it to our list</font>
+<font color="red">  51.     register(sys.exitfunc)</font>
+<font color="green">  52. sys.exitfunc = _run_exitfuncs</font>
+<font color="black">  53. </font>
+<font color="green">  54. if __name__ == &quot;__main__&quot;:</font>
+<font color="red">  55.     def x1():</font>
+<font color="red">  56.         print &quot;running x1&quot;</font>
+<font color="red">  57.     def x2(n):</font>
+<font color="red">  58.         print &quot;running x2(%r)&quot; % (n,)</font>
+<font color="red">  59.     def x3(n, kwd=None):</font>
+<font color="red">  60.         print &quot;running x3(%r, kwd=%r)&quot; % (n, kwd)</font>
+<font color="black">  61. </font>
+<font color="red">  62.     register(x1)</font>
+<font color="red">  63.     register(x2, 12)</font>
+<font color="red">  64.     register(x3, 5, &quot;bar&quot;)</font>
+<font color="red">  65.     register(x3, &quot;no kwd args&quot;)</font>
+</pre>
+

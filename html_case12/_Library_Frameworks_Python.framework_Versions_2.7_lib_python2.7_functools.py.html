@@ -1,0 +1,112 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/functools.py</b><br>
+
+
+file stats: <b>64 lines, 7 executed: 10.9% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;functools.py - Tools for working with functions and callable objects</font>
+<font color="red">   2. &quot;&quot;&quot;</font>
+<font color="black">   3. # Python module wrapper for _functools C module</font>
+<font color="black">   4. # to allow utilities written in Python to be added</font>
+<font color="black">   5. # to the functools module.</font>
+<font color="black">   6. # Written by Nick Coghlan &lt;ncoghlan at gmail.com&gt;</font>
+<font color="black">   7. #   Copyright (C) 2006 Python Software Foundation.</font>
+<font color="black">   8. # See C source code for _functools credits/copyright</font>
+<font color="black">   9. </font>
+<font color="red">  10. from _functools import partial, reduce</font>
+<font color="black">  11. </font>
+<font color="black">  12. # update_wrapper() and wraps() are tools to help write</font>
+<font color="black">  13. # wrapper functions that can handle naive introspection</font>
+<font color="black">  14. </font>
+<font color="red">  15. WRAPPER_ASSIGNMENTS = ('__module__', '__name__', '__doc__')</font>
+<font color="red">  16. WRAPPER_UPDATES = ('__dict__',)</font>
+<font color="black">  17. def update_wrapper(wrapper,</font>
+<font color="black">  18.                    wrapped,</font>
+<font color="red">  19.                    assigned = WRAPPER_ASSIGNMENTS,</font>
+<font color="red">  20.                    updated = WRAPPER_UPDATES):</font>
+<font color="black">  21.     &quot;&quot;&quot;Update a wrapper function to look like the wrapped function</font>
+<font color="black">  22. </font>
+<font color="black">  23.        wrapper is the function to be updated</font>
+<font color="black">  24.        wrapped is the original function</font>
+<font color="black">  25.        assigned is a tuple naming the attributes assigned directly</font>
+<font color="black">  26.        from the wrapped function to the wrapper function (defaults to</font>
+<font color="black">  27.        functools.WRAPPER_ASSIGNMENTS)</font>
+<font color="black">  28.        updated is a tuple naming the attributes of the wrapper that</font>
+<font color="black">  29.        are updated with the corresponding attribute from the wrapped</font>
+<font color="black">  30.        function (defaults to functools.WRAPPER_UPDATES)</font>
+<font color="black">  31.     &quot;&quot;&quot;</font>
+<font color="green">  32.     for attr in assigned:</font>
+<font color="green">  33.         setattr(wrapper, attr, getattr(wrapped, attr))</font>
+<font color="green">  34.     for attr in updated:</font>
+<font color="green">  35.         getattr(wrapper, attr).update(getattr(wrapped, attr, {}))</font>
+<font color="black">  36.     # Return the wrapper so this can be used as a decorator via partial()</font>
+<font color="green">  37.     return wrapper</font>
+<font color="black">  38. </font>
+<font color="black">  39. def wraps(wrapped,</font>
+<font color="red">  40.           assigned = WRAPPER_ASSIGNMENTS,</font>
+<font color="red">  41.           updated = WRAPPER_UPDATES):</font>
+<font color="black">  42.     &quot;&quot;&quot;Decorator factory to apply update_wrapper() to a wrapper function</font>
+<font color="black">  43. </font>
+<font color="black">  44.        Returns a decorator that invokes update_wrapper() with the decorated</font>
+<font color="black">  45.        function as the wrapper argument and the arguments to wraps() as the</font>
+<font color="black">  46.        remaining arguments. Default arguments are as for update_wrapper().</font>
+<font color="black">  47.        This is a convenience function to simplify applying partial() to</font>
+<font color="black">  48.        update_wrapper().</font>
+<font color="black">  49.     &quot;&quot;&quot;</font>
+<font color="green">  50.     return partial(update_wrapper, wrapped=wrapped,</font>
+<font color="green">  51.                    assigned=assigned, updated=updated)</font>
+<font color="black">  52. </font>
+<font color="red">  53. def total_ordering(cls):</font>
+<font color="black">  54.     &quot;&quot;&quot;Class decorator that fills in missing ordering methods&quot;&quot;&quot;</font>
+<font color="red">  55.     convert = {</font>
+<font color="red">  56.         '__lt__': [('__gt__', lambda self, other: not (self &lt; other or self == other)),</font>
+<font color="red">  57.                    ('__le__', lambda self, other: self &lt; other or self == other),</font>
+<font color="red">  58.                    ('__ne__', lambda self, other: not self == other),</font>
+<font color="red">  59.                    ('__ge__', lambda self, other: not self &lt; other)],</font>
+<font color="red">  60.         '__le__': [('__ge__', lambda self, other: not self &lt;= other or self == other),</font>
+<font color="red">  61.                    ('__lt__', lambda self, other: self &lt;= other and not self == other),</font>
+<font color="red">  62.                    ('__ne__', lambda self, other: not self == other),</font>
+<font color="red">  63.                    ('__gt__', lambda self, other: not self &lt;= other)],</font>
+<font color="red">  64.         '__gt__': [('__lt__', lambda self, other: not (self &gt; other or self == other)),</font>
+<font color="red">  65.                    ('__ge__', lambda self, other: self &gt; other or self == other),</font>
+<font color="red">  66.                    ('__ne__', lambda self, other: not self == other),</font>
+<font color="red">  67.                    ('__le__', lambda self, other: not self &gt; other)],</font>
+<font color="red">  68.         '__ge__': [('__le__', lambda self, other: (not self &gt;= other) or self == other),</font>
+<font color="red">  69.                    ('__gt__', lambda self, other: self &gt;= other and not self == other),</font>
+<font color="red">  70.                    ('__ne__', lambda self, other: not self == other),</font>
+<font color="red">  71.                    ('__lt__', lambda self, other: not self &gt;= other)]</font>
+<font color="black">  72.     }</font>
+<font color="red">  73.     defined_methods = set(dir(cls))</font>
+<font color="red">  74.     roots = defined_methods &amp; set(convert)</font>
+<font color="red">  75.     if not roots:</font>
+<font color="red">  76.         raise ValueError('must define at least one ordering operation: &lt; &gt; &lt;= &gt;=')</font>
+<font color="red">  77.     root = max(roots)       # prefer __lt__ to __le__ to __gt__ to __ge__</font>
+<font color="red">  78.     for opname, opfunc in convert[root]:</font>
+<font color="red">  79.         if opname not in defined_methods:</font>
+<font color="red">  80.             opfunc.__name__ = opname</font>
+<font color="red">  81.             opfunc.__doc__ = getattr(int, opname).__doc__</font>
+<font color="red">  82.             setattr(cls, opname, opfunc)</font>
+<font color="red">  83.     return cls</font>
+<font color="black">  84. </font>
+<font color="red">  85. def cmp_to_key(mycmp):</font>
+<font color="black">  86.     &quot;&quot;&quot;Convert a cmp= function into a key= function&quot;&quot;&quot;</font>
+<font color="red">  87.     class K(object):</font>
+<font color="red">  88.         __slots__ = ['obj']</font>
+<font color="red">  89.         def __init__(self, obj, *args):</font>
+<font color="red">  90.             self.obj = obj</font>
+<font color="red">  91.         def __lt__(self, other):</font>
+<font color="red">  92.             return mycmp(self.obj, other.obj) &lt; 0</font>
+<font color="red">  93.         def __gt__(self, other):</font>
+<font color="red">  94.             return mycmp(self.obj, other.obj) &gt; 0</font>
+<font color="red">  95.         def __eq__(self, other):</font>
+<font color="red">  96.             return mycmp(self.obj, other.obj) == 0</font>
+<font color="red">  97.         def __le__(self, other):</font>
+<font color="red">  98.             return mycmp(self.obj, other.obj) &lt;= 0</font>
+<font color="red">  99.         def __ge__(self, other):</font>
+<font color="red"> 100.             return mycmp(self.obj, other.obj) &gt;= 0</font>
+<font color="red"> 101.         def __ne__(self, other):</font>
+<font color="red"> 102.             return mycmp(self.obj, other.obj) != 0</font>
+<font color="red"> 103.         def __hash__(self):</font>
+<font color="red"> 104.             raise TypeError('hash not implemented')</font>
+<font color="red"> 105.     return K</font>
+</pre>
+

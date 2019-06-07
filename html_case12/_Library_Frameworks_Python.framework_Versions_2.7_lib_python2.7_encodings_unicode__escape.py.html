@@ -1,0 +1,52 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/encodings/unicode_escape.py</b><br>
+
+
+file stats: <b>24 lines, 22 executed: 91.7% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot; Python 'unicode-escape' Codec</font>
+<font color="black">   2. </font>
+<font color="black">   3. </font>
+<font color="black">   4. Written by Marc-Andre Lemburg (mal@lemburg.com).</font>
+<font color="black">   5. </font>
+<font color="black">   6. (c) Copyright CNRI, All Rights Reserved. NO WARRANTY.</font>
+<font color="black">   7. </font>
+<font color="green">   8. &quot;&quot;&quot;</font>
+<font color="green">   9. import codecs</font>
+<font color="black">  10. </font>
+<font color="black">  11. ### Codec APIs</font>
+<font color="black">  12. </font>
+<font color="green">  13. class Codec(codecs.Codec):</font>
+<font color="black">  14. </font>
+<font color="black">  15.     # Note: Binding these as C functions will result in the class not</font>
+<font color="black">  16.     # converting them to methods. This is intended.</font>
+<font color="green">  17.     encode = codecs.unicode_escape_encode</font>
+<font color="green">  18.     decode = codecs.unicode_escape_decode</font>
+<font color="black">  19. </font>
+<font color="green">  20. class IncrementalEncoder(codecs.IncrementalEncoder):</font>
+<font color="green">  21.     def encode(self, input, final=False):</font>
+<font color="red">  22.         return codecs.unicode_escape_encode(input, self.errors)[0]</font>
+<font color="black">  23. </font>
+<font color="green">  24. class IncrementalDecoder(codecs.IncrementalDecoder):</font>
+<font color="green">  25.     def decode(self, input, final=False):</font>
+<font color="red">  26.         return codecs.unicode_escape_decode(input, self.errors)[0]</font>
+<font color="black">  27. </font>
+<font color="green">  28. class StreamWriter(Codec,codecs.StreamWriter):</font>
+<font color="green">  29.     pass</font>
+<font color="black">  30. </font>
+<font color="green">  31. class StreamReader(Codec,codecs.StreamReader):</font>
+<font color="green">  32.     pass</font>
+<font color="black">  33. </font>
+<font color="black">  34. ### encodings module API</font>
+<font color="black">  35. </font>
+<font color="green">  36. def getregentry():</font>
+<font color="green">  37.     return codecs.CodecInfo(</font>
+<font color="green">  38.         name='unicode-escape',</font>
+<font color="green">  39.         encode=Codec.encode,</font>
+<font color="green">  40.         decode=Codec.decode,</font>
+<font color="green">  41.         incrementalencoder=IncrementalEncoder,</font>
+<font color="green">  42.         incrementaldecoder=IncrementalDecoder,</font>
+<font color="green">  43.         streamwriter=StreamWriter,</font>
+<font color="green">  44.         streamreader=StreamReader,</font>
+<font color="black">  45.     )</font>
+</pre>
+

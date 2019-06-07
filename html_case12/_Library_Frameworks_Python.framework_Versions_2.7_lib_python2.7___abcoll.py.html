@@ -1,0 +1,702 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/_abcoll.py</b><br>
+
+
+file stats: <b>411 lines, 32 executed: 7.8% covered</b>
+<pre>
+<font color="black">   1. # Copyright 2007 Google, Inc. All Rights Reserved.</font>
+<font color="black">   2. # Licensed to PSF under a Contributor Agreement.</font>
+<font color="black">   3. </font>
+<font color="black">   4. &quot;&quot;&quot;Abstract Base Classes (ABCs) for collections, according to PEP 3119.</font>
+<font color="black">   5. </font>
+<font color="black">   6. DON'T USE THIS MODULE DIRECTLY!  The classes here should be imported</font>
+<font color="black">   7. via collections; they are defined here only to alleviate certain</font>
+<font color="black">   8. bootstrapping issues.  Unit tests are in test_collections.</font>
+<font color="red">   9. &quot;&quot;&quot;</font>
+<font color="black">  10. </font>
+<font color="red">  11. from abc import ABCMeta, abstractmethod</font>
+<font color="red">  12. import sys</font>
+<font color="black">  13. </font>
+<font color="red">  14. __all__ = [&quot;Hashable&quot;, &quot;Iterable&quot;, &quot;Iterator&quot;,</font>
+<font color="red">  15.            &quot;Sized&quot;, &quot;Container&quot;, &quot;Callable&quot;,</font>
+<font color="red">  16.            &quot;Set&quot;, &quot;MutableSet&quot;,</font>
+<font color="red">  17.            &quot;Mapping&quot;, &quot;MutableMapping&quot;,</font>
+<font color="red">  18.            &quot;MappingView&quot;, &quot;KeysView&quot;, &quot;ItemsView&quot;, &quot;ValuesView&quot;,</font>
+<font color="red">  19.            &quot;Sequence&quot;, &quot;MutableSequence&quot;,</font>
+<font color="black">  20.            ]</font>
+<font color="black">  21. </font>
+<font color="black">  22. ### ONE-TRICK PONIES ###</font>
+<font color="black">  23. </font>
+<font color="red">  24. def _hasattr(C, attr):</font>
+<font color="green">  25.     try:</font>
+<font color="green">  26.         return any(attr in B.__dict__ for B in C.__mro__)</font>
+<font color="red">  27.     except AttributeError:</font>
+<font color="black">  28.         # Old-style class</font>
+<font color="red">  29.         return hasattr(C, attr)</font>
+<font color="black">  30. </font>
+<font color="black">  31. </font>
+<font color="red">  32. class Hashable:</font>
+<font color="red">  33.     __metaclass__ = ABCMeta</font>
+<font color="black">  34. </font>
+<font color="red">  35.     @abstractmethod</font>
+<font color="black">  36.     def __hash__(self):</font>
+<font color="red">  37.         return 0</font>
+<font color="black">  38. </font>
+<font color="red">  39.     @classmethod</font>
+<font color="black">  40.     def __subclasshook__(cls, C):</font>
+<font color="red">  41.         if cls is Hashable:</font>
+<font color="red">  42.             try:</font>
+<font color="red">  43.                 for B in C.__mro__:</font>
+<font color="red">  44.                     if &quot;__hash__&quot; in B.__dict__:</font>
+<font color="red">  45.                         if B.__dict__[&quot;__hash__&quot;]:</font>
+<font color="red">  46.                             return True</font>
+<font color="red">  47.                         break</font>
+<font color="red">  48.             except AttributeError:</font>
+<font color="black">  49.                 # Old-style class</font>
+<font color="red">  50.                 if getattr(C, &quot;__hash__&quot;, None):</font>
+<font color="red">  51.                     return True</font>
+<font color="red">  52.         return NotImplemented</font>
+<font color="black">  53. </font>
+<font color="black">  54. </font>
+<font color="red">  55. class Iterable:</font>
+<font color="red">  56.     __metaclass__ = ABCMeta</font>
+<font color="black">  57. </font>
+<font color="red">  58.     @abstractmethod</font>
+<font color="black">  59.     def __iter__(self):</font>
+<font color="red">  60.         while False:</font>
+<font color="red">  61.             yield None</font>
+<font color="black">  62. </font>
+<font color="red">  63.     @classmethod</font>
+<font color="black">  64.     def __subclasshook__(cls, C):</font>
+<font color="red">  65.         if cls is Iterable:</font>
+<font color="red">  66.             if _hasattr(C, &quot;__iter__&quot;):</font>
+<font color="red">  67.                 return True</font>
+<font color="red">  68.         return NotImplemented</font>
+<font color="black">  69. </font>
+<font color="red">  70. Iterable.register(str)</font>
+<font color="black">  71. </font>
+<font color="black">  72. </font>
+<font color="red">  73. class Iterator(Iterable):</font>
+<font color="black">  74. </font>
+<font color="red">  75.     @abstractmethod</font>
+<font color="black">  76.     def next(self):</font>
+<font color="black">  77.         'Return the next item from the iterator. When exhausted, raise StopIteration'</font>
+<font color="red">  78.         raise StopIteration</font>
+<font color="black">  79. </font>
+<font color="red">  80.     def __iter__(self):</font>
+<font color="red">  81.         return self</font>
+<font color="black">  82. </font>
+<font color="red">  83.     @classmethod</font>
+<font color="black">  84.     def __subclasshook__(cls, C):</font>
+<font color="red">  85.         if cls is Iterator:</font>
+<font color="red">  86.             if _hasattr(C, &quot;next&quot;) and _hasattr(C, &quot;__iter__&quot;):</font>
+<font color="red">  87.                 return True</font>
+<font color="red">  88.         return NotImplemented</font>
+<font color="black">  89. </font>
+<font color="black">  90. </font>
+<font color="red">  91. class Sized:</font>
+<font color="red">  92.     __metaclass__ = ABCMeta</font>
+<font color="black">  93. </font>
+<font color="red">  94.     @abstractmethod</font>
+<font color="black">  95.     def __len__(self):</font>
+<font color="red">  96.         return 0</font>
+<font color="black">  97. </font>
+<font color="red">  98.     @classmethod</font>
+<font color="black">  99.     def __subclasshook__(cls, C):</font>
+<font color="green"> 100.         if cls is Sized:</font>
+<font color="red"> 101.             if _hasattr(C, &quot;__len__&quot;):</font>
+<font color="red"> 102.                 return True</font>
+<font color="green"> 103.         return NotImplemented</font>
+<font color="black"> 104. </font>
+<font color="black"> 105. </font>
+<font color="red"> 106. class Container:</font>
+<font color="red"> 107.     __metaclass__ = ABCMeta</font>
+<font color="black"> 108. </font>
+<font color="red"> 109.     @abstractmethod</font>
+<font color="black"> 110.     def __contains__(self, x):</font>
+<font color="red"> 111.         return False</font>
+<font color="black"> 112. </font>
+<font color="red"> 113.     @classmethod</font>
+<font color="black"> 114.     def __subclasshook__(cls, C):</font>
+<font color="red"> 115.         if cls is Container:</font>
+<font color="red"> 116.             if _hasattr(C, &quot;__contains__&quot;):</font>
+<font color="red"> 117.                 return True</font>
+<font color="red"> 118.         return NotImplemented</font>
+<font color="black"> 119. </font>
+<font color="black"> 120. </font>
+<font color="red"> 121. class Callable:</font>
+<font color="red"> 122.     __metaclass__ = ABCMeta</font>
+<font color="black"> 123. </font>
+<font color="red"> 124.     @abstractmethod</font>
+<font color="black"> 125.     def __call__(self, *args, **kwds):</font>
+<font color="red"> 126.         return False</font>
+<font color="black"> 127. </font>
+<font color="red"> 128.     @classmethod</font>
+<font color="black"> 129.     def __subclasshook__(cls, C):</font>
+<font color="green"> 130.         if cls is Callable:</font>
+<font color="green"> 131.             if _hasattr(C, &quot;__call__&quot;):</font>
+<font color="red"> 132.                 return True</font>
+<font color="green"> 133.         return NotImplemented</font>
+<font color="black"> 134. </font>
+<font color="black"> 135. </font>
+<font color="black"> 136. ### SETS ###</font>
+<font color="black"> 137. </font>
+<font color="black"> 138. </font>
+<font color="red"> 139. class Set(Sized, Iterable, Container):</font>
+<font color="black"> 140.     &quot;&quot;&quot;A set is a finite, iterable container.</font>
+<font color="black"> 141. </font>
+<font color="black"> 142.     This class provides concrete generic implementations of all</font>
+<font color="black"> 143.     methods except for __contains__, __iter__ and __len__.</font>
+<font color="black"> 144. </font>
+<font color="black"> 145.     To override the comparisons (presumably for speed, as the</font>
+<font color="black"> 146.     semantics are fixed), redefine __le__ and __ge__,</font>
+<font color="black"> 147.     then the other operations will automatically follow suit.</font>
+<font color="red"> 148.     &quot;&quot;&quot;</font>
+<font color="black"> 149. </font>
+<font color="red"> 150.     def __le__(self, other):</font>
+<font color="red"> 151.         if not isinstance(other, Set):</font>
+<font color="red"> 152.             return NotImplemented</font>
+<font color="red"> 153.         if len(self) &gt; len(other):</font>
+<font color="red"> 154.             return False</font>
+<font color="red"> 155.         for elem in self:</font>
+<font color="red"> 156.             if elem not in other:</font>
+<font color="red"> 157.                 return False</font>
+<font color="red"> 158.         return True</font>
+<font color="black"> 159. </font>
+<font color="red"> 160.     def __lt__(self, other):</font>
+<font color="red"> 161.         if not isinstance(other, Set):</font>
+<font color="red"> 162.             return NotImplemented</font>
+<font color="red"> 163.         return len(self) &lt; len(other) and self.__le__(other)</font>
+<font color="black"> 164. </font>
+<font color="red"> 165.     def __gt__(self, other):</font>
+<font color="red"> 166.         if not isinstance(other, Set):</font>
+<font color="red"> 167.             return NotImplemented</font>
+<font color="red"> 168.         return len(self) &gt; len(other) and self.__ge__(other)</font>
+<font color="black"> 169. </font>
+<font color="red"> 170.     def __ge__(self, other):</font>
+<font color="red"> 171.         if not isinstance(other, Set):</font>
+<font color="red"> 172.             return NotImplemented</font>
+<font color="red"> 173.         if len(self) &lt; len(other):</font>
+<font color="red"> 174.             return False</font>
+<font color="red"> 175.         for elem in other:</font>
+<font color="red"> 176.             if elem not in self:</font>
+<font color="red"> 177.                 return False</font>
+<font color="red"> 178.         return True</font>
+<font color="black"> 179. </font>
+<font color="red"> 180.     def __eq__(self, other):</font>
+<font color="red"> 181.         if not isinstance(other, Set):</font>
+<font color="red"> 182.             return NotImplemented</font>
+<font color="red"> 183.         return len(self) == len(other) and self.__le__(other)</font>
+<font color="black"> 184. </font>
+<font color="red"> 185.     def __ne__(self, other):</font>
+<font color="red"> 186.         return not (self == other)</font>
+<font color="black"> 187. </font>
+<font color="red"> 188.     @classmethod</font>
+<font color="black"> 189.     def _from_iterable(cls, it):</font>
+<font color="black"> 190.         '''Construct an instance of the class from any iterable input.</font>
+<font color="black"> 191. </font>
+<font color="black"> 192.         Must override this method if the class constructor signature</font>
+<font color="black"> 193.         does not accept an iterable for an input.</font>
+<font color="black"> 194.         '''</font>
+<font color="red"> 195.         return cls(it)</font>
+<font color="black"> 196. </font>
+<font color="red"> 197.     def __and__(self, other):</font>
+<font color="red"> 198.         if not isinstance(other, Iterable):</font>
+<font color="red"> 199.             return NotImplemented</font>
+<font color="red"> 200.         return self._from_iterable(value for value in other if value in self)</font>
+<font color="black"> 201. </font>
+<font color="red"> 202.     __rand__ = __and__</font>
+<font color="black"> 203. </font>
+<font color="red"> 204.     def isdisjoint(self, other):</font>
+<font color="black"> 205.         'Return True if two sets have a null intersection.'</font>
+<font color="red"> 206.         for value in other:</font>
+<font color="red"> 207.             if value in self:</font>
+<font color="red"> 208.                 return False</font>
+<font color="red"> 209.         return True</font>
+<font color="black"> 210. </font>
+<font color="red"> 211.     def __or__(self, other):</font>
+<font color="red"> 212.         if not isinstance(other, Iterable):</font>
+<font color="red"> 213.             return NotImplemented</font>
+<font color="red"> 214.         chain = (e for s in (self, other) for e in s)</font>
+<font color="red"> 215.         return self._from_iterable(chain)</font>
+<font color="black"> 216. </font>
+<font color="red"> 217.     __ror__ = __or__</font>
+<font color="black"> 218. </font>
+<font color="red"> 219.     def __sub__(self, other):</font>
+<font color="red"> 220.         if not isinstance(other, Set):</font>
+<font color="red"> 221.             if not isinstance(other, Iterable):</font>
+<font color="red"> 222.                 return NotImplemented</font>
+<font color="red"> 223.             other = self._from_iterable(other)</font>
+<font color="red"> 224.         return self._from_iterable(value for value in self</font>
+<font color="red"> 225.                                    if value not in other)</font>
+<font color="black"> 226. </font>
+<font color="red"> 227.     def __rsub__(self, other):</font>
+<font color="red"> 228.         if not isinstance(other, Set):</font>
+<font color="red"> 229.             if not isinstance(other, Iterable):</font>
+<font color="red"> 230.                 return NotImplemented</font>
+<font color="red"> 231.             other = self._from_iterable(other)</font>
+<font color="red"> 232.         return self._from_iterable(value for value in other</font>
+<font color="red"> 233.                                    if value not in self)</font>
+<font color="black"> 234. </font>
+<font color="red"> 235.     def __xor__(self, other):</font>
+<font color="red"> 236.         if not isinstance(other, Set):</font>
+<font color="red"> 237.             if not isinstance(other, Iterable):</font>
+<font color="red"> 238.                 return NotImplemented</font>
+<font color="red"> 239.             other = self._from_iterable(other)</font>
+<font color="red"> 240.         return (self - other) | (other - self)</font>
+<font color="black"> 241. </font>
+<font color="red"> 242.     __rxor__ = __xor__</font>
+<font color="black"> 243. </font>
+<font color="black"> 244.     # Sets are not hashable by default, but subclasses can change this</font>
+<font color="red"> 245.     __hash__ = None</font>
+<font color="black"> 246. </font>
+<font color="red"> 247.     def _hash(self):</font>
+<font color="black"> 248.         &quot;&quot;&quot;Compute the hash value of a set.</font>
+<font color="black"> 249. </font>
+<font color="black"> 250.         Note that we don't define __hash__: not all sets are hashable.</font>
+<font color="black"> 251.         But if you define a hashable set type, its __hash__ should</font>
+<font color="black"> 252.         call this function.</font>
+<font color="black"> 253. </font>
+<font color="black"> 254.         This must be compatible __eq__.</font>
+<font color="black"> 255. </font>
+<font color="black"> 256.         All sets ought to compare equal if they contain the same</font>
+<font color="black"> 257.         elements, regardless of how they are implemented, and</font>
+<font color="black"> 258.         regardless of the order of the elements; so there's not much</font>
+<font color="black"> 259.         freedom for __eq__ or __hash__.  We match the algorithm used</font>
+<font color="black"> 260.         by the built-in frozenset type.</font>
+<font color="black"> 261.         &quot;&quot;&quot;</font>
+<font color="red"> 262.         MAX = sys.maxint</font>
+<font color="red"> 263.         MASK = 2 * MAX + 1</font>
+<font color="red"> 264.         n = len(self)</font>
+<font color="red"> 265.         h = 1927868237 * (n + 1)</font>
+<font color="red"> 266.         h &amp;= MASK</font>
+<font color="red"> 267.         for x in self:</font>
+<font color="red"> 268.             hx = hash(x)</font>
+<font color="red"> 269.             h ^= (hx ^ (hx &lt;&lt; 16) ^ 89869747)  * 3644798167</font>
+<font color="red"> 270.             h &amp;= MASK</font>
+<font color="red"> 271.         h = h * 69069 + 907133923</font>
+<font color="red"> 272.         h &amp;= MASK</font>
+<font color="red"> 273.         if h &gt; MAX:</font>
+<font color="red"> 274.             h -= MASK + 1</font>
+<font color="red"> 275.         if h == -1:</font>
+<font color="red"> 276.             h = 590923713</font>
+<font color="red"> 277.         return h</font>
+<font color="black"> 278. </font>
+<font color="red"> 279. Set.register(frozenset)</font>
+<font color="black"> 280. </font>
+<font color="black"> 281. </font>
+<font color="red"> 282. class MutableSet(Set):</font>
+<font color="black"> 283.     &quot;&quot;&quot;A mutable set is a finite, iterable container.</font>
+<font color="black"> 284. </font>
+<font color="black"> 285.     This class provides concrete generic implementations of all</font>
+<font color="black"> 286.     methods except for __contains__, __iter__, __len__,</font>
+<font color="black"> 287.     add(), and discard().</font>
+<font color="black"> 288. </font>
+<font color="black"> 289.     To override the comparisons (presumably for speed, as the</font>
+<font color="black"> 290.     semantics are fixed), all you have to do is redefine __le__ and</font>
+<font color="black"> 291.     then the other operations will automatically follow suit.</font>
+<font color="red"> 292.     &quot;&quot;&quot;</font>
+<font color="black"> 293. </font>
+<font color="red"> 294.     @abstractmethod</font>
+<font color="black"> 295.     def add(self, value):</font>
+<font color="black"> 296.         &quot;&quot;&quot;Add an element.&quot;&quot;&quot;</font>
+<font color="red"> 297.         raise NotImplementedError</font>
+<font color="black"> 298. </font>
+<font color="red"> 299.     @abstractmethod</font>
+<font color="black"> 300.     def discard(self, value):</font>
+<font color="black"> 301.         &quot;&quot;&quot;Remove an element.  Do not raise an exception if absent.&quot;&quot;&quot;</font>
+<font color="red"> 302.         raise NotImplementedError</font>
+<font color="black"> 303. </font>
+<font color="red"> 304.     def remove(self, value):</font>
+<font color="black"> 305.         &quot;&quot;&quot;Remove an element. If not a member, raise a KeyError.&quot;&quot;&quot;</font>
+<font color="red"> 306.         if value not in self:</font>
+<font color="red"> 307.             raise KeyError(value)</font>
+<font color="red"> 308.         self.discard(value)</font>
+<font color="black"> 309. </font>
+<font color="red"> 310.     def pop(self):</font>
+<font color="black"> 311.         &quot;&quot;&quot;Return the popped value.  Raise KeyError if empty.&quot;&quot;&quot;</font>
+<font color="red"> 312.         it = iter(self)</font>
+<font color="red"> 313.         try:</font>
+<font color="red"> 314.             value = next(it)</font>
+<font color="red"> 315.         except StopIteration:</font>
+<font color="red"> 316.             raise KeyError</font>
+<font color="red"> 317.         self.discard(value)</font>
+<font color="red"> 318.         return value</font>
+<font color="black"> 319. </font>
+<font color="red"> 320.     def clear(self):</font>
+<font color="black"> 321.         &quot;&quot;&quot;This is slow (creates N new iterators!) but effective.&quot;&quot;&quot;</font>
+<font color="red"> 322.         try:</font>
+<font color="red"> 323.             while True:</font>
+<font color="red"> 324.                 self.pop()</font>
+<font color="red"> 325.         except KeyError:</font>
+<font color="red"> 326.             pass</font>
+<font color="black"> 327. </font>
+<font color="red"> 328.     def __ior__(self, it):</font>
+<font color="red"> 329.         for value in it:</font>
+<font color="red"> 330.             self.add(value)</font>
+<font color="red"> 331.         return self</font>
+<font color="black"> 332. </font>
+<font color="red"> 333.     def __iand__(self, it):</font>
+<font color="red"> 334.         for value in (self - it):</font>
+<font color="red"> 335.             self.discard(value)</font>
+<font color="red"> 336.         return self</font>
+<font color="black"> 337. </font>
+<font color="red"> 338.     def __ixor__(self, it):</font>
+<font color="red"> 339.         if it is self:</font>
+<font color="red"> 340.             self.clear()</font>
+<font color="black"> 341.         else:</font>
+<font color="red"> 342.             if not isinstance(it, Set):</font>
+<font color="red"> 343.                 it = self._from_iterable(it)</font>
+<font color="red"> 344.             for value in it:</font>
+<font color="red"> 345.                 if value in self:</font>
+<font color="red"> 346.                     self.discard(value)</font>
+<font color="black"> 347.                 else:</font>
+<font color="red"> 348.                     self.add(value)</font>
+<font color="red"> 349.         return self</font>
+<font color="black"> 350. </font>
+<font color="red"> 351.     def __isub__(self, it):</font>
+<font color="red"> 352.         if it is self:</font>
+<font color="red"> 353.             self.clear()</font>
+<font color="black"> 354.         else:</font>
+<font color="red"> 355.             for value in it:</font>
+<font color="red"> 356.                 self.discard(value)</font>
+<font color="red"> 357.         return self</font>
+<font color="black"> 358. </font>
+<font color="red"> 359. MutableSet.register(set)</font>
+<font color="black"> 360. </font>
+<font color="black"> 361. </font>
+<font color="black"> 362. ### MAPPINGS ###</font>
+<font color="black"> 363. </font>
+<font color="black"> 364. </font>
+<font color="red"> 365. class Mapping(Sized, Iterable, Container):</font>
+<font color="black"> 366. </font>
+<font color="black"> 367.     &quot;&quot;&quot;A Mapping is a generic container for associating key/value</font>
+<font color="black"> 368.     pairs.</font>
+<font color="black"> 369. </font>
+<font color="black"> 370.     This class provides concrete generic implementations of all</font>
+<font color="black"> 371.     methods except for __getitem__, __iter__, and __len__.</font>
+<font color="black"> 372. </font>
+<font color="red"> 373.     &quot;&quot;&quot;</font>
+<font color="black"> 374. </font>
+<font color="red"> 375.     @abstractmethod</font>
+<font color="black"> 376.     def __getitem__(self, key):</font>
+<font color="red"> 377.         raise KeyError</font>
+<font color="black"> 378. </font>
+<font color="red"> 379.     def get(self, key, default=None):</font>
+<font color="black"> 380.         'D.get(k[,d]) -&gt; D[k] if k in D, else d.  d defaults to None.'</font>
+<font color="green"> 381.         try:</font>
+<font color="green"> 382.             return self[key]</font>
+<font color="green"> 383.         except KeyError:</font>
+<font color="green"> 384.             return default</font>
+<font color="black"> 385. </font>
+<font color="red"> 386.     def __contains__(self, key):</font>
+<font color="green"> 387.         try:</font>
+<font color="green"> 388.             self[key]</font>
+<font color="green"> 389.         except KeyError:</font>
+<font color="green"> 390.             return False</font>
+<font color="black"> 391.         else:</font>
+<font color="green"> 392.             return True</font>
+<font color="black"> 393. </font>
+<font color="red"> 394.     def iterkeys(self):</font>
+<font color="black"> 395.         'D.iterkeys() -&gt; an iterator over the keys of D'</font>
+<font color="red"> 396.         return iter(self)</font>
+<font color="black"> 397. </font>
+<font color="red"> 398.     def itervalues(self):</font>
+<font color="black"> 399.         'D.itervalues() -&gt; an iterator over the values of D'</font>
+<font color="red"> 400.         for key in self:</font>
+<font color="red"> 401.             yield self[key]</font>
+<font color="black"> 402. </font>
+<font color="red"> 403.     def iteritems(self):</font>
+<font color="black"> 404.         'D.iteritems() -&gt; an iterator over the (key, value) items of D'</font>
+<font color="green"> 405.         for key in self:</font>
+<font color="green"> 406.             yield (key, self[key])</font>
+<font color="black"> 407. </font>
+<font color="red"> 408.     def keys(self):</font>
+<font color="black"> 409.         &quot;D.keys() -&gt; list of D's keys&quot;</font>
+<font color="green"> 410.         return list(self)</font>
+<font color="black"> 411. </font>
+<font color="red"> 412.     def items(self):</font>
+<font color="black"> 413.         &quot;D.items() -&gt; list of D's (key, value) pairs, as 2-tuples&quot;</font>
+<font color="red"> 414.         return [(key, self[key]) for key in self]</font>
+<font color="black"> 415. </font>
+<font color="red"> 416.     def values(self):</font>
+<font color="black"> 417.         &quot;D.values() -&gt; list of D's values&quot;</font>
+<font color="red"> 418.         return [self[key] for key in self]</font>
+<font color="black"> 419. </font>
+<font color="black"> 420.     # Mappings are not hashable by default, but subclasses can change this</font>
+<font color="red"> 421.     __hash__ = None</font>
+<font color="black"> 422. </font>
+<font color="red"> 423.     def __eq__(self, other):</font>
+<font color="red"> 424.         if not isinstance(other, Mapping):</font>
+<font color="red"> 425.             return NotImplemented</font>
+<font color="red"> 426.         return dict(self.items()) == dict(other.items())</font>
+<font color="black"> 427. </font>
+<font color="red"> 428.     def __ne__(self, other):</font>
+<font color="red"> 429.         return not (self == other)</font>
+<font color="black"> 430. </font>
+<font color="red"> 431. class MappingView(Sized):</font>
+<font color="black"> 432. </font>
+<font color="red"> 433.     def __init__(self, mapping):</font>
+<font color="red"> 434.         self._mapping = mapping</font>
+<font color="black"> 435. </font>
+<font color="red"> 436.     def __len__(self):</font>
+<font color="red"> 437.         return len(self._mapping)</font>
+<font color="black"> 438. </font>
+<font color="red"> 439.     def __repr__(self):</font>
+<font color="red"> 440.         return '{0.__class__.__name__}({0._mapping!r})'.format(self)</font>
+<font color="black"> 441. </font>
+<font color="black"> 442. </font>
+<font color="red"> 443. class KeysView(MappingView, Set):</font>
+<font color="black"> 444. </font>
+<font color="red"> 445.     @classmethod</font>
+<font color="black"> 446.     def _from_iterable(self, it):</font>
+<font color="red"> 447.         return set(it)</font>
+<font color="black"> 448. </font>
+<font color="red"> 449.     def __contains__(self, key):</font>
+<font color="red"> 450.         return key in self._mapping</font>
+<font color="black"> 451. </font>
+<font color="red"> 452.     def __iter__(self):</font>
+<font color="red"> 453.         for key in self._mapping:</font>
+<font color="red"> 454.             yield key</font>
+<font color="black"> 455. </font>
+<font color="red"> 456. KeysView.register(type({}.viewkeys()))</font>
+<font color="black"> 457. </font>
+<font color="red"> 458. class ItemsView(MappingView, Set):</font>
+<font color="black"> 459. </font>
+<font color="red"> 460.     @classmethod</font>
+<font color="black"> 461.     def _from_iterable(self, it):</font>
+<font color="red"> 462.         return set(it)</font>
+<font color="black"> 463. </font>
+<font color="red"> 464.     def __contains__(self, item):</font>
+<font color="red"> 465.         key, value = item</font>
+<font color="red"> 466.         try:</font>
+<font color="red"> 467.             v = self._mapping[key]</font>
+<font color="red"> 468.         except KeyError:</font>
+<font color="red"> 469.             return False</font>
+<font color="black"> 470.         else:</font>
+<font color="red"> 471.             return v == value</font>
+<font color="black"> 472. </font>
+<font color="red"> 473.     def __iter__(self):</font>
+<font color="red"> 474.         for key in self._mapping:</font>
+<font color="red"> 475.             yield (key, self._mapping[key])</font>
+<font color="black"> 476. </font>
+<font color="red"> 477. ItemsView.register(type({}.viewitems()))</font>
+<font color="black"> 478. </font>
+<font color="red"> 479. class ValuesView(MappingView):</font>
+<font color="black"> 480. </font>
+<font color="red"> 481.     def __contains__(self, value):</font>
+<font color="red"> 482.         for key in self._mapping:</font>
+<font color="red"> 483.             if value == self._mapping[key]:</font>
+<font color="red"> 484.                 return True</font>
+<font color="red"> 485.         return False</font>
+<font color="black"> 486. </font>
+<font color="red"> 487.     def __iter__(self):</font>
+<font color="red"> 488.         for key in self._mapping:</font>
+<font color="red"> 489.             yield self._mapping[key]</font>
+<font color="black"> 490. </font>
+<font color="red"> 491. ValuesView.register(type({}.viewvalues()))</font>
+<font color="black"> 492. </font>
+<font color="red"> 493. class MutableMapping(Mapping):</font>
+<font color="black"> 494. </font>
+<font color="black"> 495.     &quot;&quot;&quot;A MutableMapping is a generic container for associating</font>
+<font color="black"> 496.     key/value pairs.</font>
+<font color="black"> 497. </font>
+<font color="black"> 498.     This class provides concrete generic implementations of all</font>
+<font color="black"> 499.     methods except for __getitem__, __setitem__, __delitem__,</font>
+<font color="black"> 500.     __iter__, and __len__.</font>
+<font color="black"> 501. </font>
+<font color="red"> 502.     &quot;&quot;&quot;</font>
+<font color="black"> 503. </font>
+<font color="red"> 504.     @abstractmethod</font>
+<font color="black"> 505.     def __setitem__(self, key, value):</font>
+<font color="red"> 506.         raise KeyError</font>
+<font color="black"> 507. </font>
+<font color="red"> 508.     @abstractmethod</font>
+<font color="black"> 509.     def __delitem__(self, key):</font>
+<font color="red"> 510.         raise KeyError</font>
+<font color="black"> 511. </font>
+<font color="red"> 512.     __marker = object()</font>
+<font color="black"> 513. </font>
+<font color="red"> 514.     def pop(self, key, default=__marker):</font>
+<font color="black"> 515.         '''D.pop(k[,d]) -&gt; v, remove specified key and return the corresponding value.</font>
+<font color="black"> 516.           If key is not found, d is returned if given, otherwise KeyError is raised.</font>
+<font color="black"> 517.         '''</font>
+<font color="red"> 518.         try:</font>
+<font color="red"> 519.             value = self[key]</font>
+<font color="red"> 520.         except KeyError:</font>
+<font color="red"> 521.             if default is self.__marker:</font>
+<font color="red"> 522.                 raise</font>
+<font color="red"> 523.             return default</font>
+<font color="black"> 524.         else:</font>
+<font color="red"> 525.             del self[key]</font>
+<font color="red"> 526.             return value</font>
+<font color="black"> 527. </font>
+<font color="red"> 528.     def popitem(self):</font>
+<font color="black"> 529.         '''D.popitem() -&gt; (k, v), remove and return some (key, value) pair</font>
+<font color="black"> 530.            as a 2-tuple; but raise KeyError if D is empty.</font>
+<font color="black"> 531.         '''</font>
+<font color="red"> 532.         try:</font>
+<font color="red"> 533.             key = next(iter(self))</font>
+<font color="red"> 534.         except StopIteration:</font>
+<font color="red"> 535.             raise KeyError</font>
+<font color="red"> 536.         value = self[key]</font>
+<font color="red"> 537.         del self[key]</font>
+<font color="red"> 538.         return key, value</font>
+<font color="black"> 539. </font>
+<font color="red"> 540.     def clear(self):</font>
+<font color="black"> 541.         'D.clear() -&gt; None.  Remove all items from D.'</font>
+<font color="red"> 542.         try:</font>
+<font color="red"> 543.             while True:</font>
+<font color="red"> 544.                 self.popitem()</font>
+<font color="red"> 545.         except KeyError:</font>
+<font color="red"> 546.             pass</font>
+<font color="black"> 547. </font>
+<font color="red"> 548.     def update(*args, **kwds):</font>
+<font color="black"> 549.         ''' D.update([E, ]**F) -&gt; None.  Update D from mapping/iterable E and F.</font>
+<font color="black"> 550.             If E present and has a .keys() method, does:     for k in E: D[k] = E[k]</font>
+<font color="black"> 551.             If E present and lacks .keys() method, does:     for (k, v) in E: D[k] = v</font>
+<font color="black"> 552.             In either case, this is followed by: for k, v in F.items(): D[k] = v</font>
+<font color="black"> 553.         '''</font>
+<font color="green"> 554.         if not args:</font>
+<font color="red"> 555.             raise TypeError(&quot;descriptor 'update' of 'MutableMapping' object &quot;</font>
+<font color="black"> 556.                             &quot;needs an argument&quot;)</font>
+<font color="green"> 557.         self = args[0]</font>
+<font color="green"> 558.         args = args[1:]</font>
+<font color="green"> 559.         if len(args) &gt; 1:</font>
+<font color="red"> 560.             raise TypeError('update expected at most 1 arguments, got %d' %</font>
+<font color="red"> 561.                             len(args))</font>
+<font color="green"> 562.         if args:</font>
+<font color="green"> 563.             other = args[0]</font>
+<font color="green"> 564.             if isinstance(other, Mapping):</font>
+<font color="green"> 565.                 for key in other:</font>
+<font color="green"> 566.                     self[key] = other[key]</font>
+<font color="green"> 567.             elif hasattr(other, &quot;keys&quot;):</font>
+<font color="red"> 568.                 for key in other.keys():</font>
+<font color="red"> 569.                     self[key] = other[key]</font>
+<font color="black"> 570.             else:</font>
+<font color="green"> 571.                 for key, value in other:</font>
+<font color="green"> 572.                     self[key] = value</font>
+<font color="green"> 573.         for key, value in kwds.items():</font>
+<font color="red"> 574.             self[key] = value</font>
+<font color="black"> 575. </font>
+<font color="red"> 576.     def setdefault(self, key, default=None):</font>
+<font color="black"> 577.         'D.setdefault(k[,d]) -&gt; D.get(k,d), also set D[k]=d if k not in D'</font>
+<font color="red"> 578.         try:</font>
+<font color="red"> 579.             return self[key]</font>
+<font color="red"> 580.         except KeyError:</font>
+<font color="red"> 581.             self[key] = default</font>
+<font color="red"> 582.         return default</font>
+<font color="black"> 583. </font>
+<font color="red"> 584. MutableMapping.register(dict)</font>
+<font color="black"> 585. </font>
+<font color="black"> 586. </font>
+<font color="black"> 587. ### SEQUENCES ###</font>
+<font color="black"> 588. </font>
+<font color="black"> 589. </font>
+<font color="red"> 590. class Sequence(Sized, Iterable, Container):</font>
+<font color="black"> 591.     &quot;&quot;&quot;All the operations on a read-only sequence.</font>
+<font color="black"> 592. </font>
+<font color="black"> 593.     Concrete subclasses must override __new__ or __init__,</font>
+<font color="black"> 594.     __getitem__, and __len__.</font>
+<font color="red"> 595.     &quot;&quot;&quot;</font>
+<font color="black"> 596. </font>
+<font color="red"> 597.     @abstractmethod</font>
+<font color="black"> 598.     def __getitem__(self, index):</font>
+<font color="red"> 599.         raise IndexError</font>
+<font color="black"> 600. </font>
+<font color="red"> 601.     def __iter__(self):</font>
+<font color="red"> 602.         i = 0</font>
+<font color="red"> 603.         try:</font>
+<font color="red"> 604.             while True:</font>
+<font color="red"> 605.                 v = self[i]</font>
+<font color="red"> 606.                 yield v</font>
+<font color="red"> 607.                 i += 1</font>
+<font color="red"> 608.         except IndexError:</font>
+<font color="red"> 609.             return</font>
+<font color="black"> 610. </font>
+<font color="red"> 611.     def __contains__(self, value):</font>
+<font color="red"> 612.         for v in self:</font>
+<font color="red"> 613.             if v == value:</font>
+<font color="red"> 614.                 return True</font>
+<font color="red"> 615.         return False</font>
+<font color="black"> 616. </font>
+<font color="red"> 617.     def __reversed__(self):</font>
+<font color="red"> 618.         for i in reversed(range(len(self))):</font>
+<font color="red"> 619.             yield self[i]</font>
+<font color="black"> 620. </font>
+<font color="red"> 621.     def index(self, value):</font>
+<font color="black"> 622.         '''S.index(value) -&gt; integer -- return first index of value.</font>
+<font color="black"> 623.            Raises ValueError if the value is not present.</font>
+<font color="black"> 624.         '''</font>
+<font color="red"> 625.         for i, v in enumerate(self):</font>
+<font color="red"> 626.             if v == value:</font>
+<font color="red"> 627.                 return i</font>
+<font color="red"> 628.         raise ValueError</font>
+<font color="black"> 629. </font>
+<font color="red"> 630.     def count(self, value):</font>
+<font color="black"> 631.         'S.count(value) -&gt; integer -- return number of occurrences of value'</font>
+<font color="red"> 632.         return sum(1 for v in self if v == value)</font>
+<font color="black"> 633. </font>
+<font color="red"> 634. Sequence.register(tuple)</font>
+<font color="red"> 635. Sequence.register(basestring)</font>
+<font color="red"> 636. Sequence.register(buffer)</font>
+<font color="red"> 637. Sequence.register(xrange)</font>
+<font color="black"> 638. </font>
+<font color="black"> 639. </font>
+<font color="red"> 640. class MutableSequence(Sequence):</font>
+<font color="black"> 641. </font>
+<font color="black"> 642.     &quot;&quot;&quot;All the operations on a read-only sequence.</font>
+<font color="black"> 643. </font>
+<font color="black"> 644.     Concrete subclasses must provide __new__ or __init__,</font>
+<font color="black"> 645.     __getitem__, __setitem__, __delitem__, __len__, and insert().</font>
+<font color="black"> 646. </font>
+<font color="red"> 647.     &quot;&quot;&quot;</font>
+<font color="black"> 648. </font>
+<font color="red"> 649.     @abstractmethod</font>
+<font color="black"> 650.     def __setitem__(self, index, value):</font>
+<font color="red"> 651.         raise IndexError</font>
+<font color="black"> 652. </font>
+<font color="red"> 653.     @abstractmethod</font>
+<font color="black"> 654.     def __delitem__(self, index):</font>
+<font color="red"> 655.         raise IndexError</font>
+<font color="black"> 656. </font>
+<font color="red"> 657.     @abstractmethod</font>
+<font color="black"> 658.     def insert(self, index, value):</font>
+<font color="black"> 659.         'S.insert(index, object) -- insert object before index'</font>
+<font color="red"> 660.         raise IndexError</font>
+<font color="black"> 661. </font>
+<font color="red"> 662.     def append(self, value):</font>
+<font color="black"> 663.         'S.append(object) -- append object to the end of the sequence'</font>
+<font color="red"> 664.         self.insert(len(self), value)</font>
+<font color="black"> 665. </font>
+<font color="red"> 666.     def reverse(self):</font>
+<font color="black"> 667.         'S.reverse() -- reverse *IN PLACE*'</font>
+<font color="red"> 668.         n = len(self)</font>
+<font color="red"> 669.         for i in range(n//2):</font>
+<font color="red"> 670.             self[i], self[n-i-1] = self[n-i-1], self[i]</font>
+<font color="black"> 671. </font>
+<font color="red"> 672.     def extend(self, values):</font>
+<font color="black"> 673.         'S.extend(iterable) -- extend sequence by appending elements from the iterable'</font>
+<font color="red"> 674.         for v in values:</font>
+<font color="red"> 675.             self.append(v)</font>
+<font color="black"> 676. </font>
+<font color="red"> 677.     def pop(self, index=-1):</font>
+<font color="black"> 678.         '''S.pop([index]) -&gt; item -- remove and return item at index (default last).</font>
+<font color="black"> 679.            Raise IndexError if list is empty or index is out of range.</font>
+<font color="black"> 680.         '''</font>
+<font color="red"> 681.         v = self[index]</font>
+<font color="red"> 682.         del self[index]</font>
+<font color="red"> 683.         return v</font>
+<font color="black"> 684. </font>
+<font color="red"> 685.     def remove(self, value):</font>
+<font color="black"> 686.         '''S.remove(value) -- remove first occurrence of value.</font>
+<font color="black"> 687.            Raise ValueError if the value is not present.</font>
+<font color="black"> 688.         '''</font>
+<font color="red"> 689.         del self[self.index(value)]</font>
+<font color="black"> 690. </font>
+<font color="red"> 691.     def __iadd__(self, values):</font>
+<font color="red"> 692.         self.extend(values)</font>
+<font color="red"> 693.         return self</font>
+<font color="black"> 694. </font>
+<font color="red"> 695. MutableSequence.register(list)</font>
+</pre>
+

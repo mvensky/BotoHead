@@ -1,0 +1,596 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/pkgutil.py</b><br>
+
+
+file stats: <b>329 lines, 15 executed: 4.6% covered</b>
+<pre>
+<font color="red">   1. &quot;&quot;&quot;Utilities to support packages.&quot;&quot;&quot;</font>
+<font color="black">   2. </font>
+<font color="red">   3. import os</font>
+<font color="red">   4. import sys</font>
+<font color="red">   5. import imp</font>
+<font color="red">   6. import os.path</font>
+<font color="red">   7. from types import ModuleType</font>
+<font color="black">   8. </font>
+<font color="black">   9. __all__ = [</font>
+<font color="red">  10.     'get_importer', 'iter_importers', 'get_loader', 'find_loader',</font>
+<font color="red">  11.     'walk_packages', 'iter_modules', 'get_data',</font>
+<font color="red">  12.     'ImpImporter', 'ImpLoader', 'read_code', 'extend_path',</font>
+<font color="black">  13. ]</font>
+<font color="black">  14. </font>
+<font color="red">  15. def read_code(stream):</font>
+<font color="black">  16.     # This helper is needed in order for the PEP 302 emulation to</font>
+<font color="black">  17.     # correctly handle compiled files</font>
+<font color="red">  18.     import marshal</font>
+<font color="black">  19. </font>
+<font color="red">  20.     magic = stream.read(4)</font>
+<font color="red">  21.     if magic != imp.get_magic():</font>
+<font color="red">  22.         return None</font>
+<font color="black">  23. </font>
+<font color="red">  24.     stream.read(4) # Skip timestamp</font>
+<font color="red">  25.     return marshal.load(stream)</font>
+<font color="black">  26. </font>
+<font color="black">  27. </font>
+<font color="red">  28. def simplegeneric(func):</font>
+<font color="black">  29.     &quot;&quot;&quot;Make a trivial single-dispatch generic function&quot;&quot;&quot;</font>
+<font color="red">  30.     registry = {}</font>
+<font color="red">  31.     def wrapper(*args, **kw):</font>
+<font color="red">  32.         ob = args[0]</font>
+<font color="red">  33.         try:</font>
+<font color="red">  34.             cls = ob.__class__</font>
+<font color="red">  35.         except AttributeError:</font>
+<font color="red">  36.             cls = type(ob)</font>
+<font color="red">  37.         try:</font>
+<font color="red">  38.             mro = cls.__mro__</font>
+<font color="red">  39.         except AttributeError:</font>
+<font color="red">  40.             try:</font>
+<font color="red">  41.                 class cls(cls, object):</font>
+<font color="red">  42.                     pass</font>
+<font color="red">  43.                 mro = cls.__mro__[1:]</font>
+<font color="red">  44.             except TypeError:</font>
+<font color="red">  45.                 mro = object,   # must be an ExtensionClass or some such  :(</font>
+<font color="red">  46.         for t in mro:</font>
+<font color="red">  47.             if t in registry:</font>
+<font color="red">  48.                 return registry[t](*args, **kw)</font>
+<font color="black">  49.         else:</font>
+<font color="red">  50.             return func(*args, **kw)</font>
+<font color="red">  51.     try:</font>
+<font color="red">  52.         wrapper.__name__ = func.__name__</font>
+<font color="red">  53.     except (TypeError, AttributeError):</font>
+<font color="red">  54.         pass    # Python 2.3 doesn't allow functions to be renamed</font>
+<font color="black">  55. </font>
+<font color="red">  56.     def register(typ, func=None):</font>
+<font color="red">  57.         if func is None:</font>
+<font color="red">  58.             return lambda f: register(typ, f)</font>
+<font color="red">  59.         registry[typ] = func</font>
+<font color="red">  60.         return func</font>
+<font color="black">  61. </font>
+<font color="red">  62.     wrapper.__dict__ = func.__dict__</font>
+<font color="red">  63.     wrapper.__doc__ = func.__doc__</font>
+<font color="red">  64.     wrapper.register = register</font>
+<font color="red">  65.     return wrapper</font>
+<font color="black">  66. </font>
+<font color="black">  67. </font>
+<font color="red">  68. def walk_packages(path=None, prefix='', onerror=None):</font>
+<font color="black">  69.     &quot;&quot;&quot;Yields (module_loader, name, ispkg) for all modules recursively</font>
+<font color="black">  70.     on path, or, if path is None, all accessible modules.</font>
+<font color="black">  71. </font>
+<font color="black">  72.     'path' should be either None or a list of paths to look for</font>
+<font color="black">  73.     modules in.</font>
+<font color="black">  74. </font>
+<font color="black">  75.     'prefix' is a string to output on the front of every module name</font>
+<font color="black">  76.     on output.</font>
+<font color="black">  77. </font>
+<font color="black">  78.     Note that this function must import all *packages* (NOT all</font>
+<font color="black">  79.     modules!) on the given path, in order to access the __path__</font>
+<font color="black">  80.     attribute to find submodules.</font>
+<font color="black">  81. </font>
+<font color="black">  82.     'onerror' is a function which gets called with one argument (the</font>
+<font color="black">  83.     name of the package which was being imported) if any exception</font>
+<font color="black">  84.     occurs while trying to import a package.  If no onerror function is</font>
+<font color="black">  85.     supplied, ImportErrors are caught and ignored, while all other</font>
+<font color="black">  86.     exceptions are propagated, terminating the search.</font>
+<font color="black">  87. </font>
+<font color="black">  88.     Examples:</font>
+<font color="black">  89. </font>
+<font color="black">  90.     # list all modules python can access</font>
+<font color="black">  91.     walk_packages()</font>
+<font color="black">  92. </font>
+<font color="black">  93.     # list all submodules of ctypes</font>
+<font color="black">  94.     walk_packages(ctypes.__path__, ctypes.__name__+'.')</font>
+<font color="black">  95.     &quot;&quot;&quot;</font>
+<font color="black">  96. </font>
+<font color="red">  97.     def seen(p, m={}):</font>
+<font color="red">  98.         if p in m:</font>
+<font color="red">  99.             return True</font>
+<font color="red"> 100.         m[p] = True</font>
+<font color="black"> 101. </font>
+<font color="red"> 102.     for importer, name, ispkg in iter_modules(path, prefix):</font>
+<font color="red"> 103.         yield importer, name, ispkg</font>
+<font color="black"> 104. </font>
+<font color="red"> 105.         if ispkg:</font>
+<font color="red"> 106.             try:</font>
+<font color="red"> 107.                 __import__(name)</font>
+<font color="red"> 108.             except ImportError:</font>
+<font color="red"> 109.                 if onerror is not None:</font>
+<font color="red"> 110.                     onerror(name)</font>
+<font color="red"> 111.             except Exception:</font>
+<font color="red"> 112.                 if onerror is not None:</font>
+<font color="red"> 113.                     onerror(name)</font>
+<font color="black"> 114.                 else:</font>
+<font color="red"> 115.                     raise</font>
+<font color="black"> 116.             else:</font>
+<font color="red"> 117.                 path = getattr(sys.modules[name], '__path__', None) or []</font>
+<font color="black"> 118. </font>
+<font color="black"> 119.                 # don't traverse path items we've seen before</font>
+<font color="red"> 120.                 path = [p for p in path if not seen(p)]</font>
+<font color="black"> 121. </font>
+<font color="red"> 122.                 for item in walk_packages(path, name+'.', onerror):</font>
+<font color="red"> 123.                     yield item</font>
+<font color="black"> 124. </font>
+<font color="black"> 125. </font>
+<font color="red"> 126. def iter_modules(path=None, prefix=''):</font>
+<font color="black"> 127.     &quot;&quot;&quot;Yields (module_loader, name, ispkg) for all submodules on path,</font>
+<font color="black"> 128.     or, if path is None, all top-level modules on sys.path.</font>
+<font color="black"> 129. </font>
+<font color="black"> 130.     'path' should be either None or a list of paths to look for</font>
+<font color="black"> 131.     modules in.</font>
+<font color="black"> 132. </font>
+<font color="black"> 133.     'prefix' is a string to output on the front of every module name</font>
+<font color="black"> 134.     on output.</font>
+<font color="black"> 135.     &quot;&quot;&quot;</font>
+<font color="black"> 136. </font>
+<font color="red"> 137.     if path is None:</font>
+<font color="red"> 138.         importers = iter_importers()</font>
+<font color="black"> 139.     else:</font>
+<font color="red"> 140.         importers = map(get_importer, path)</font>
+<font color="black"> 141. </font>
+<font color="red"> 142.     yielded = {}</font>
+<font color="red"> 143.     for i in importers:</font>
+<font color="red"> 144.         for name, ispkg in iter_importer_modules(i, prefix):</font>
+<font color="red"> 145.             if name not in yielded:</font>
+<font color="red"> 146.                 yielded[name] = 1</font>
+<font color="red"> 147.                 yield i, name, ispkg</font>
+<font color="black"> 148. </font>
+<font color="black"> 149. </font>
+<font color="black"> 150. #@simplegeneric</font>
+<font color="red"> 151. def iter_importer_modules(importer, prefix=''):</font>
+<font color="red"> 152.     if not hasattr(importer, 'iter_modules'):</font>
+<font color="red"> 153.         return []</font>
+<font color="red"> 154.     return importer.iter_modules(prefix)</font>
+<font color="black"> 155. </font>
+<font color="red"> 156. iter_importer_modules = simplegeneric(iter_importer_modules)</font>
+<font color="black"> 157. </font>
+<font color="black"> 158. </font>
+<font color="red"> 159. class ImpImporter:</font>
+<font color="black"> 160.     &quot;&quot;&quot;PEP 302 Importer that wraps Python's &quot;classic&quot; import algorithm</font>
+<font color="black"> 161. </font>
+<font color="black"> 162.     ImpImporter(dirname) produces a PEP 302 importer that searches that</font>
+<font color="black"> 163.     directory.  ImpImporter(None) produces a PEP 302 importer that searches</font>
+<font color="black"> 164.     the current sys.path, plus any modules that are frozen or built-in.</font>
+<font color="black"> 165. </font>
+<font color="black"> 166.     Note that ImpImporter does not currently support being used by placement</font>
+<font color="black"> 167.     on sys.meta_path.</font>
+<font color="red"> 168.     &quot;&quot;&quot;</font>
+<font color="black"> 169. </font>
+<font color="red"> 170.     def __init__(self, path=None):</font>
+<font color="red"> 171.         self.path = path</font>
+<font color="black"> 172. </font>
+<font color="red"> 173.     def find_module(self, fullname, path=None):</font>
+<font color="black"> 174.         # Note: we ignore 'path' argument since it is only used via meta_path</font>
+<font color="red"> 175.         subname = fullname.split(&quot;.&quot;)[-1]</font>
+<font color="red"> 176.         if subname != fullname and self.path is None:</font>
+<font color="red"> 177.             return None</font>
+<font color="red"> 178.         if self.path is None:</font>
+<font color="red"> 179.             path = None</font>
+<font color="black"> 180.         else:</font>
+<font color="red"> 181.             path = [os.path.realpath(self.path)]</font>
+<font color="red"> 182.         try:</font>
+<font color="red"> 183.             file, filename, etc = imp.find_module(subname, path)</font>
+<font color="red"> 184.         except ImportError:</font>
+<font color="red"> 185.             return None</font>
+<font color="red"> 186.         return ImpLoader(fullname, file, filename, etc)</font>
+<font color="black"> 187. </font>
+<font color="red"> 188.     def iter_modules(self, prefix=''):</font>
+<font color="red"> 189.         if self.path is None or not os.path.isdir(self.path):</font>
+<font color="red"> 190.             return</font>
+<font color="black"> 191. </font>
+<font color="red"> 192.         yielded = {}</font>
+<font color="red"> 193.         import inspect</font>
+<font color="red"> 194.         try:</font>
+<font color="red"> 195.             filenames = os.listdir(self.path)</font>
+<font color="red"> 196.         except OSError:</font>
+<font color="black"> 197.             # ignore unreadable directories like import does</font>
+<font color="red"> 198.             filenames = []</font>
+<font color="red"> 199.         filenames.sort()  # handle packages before same-named modules</font>
+<font color="black"> 200. </font>
+<font color="red"> 201.         for fn in filenames:</font>
+<font color="red"> 202.             modname = inspect.getmodulename(fn)</font>
+<font color="red"> 203.             if modname=='__init__' or modname in yielded:</font>
+<font color="red"> 204.                 continue</font>
+<font color="black"> 205. </font>
+<font color="red"> 206.             path = os.path.join(self.path, fn)</font>
+<font color="red"> 207.             ispkg = False</font>
+<font color="black"> 208. </font>
+<font color="red"> 209.             if not modname and os.path.isdir(path) and '.' not in fn:</font>
+<font color="red"> 210.                 modname = fn</font>
+<font color="red"> 211.                 try:</font>
+<font color="red"> 212.                     dircontents = os.listdir(path)</font>
+<font color="red"> 213.                 except OSError:</font>
+<font color="black"> 214.                     # ignore unreadable directories like import does</font>
+<font color="red"> 215.                     dircontents = []</font>
+<font color="red"> 216.                 for fn in dircontents:</font>
+<font color="red"> 217.                     subname = inspect.getmodulename(fn)</font>
+<font color="red"> 218.                     if subname=='__init__':</font>
+<font color="red"> 219.                         ispkg = True</font>
+<font color="red"> 220.                         break</font>
+<font color="black"> 221.                 else:</font>
+<font color="red"> 222.                     continue    # not a package</font>
+<font color="black"> 223. </font>
+<font color="red"> 224.             if modname and '.' not in modname:</font>
+<font color="red"> 225.                 yielded[modname] = 1</font>
+<font color="red"> 226.                 yield prefix + modname, ispkg</font>
+<font color="black"> 227. </font>
+<font color="black"> 228. </font>
+<font color="red"> 229. class ImpLoader:</font>
+<font color="black"> 230.     &quot;&quot;&quot;PEP 302 Loader that wraps Python's &quot;classic&quot; import algorithm</font>
+<font color="red"> 231.     &quot;&quot;&quot;</font>
+<font color="red"> 232.     code = source = None</font>
+<font color="black"> 233. </font>
+<font color="red"> 234.     def __init__(self, fullname, file, filename, etc):</font>
+<font color="red"> 235.         self.file = file</font>
+<font color="red"> 236.         self.filename = filename</font>
+<font color="red"> 237.         self.fullname = fullname</font>
+<font color="red"> 238.         self.etc = etc</font>
+<font color="black"> 239. </font>
+<font color="red"> 240.     def load_module(self, fullname):</font>
+<font color="red"> 241.         self._reopen()</font>
+<font color="red"> 242.         try:</font>
+<font color="red"> 243.             mod = imp.load_module(fullname, self.file, self.filename, self.etc)</font>
+<font color="black"> 244.         finally:</font>
+<font color="red"> 245.             if self.file:</font>
+<font color="red"> 246.                 self.file.close()</font>
+<font color="black"> 247.         # Note: we don't set __loader__ because we want the module to look</font>
+<font color="black"> 248.         # normal; i.e. this is just a wrapper for standard import machinery</font>
+<font color="red"> 249.         return mod</font>
+<font color="black"> 250. </font>
+<font color="red"> 251.     def get_data(self, pathname):</font>
+<font color="red"> 252.         with open(pathname, &quot;rb&quot;) as file:</font>
+<font color="red"> 253.             return file.read()</font>
+<font color="black"> 254. </font>
+<font color="red"> 255.     def _reopen(self):</font>
+<font color="red"> 256.         if self.file and self.file.closed:</font>
+<font color="red"> 257.             mod_type = self.etc[2]</font>
+<font color="red"> 258.             if mod_type==imp.PY_SOURCE:</font>
+<font color="red"> 259.                 self.file = open(self.filename, 'rU')</font>
+<font color="red"> 260.             elif mod_type in (imp.PY_COMPILED, imp.C_EXTENSION):</font>
+<font color="red"> 261.                 self.file = open(self.filename, 'rb')</font>
+<font color="black"> 262. </font>
+<font color="red"> 263.     def _fix_name(self, fullname):</font>
+<font color="red"> 264.         if fullname is None:</font>
+<font color="red"> 265.             fullname = self.fullname</font>
+<font color="red"> 266.         elif fullname != self.fullname:</font>
+<font color="red"> 267.             raise ImportError(&quot;Loader for module %s cannot handle &quot;</font>
+<font color="red"> 268.                               &quot;module %s&quot; % (self.fullname, fullname))</font>
+<font color="red"> 269.         return fullname</font>
+<font color="black"> 270. </font>
+<font color="red"> 271.     def is_package(self, fullname):</font>
+<font color="red"> 272.         fullname = self._fix_name(fullname)</font>
+<font color="red"> 273.         return self.etc[2]==imp.PKG_DIRECTORY</font>
+<font color="black"> 274. </font>
+<font color="red"> 275.     def get_code(self, fullname=None):</font>
+<font color="red"> 276.         fullname = self._fix_name(fullname)</font>
+<font color="red"> 277.         if self.code is None:</font>
+<font color="red"> 278.             mod_type = self.etc[2]</font>
+<font color="red"> 279.             if mod_type==imp.PY_SOURCE:</font>
+<font color="red"> 280.                 source = self.get_source(fullname)</font>
+<font color="red"> 281.                 self.code = compile(source, self.filename, 'exec')</font>
+<font color="red"> 282.             elif mod_type==imp.PY_COMPILED:</font>
+<font color="red"> 283.                 self._reopen()</font>
+<font color="red"> 284.                 try:</font>
+<font color="red"> 285.                     self.code = read_code(self.file)</font>
+<font color="black"> 286.                 finally:</font>
+<font color="red"> 287.                     self.file.close()</font>
+<font color="red"> 288.             elif mod_type==imp.PKG_DIRECTORY:</font>
+<font color="red"> 289.                 self.code = self._get_delegate().get_code()</font>
+<font color="red"> 290.         return self.code</font>
+<font color="black"> 291. </font>
+<font color="red"> 292.     def get_source(self, fullname=None):</font>
+<font color="red"> 293.         fullname = self._fix_name(fullname)</font>
+<font color="red"> 294.         if self.source is None:</font>
+<font color="red"> 295.             mod_type = self.etc[2]</font>
+<font color="red"> 296.             if mod_type==imp.PY_SOURCE:</font>
+<font color="red"> 297.                 self._reopen()</font>
+<font color="red"> 298.                 try:</font>
+<font color="red"> 299.                     self.source = self.file.read()</font>
+<font color="black"> 300.                 finally:</font>
+<font color="red"> 301.                     self.file.close()</font>
+<font color="red"> 302.             elif mod_type==imp.PY_COMPILED:</font>
+<font color="red"> 303.                 if os.path.exists(self.filename[:-1]):</font>
+<font color="red"> 304.                     f = open(self.filename[:-1], 'rU')</font>
+<font color="red"> 305.                     self.source = f.read()</font>
+<font color="red"> 306.                     f.close()</font>
+<font color="red"> 307.             elif mod_type==imp.PKG_DIRECTORY:</font>
+<font color="red"> 308.                 self.source = self._get_delegate().get_source()</font>
+<font color="red"> 309.         return self.source</font>
+<font color="black"> 310. </font>
+<font color="black"> 311. </font>
+<font color="red"> 312.     def _get_delegate(self):</font>
+<font color="red"> 313.         return ImpImporter(self.filename).find_module('__init__')</font>
+<font color="black"> 314. </font>
+<font color="red"> 315.     def get_filename(self, fullname=None):</font>
+<font color="red"> 316.         fullname = self._fix_name(fullname)</font>
+<font color="red"> 317.         mod_type = self.etc[2]</font>
+<font color="red"> 318.         if self.etc[2]==imp.PKG_DIRECTORY:</font>
+<font color="red"> 319.             return self._get_delegate().get_filename()</font>
+<font color="red"> 320.         elif self.etc[2] in (imp.PY_SOURCE, imp.PY_COMPILED, imp.C_EXTENSION):</font>
+<font color="red"> 321.             return self.filename</font>
+<font color="red"> 322.         return None</font>
+<font color="black"> 323. </font>
+<font color="black"> 324. </font>
+<font color="red"> 325. try:</font>
+<font color="red"> 326.     import zipimport</font>
+<font color="red"> 327.     from zipimport import zipimporter</font>
+<font color="black"> 328. </font>
+<font color="red"> 329.     def iter_zipimport_modules(importer, prefix=''):</font>
+<font color="red"> 330.         dirlist = zipimport._zip_directory_cache[importer.archive].keys()</font>
+<font color="red"> 331.         dirlist.sort()</font>
+<font color="red"> 332.         _prefix = importer.prefix</font>
+<font color="red"> 333.         plen = len(_prefix)</font>
+<font color="red"> 334.         yielded = {}</font>
+<font color="red"> 335.         import inspect</font>
+<font color="red"> 336.         for fn in dirlist:</font>
+<font color="red"> 337.             if not fn.startswith(_prefix):</font>
+<font color="red"> 338.                 continue</font>
+<font color="black"> 339. </font>
+<font color="red"> 340.             fn = fn[plen:].split(os.sep)</font>
+<font color="black"> 341. </font>
+<font color="red"> 342.             if len(fn)==2 and fn[1].startswith('__init__.py'):</font>
+<font color="red"> 343.                 if fn[0] not in yielded:</font>
+<font color="red"> 344.                     yielded[fn[0]] = 1</font>
+<font color="red"> 345.                     yield fn[0], True</font>
+<font color="black"> 346. </font>
+<font color="red"> 347.             if len(fn)!=1:</font>
+<font color="red"> 348.                 continue</font>
+<font color="black"> 349. </font>
+<font color="red"> 350.             modname = inspect.getmodulename(fn[0])</font>
+<font color="red"> 351.             if modname=='__init__':</font>
+<font color="red"> 352.                 continue</font>
+<font color="black"> 353. </font>
+<font color="red"> 354.             if modname and '.' not in modname and modname not in yielded:</font>
+<font color="red"> 355.                 yielded[modname] = 1</font>
+<font color="red"> 356.                 yield prefix + modname, False</font>
+<font color="black"> 357. </font>
+<font color="red"> 358.     iter_importer_modules.register(zipimporter, iter_zipimport_modules)</font>
+<font color="black"> 359. </font>
+<font color="red"> 360. except ImportError:</font>
+<font color="red"> 361.     pass</font>
+<font color="black"> 362. </font>
+<font color="black"> 363. </font>
+<font color="red"> 364. def get_importer(path_item):</font>
+<font color="black"> 365.     &quot;&quot;&quot;Retrieve a PEP 302 importer for the given path item</font>
+<font color="black"> 366. </font>
+<font color="black"> 367.     The returned importer is cached in sys.path_importer_cache</font>
+<font color="black"> 368.     if it was newly created by a path hook.</font>
+<font color="black"> 369. </font>
+<font color="black"> 370.     If there is no importer, a wrapper around the basic import</font>
+<font color="black"> 371.     machinery is returned. This wrapper is never inserted into</font>
+<font color="black"> 372.     the importer cache (None is inserted instead).</font>
+<font color="black"> 373. </font>
+<font color="black"> 374.     The cache (or part of it) can be cleared manually if a</font>
+<font color="black"> 375.     rescan of sys.path_hooks is necessary.</font>
+<font color="black"> 376.     &quot;&quot;&quot;</font>
+<font color="red"> 377.     try:</font>
+<font color="red"> 378.         importer = sys.path_importer_cache[path_item]</font>
+<font color="red"> 379.     except KeyError:</font>
+<font color="red"> 380.         for path_hook in sys.path_hooks:</font>
+<font color="red"> 381.             try:</font>
+<font color="red"> 382.                 importer = path_hook(path_item)</font>
+<font color="red"> 383.                 break</font>
+<font color="red"> 384.             except ImportError:</font>
+<font color="red"> 385.                 pass</font>
+<font color="black"> 386.         else:</font>
+<font color="red"> 387.             importer = None</font>
+<font color="red"> 388.         sys.path_importer_cache.setdefault(path_item, importer)</font>
+<font color="black"> 389. </font>
+<font color="red"> 390.     if importer is None:</font>
+<font color="red"> 391.         try:</font>
+<font color="red"> 392.             importer = ImpImporter(path_item)</font>
+<font color="red"> 393.         except ImportError:</font>
+<font color="red"> 394.             importer = None</font>
+<font color="red"> 395.     return importer</font>
+<font color="black"> 396. </font>
+<font color="black"> 397. </font>
+<font color="red"> 398. def iter_importers(fullname=&quot;&quot;):</font>
+<font color="black"> 399.     &quot;&quot;&quot;Yield PEP 302 importers for the given module name</font>
+<font color="black"> 400. </font>
+<font color="black"> 401.     If fullname contains a '.', the importers will be for the package</font>
+<font color="black"> 402.     containing fullname, otherwise they will be importers for sys.meta_path,</font>
+<font color="black"> 403.     sys.path, and Python's &quot;classic&quot; import machinery, in that order.  If</font>
+<font color="black"> 404.     the named module is in a package, that package is imported as a side</font>
+<font color="black"> 405.     effect of invoking this function.</font>
+<font color="black"> 406. </font>
+<font color="black"> 407.     Non PEP 302 mechanisms (e.g. the Windows registry) used by the</font>
+<font color="black"> 408.     standard import machinery to find files in alternative locations</font>
+<font color="black"> 409.     are partially supported, but are searched AFTER sys.path. Normally,</font>
+<font color="black"> 410.     these locations are searched BEFORE sys.path, preventing sys.path</font>
+<font color="black"> 411.     entries from shadowing them.</font>
+<font color="black"> 412. </font>
+<font color="black"> 413.     For this to cause a visible difference in behaviour, there must</font>
+<font color="black"> 414.     be a module or package name that is accessible via both sys.path</font>
+<font color="black"> 415.     and one of the non PEP 302 file system mechanisms. In this case,</font>
+<font color="black"> 416.     the emulation will find the former version, while the builtin</font>
+<font color="black"> 417.     import mechanism will find the latter.</font>
+<font color="black"> 418. </font>
+<font color="black"> 419.     Items of the following types can be affected by this discrepancy:</font>
+<font color="black"> 420.         imp.C_EXTENSION, imp.PY_SOURCE, imp.PY_COMPILED, imp.PKG_DIRECTORY</font>
+<font color="black"> 421.     &quot;&quot;&quot;</font>
+<font color="red"> 422.     if fullname.startswith('.'):</font>
+<font color="red"> 423.         raise ImportError(&quot;Relative module names not supported&quot;)</font>
+<font color="red"> 424.     if '.' in fullname:</font>
+<font color="black"> 425.         # Get the containing package's __path__</font>
+<font color="red"> 426.         pkg = '.'.join(fullname.split('.')[:-1])</font>
+<font color="red"> 427.         if pkg not in sys.modules:</font>
+<font color="red"> 428.             __import__(pkg)</font>
+<font color="red"> 429.         path = getattr(sys.modules[pkg], '__path__', None) or []</font>
+<font color="black"> 430.     else:</font>
+<font color="red"> 431.         for importer in sys.meta_path:</font>
+<font color="red"> 432.             yield importer</font>
+<font color="red"> 433.         path = sys.path</font>
+<font color="red"> 434.     for item in path:</font>
+<font color="red"> 435.         yield get_importer(item)</font>
+<font color="red"> 436.     if '.' not in fullname:</font>
+<font color="red"> 437.         yield ImpImporter()</font>
+<font color="black"> 438. </font>
+<font color="red"> 439. def get_loader(module_or_name):</font>
+<font color="black"> 440.     &quot;&quot;&quot;Get a PEP 302 &quot;loader&quot; object for module_or_name</font>
+<font color="black"> 441. </font>
+<font color="black"> 442.     If the module or package is accessible via the normal import</font>
+<font color="black"> 443.     mechanism, a wrapper around the relevant part of that machinery</font>
+<font color="black"> 444.     is returned.  Returns None if the module cannot be found or imported.</font>
+<font color="black"> 445.     If the named module is not already imported, its containing package</font>
+<font color="black"> 446.     (if any) is imported, in order to establish the package __path__.</font>
+<font color="black"> 447. </font>
+<font color="black"> 448.     This function uses iter_importers(), and is thus subject to the same</font>
+<font color="black"> 449.     limitations regarding platform-specific special import locations such</font>
+<font color="black"> 450.     as the Windows registry.</font>
+<font color="black"> 451.     &quot;&quot;&quot;</font>
+<font color="red"> 452.     if module_or_name in sys.modules:</font>
+<font color="red"> 453.         module_or_name = sys.modules[module_or_name]</font>
+<font color="red"> 454.     if isinstance(module_or_name, ModuleType):</font>
+<font color="red"> 455.         module = module_or_name</font>
+<font color="red"> 456.         loader = getattr(module, '__loader__', None)</font>
+<font color="red"> 457.         if loader is not None:</font>
+<font color="red"> 458.             return loader</font>
+<font color="red"> 459.         fullname = module.__name__</font>
+<font color="black"> 460.     else:</font>
+<font color="red"> 461.         fullname = module_or_name</font>
+<font color="red"> 462.     return find_loader(fullname)</font>
+<font color="black"> 463. </font>
+<font color="red"> 464. def find_loader(fullname):</font>
+<font color="black"> 465.     &quot;&quot;&quot;Find a PEP 302 &quot;loader&quot; object for fullname</font>
+<font color="black"> 466. </font>
+<font color="black"> 467.     If fullname contains dots, path must be the containing package's __path__.</font>
+<font color="black"> 468.     Returns None if the module cannot be found or imported. This function uses</font>
+<font color="black"> 469.     iter_importers(), and is thus subject to the same limitations regarding</font>
+<font color="black"> 470.     platform-specific special import locations such as the Windows registry.</font>
+<font color="black"> 471.     &quot;&quot;&quot;</font>
+<font color="red"> 472.     for importer in iter_importers(fullname):</font>
+<font color="red"> 473.         loader = importer.find_module(fullname)</font>
+<font color="red"> 474.         if loader is not None:</font>
+<font color="red"> 475.             return loader</font>
+<font color="black"> 476. </font>
+<font color="red"> 477.     return None</font>
+<font color="black"> 478. </font>
+<font color="black"> 479. </font>
+<font color="red"> 480. def extend_path(path, name):</font>
+<font color="black"> 481.     &quot;&quot;&quot;Extend a package's path.</font>
+<font color="black"> 482. </font>
+<font color="black"> 483.     Intended use is to place the following code in a package's __init__.py:</font>
+<font color="black"> 484. </font>
+<font color="black"> 485.         from pkgutil import extend_path</font>
+<font color="black"> 486.         __path__ = extend_path(__path__, __name__)</font>
+<font color="black"> 487. </font>
+<font color="black"> 488.     This will add to the package's __path__ all subdirectories of</font>
+<font color="black"> 489.     directories on sys.path named after the package.  This is useful</font>
+<font color="black"> 490.     if one wants to distribute different parts of a single logical</font>
+<font color="black"> 491.     package as multiple directories.</font>
+<font color="black"> 492. </font>
+<font color="black"> 493.     It also looks for *.pkg files beginning where * matches the name</font>
+<font color="black"> 494.     argument.  This feature is similar to *.pth files (see site.py),</font>
+<font color="black"> 495.     except that it doesn't special-case lines starting with 'import'.</font>
+<font color="black"> 496.     A *.pkg file is trusted at face value: apart from checking for</font>
+<font color="black"> 497.     duplicates, all entries found in a *.pkg file are added to the</font>
+<font color="black"> 498.     path, regardless of whether they are exist the filesystem.  (This</font>
+<font color="black"> 499.     is a feature.)</font>
+<font color="black"> 500. </font>
+<font color="black"> 501.     If the input path is not a list (as is the case for frozen</font>
+<font color="black"> 502.     packages) it is returned unchanged.  The input path is not</font>
+<font color="black"> 503.     modified; an extended copy is returned.  Items are only appended</font>
+<font color="black"> 504.     to the copy at the end.</font>
+<font color="black"> 505. </font>
+<font color="black"> 506.     It is assumed that sys.path is a sequence.  Items of sys.path that</font>
+<font color="black"> 507.     are not (unicode or 8-bit) strings referring to existing</font>
+<font color="black"> 508.     directories are ignored.  Unicode items of sys.path that cause</font>
+<font color="black"> 509.     errors when used as filenames may cause this function to raise an</font>
+<font color="black"> 510.     exception (in line with os.path.isdir() behavior).</font>
+<font color="black"> 511.     &quot;&quot;&quot;</font>
+<font color="black"> 512. </font>
+<font color="green"> 513.     if not isinstance(path, list):</font>
+<font color="black"> 514.         # This could happen e.g. when this is called from inside a</font>
+<font color="black"> 515.         # frozen package.  Return the path unchanged in that case.</font>
+<font color="red"> 516.         return path</font>
+<font color="black"> 517. </font>
+<font color="green"> 518.     pname = os.path.join(*name.split('.')) # Reconstitute as relative path</font>
+<font color="black"> 519.     # Just in case os.extsep != '.'</font>
+<font color="green"> 520.     sname = os.extsep.join(name.split('.'))</font>
+<font color="green"> 521.     sname_pkg = sname + os.extsep + &quot;pkg&quot;</font>
+<font color="green"> 522.     init_py = &quot;__init__&quot; + os.extsep + &quot;py&quot;</font>
+<font color="black"> 523. </font>
+<font color="green"> 524.     path = path[:] # Start with a copy of the existing path</font>
+<font color="black"> 525. </font>
+<font color="green"> 526.     for dir in sys.path:</font>
+<font color="green"> 527.         if not isinstance(dir, basestring) or not os.path.isdir(dir):</font>
+<font color="green"> 528.             continue</font>
+<font color="green"> 529.         subdir = os.path.join(dir, pname)</font>
+<font color="black"> 530.         # XXX This may still add duplicate entries to path on</font>
+<font color="black"> 531.         # case-insensitive filesystems</font>
+<font color="green"> 532.         initfile = os.path.join(subdir, init_py)</font>
+<font color="green"> 533.         if subdir not in path and os.path.isfile(initfile):</font>
+<font color="red"> 534.             path.append(subdir)</font>
+<font color="black"> 535.         # XXX Is this the right thing for subpackages like zope.app?</font>
+<font color="black"> 536.         # It looks for a file named &quot;zope.app.pkg&quot;</font>
+<font color="green"> 537.         pkgfile = os.path.join(dir, sname_pkg)</font>
+<font color="green"> 538.         if os.path.isfile(pkgfile):</font>
+<font color="red"> 539.             try:</font>
+<font color="red"> 540.                 f = open(pkgfile)</font>
+<font color="red"> 541.             except IOError, msg:</font>
+<font color="red"> 542.                 sys.stderr.write(&quot;Can't open %s: %s\n&quot; %</font>
+<font color="red"> 543.                                  (pkgfile, msg))</font>
+<font color="black"> 544.             else:</font>
+<font color="red"> 545.                 for line in f:</font>
+<font color="red"> 546.                     line = line.rstrip('\n')</font>
+<font color="red"> 547.                     if not line or line.startswith('#'):</font>
+<font color="red"> 548.                         continue</font>
+<font color="red"> 549.                     path.append(line) # Don't check for existence!</font>
+<font color="red"> 550.                 f.close()</font>
+<font color="black"> 551. </font>
+<font color="green"> 552.     return path</font>
+<font color="black"> 553. </font>
+<font color="red"> 554. def get_data(package, resource):</font>
+<font color="black"> 555.     &quot;&quot;&quot;Get a resource from a package.</font>
+<font color="black"> 556. </font>
+<font color="black"> 557.     This is a wrapper round the PEP 302 loader get_data API. The package</font>
+<font color="black"> 558.     argument should be the name of a package, in standard module format</font>
+<font color="black"> 559.     (foo.bar). The resource argument should be in the form of a relative</font>
+<font color="black"> 560.     filename, using '/' as the path separator. The parent directory name '..'</font>
+<font color="black"> 561.     is not allowed, and nor is a rooted name (starting with a '/').</font>
+<font color="black"> 562. </font>
+<font color="black"> 563.     The function returns a binary string, which is the contents of the</font>
+<font color="black"> 564.     specified resource.</font>
+<font color="black"> 565. </font>
+<font color="black"> 566.     For packages located in the filesystem, which have already been imported,</font>
+<font color="black"> 567.     this is the rough equivalent of</font>
+<font color="black"> 568. </font>
+<font color="black"> 569.         d = os.path.dirname(sys.modules[package].__file__)</font>
+<font color="black"> 570.         data = open(os.path.join(d, resource), 'rb').read()</font>
+<font color="black"> 571. </font>
+<font color="black"> 572.     If the package cannot be located or loaded, or it uses a PEP 302 loader</font>
+<font color="black"> 573.     which does not support get_data(), then None is returned.</font>
+<font color="black"> 574.     &quot;&quot;&quot;</font>
+<font color="black"> 575. </font>
+<font color="red"> 576.     loader = get_loader(package)</font>
+<font color="red"> 577.     if loader is None or not hasattr(loader, 'get_data'):</font>
+<font color="red"> 578.         return None</font>
+<font color="red"> 579.     mod = sys.modules.get(package) or loader.load_module(package)</font>
+<font color="red"> 580.     if mod is None or not hasattr(mod, '__file__'):</font>
+<font color="red"> 581.         return None</font>
+<font color="black"> 582. </font>
+<font color="black"> 583.     # Modify the resource name to be compatible with the loader.get_data</font>
+<font color="black"> 584.     # signature - an os.path format &quot;filename&quot; starting with the dirname of</font>
+<font color="black"> 585.     # the package's __file__</font>
+<font color="red"> 586.     parts = resource.split('/')</font>
+<font color="red"> 587.     parts.insert(0, os.path.dirname(mod.__file__))</font>
+<font color="red"> 588.     resource_name = os.path.join(*parts)</font>
+<font color="red"> 589.     return loader.get_data(resource_name)</font>
+</pre>
+

@@ -1,0 +1,72 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/ctypes/macholib/framework.py</b><br>
+
+
+file stats: <b>30 lines, 12 executed: 40.0% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;</font>
+<font color="black">   2. Generic framework path manipulation</font>
+<font color="green">   3. &quot;&quot;&quot;</font>
+<font color="black">   4. </font>
+<font color="green">   5. import re</font>
+<font color="black">   6. </font>
+<font color="green">   7. __all__ = ['framework_info']</font>
+<font color="black">   8. </font>
+<font color="green">   9. STRICT_FRAMEWORK_RE = re.compile(r&quot;&quot;&quot;(?x)</font>
+<font color="black">  10. (?P&lt;location&gt;^.*)(?:^|/)</font>
+<font color="black">  11. (?P&lt;name&gt;</font>
+<font color="black">  12.     (?P&lt;shortname&gt;\w+).framework/</font>
+<font color="black">  13.     (?:Versions/(?P&lt;version&gt;[^/]+)/)?</font>
+<font color="black">  14.     (?P=shortname)</font>
+<font color="black">  15.     (?:_(?P&lt;suffix&gt;[^_]+))?</font>
+<font color="black">  16. )$</font>
+<font color="green">  17. &quot;&quot;&quot;)</font>
+<font color="black">  18. </font>
+<font color="green">  19. def framework_info(filename):</font>
+<font color="black">  20.     &quot;&quot;&quot;</font>
+<font color="black">  21.     A framework name can take one of the following four forms:</font>
+<font color="black">  22.         Location/Name.framework/Versions/SomeVersion/Name_Suffix</font>
+<font color="black">  23.         Location/Name.framework/Versions/SomeVersion/Name</font>
+<font color="black">  24.         Location/Name.framework/Name_Suffix</font>
+<font color="black">  25.         Location/Name.framework/Name</font>
+<font color="black">  26. </font>
+<font color="black">  27.     returns None if not found, or a mapping equivalent to:</font>
+<font color="black">  28.         dict(</font>
+<font color="black">  29.             location='Location',</font>
+<font color="black">  30.             name='Name.framework/Versions/SomeVersion/Name_Suffix',</font>
+<font color="black">  31.             shortname='Name',</font>
+<font color="black">  32.             version='SomeVersion',</font>
+<font color="black">  33.             suffix='Suffix',</font>
+<font color="black">  34.         )</font>
+<font color="black">  35. </font>
+<font color="black">  36.     Note that SomeVersion and Suffix are optional and may be None</font>
+<font color="black">  37.     if not present</font>
+<font color="black">  38.     &quot;&quot;&quot;</font>
+<font color="green">  39.     is_framework = STRICT_FRAMEWORK_RE.match(filename)</font>
+<font color="green">  40.     if not is_framework:</font>
+<font color="green">  41.         return None</font>
+<font color="green">  42.     return is_framework.groupdict()</font>
+<font color="black">  43. </font>
+<font color="green">  44. def test_framework_info():</font>
+<font color="red">  45.     def d(location=None, name=None, shortname=None, version=None, suffix=None):</font>
+<font color="red">  46.         return dict(</font>
+<font color="red">  47.             location=location,</font>
+<font color="red">  48.             name=name,</font>
+<font color="red">  49.             shortname=shortname,</font>
+<font color="red">  50.             version=version,</font>
+<font color="red">  51.             suffix=suffix</font>
+<font color="black">  52.         )</font>
+<font color="red">  53.     assert framework_info('completely/invalid') is None</font>
+<font color="red">  54.     assert framework_info('completely/invalid/_debug') is None</font>
+<font color="red">  55.     assert framework_info('P/F.framework') is None</font>
+<font color="red">  56.     assert framework_info('P/F.framework/_debug') is None</font>
+<font color="red">  57.     assert framework_info('P/F.framework/F') == d('P', 'F.framework/F', 'F')</font>
+<font color="red">  58.     assert framework_info('P/F.framework/F_debug') == d('P', 'F.framework/F_debug', 'F', suffix='debug')</font>
+<font color="red">  59.     assert framework_info('P/F.framework/Versions') is None</font>
+<font color="red">  60.     assert framework_info('P/F.framework/Versions/A') is None</font>
+<font color="red">  61.     assert framework_info('P/F.framework/Versions/A/F') == d('P', 'F.framework/Versions/A/F', 'F', 'A')</font>
+<font color="red">  62.     assert framework_info('P/F.framework/Versions/A/F_debug') == d('P', 'F.framework/Versions/A/F_debug', 'F', 'A', 'debug')</font>
+<font color="black">  63. </font>
+<font color="green">  64. if __name__ == '__main__':</font>
+<font color="red">  65.     test_framework_info()</font>
+</pre>
+

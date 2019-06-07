@@ -1,0 +1,220 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/UserDict.py</b><br>
+
+
+file stats: <b>187 lines, 18 executed: 9.6% covered</b>
+<pre>
+<font color="red">   1. &quot;&quot;&quot;A more or less complete user-defined wrapper around dictionary objects.&quot;&quot;&quot;</font>
+<font color="black">   2. </font>
+<font color="red">   3. class UserDict:</font>
+<font color="red">   4.     def __init__(*args, **kwargs):</font>
+<font color="green">   5.         if not args:</font>
+<font color="red">   6.             raise TypeError(&quot;descriptor '__init__' of 'UserDict' object &quot;</font>
+<font color="black">   7.                             &quot;needs an argument&quot;)</font>
+<font color="green">   8.         self = args[0]</font>
+<font color="green">   9.         args = args[1:]</font>
+<font color="green">  10.         if len(args) &gt; 1:</font>
+<font color="red">  11.             raise TypeError('expected at most 1 arguments, got %d' % len(args))</font>
+<font color="green">  12.         if args:</font>
+<font color="red">  13.             dict = args[0]</font>
+<font color="green">  14.         elif 'dict' in kwargs:</font>
+<font color="red">  15.             dict = kwargs.pop('dict')</font>
+<font color="red">  16.             import warnings</font>
+<font color="red">  17.             warnings.warn(&quot;Passing 'dict' as keyword argument is &quot;</font>
+<font color="red">  18.                           &quot;deprecated&quot;, PendingDeprecationWarning,</font>
+<font color="red">  19.                           stacklevel=2)</font>
+<font color="black">  20.         else:</font>
+<font color="green">  21.             dict = None</font>
+<font color="green">  22.         self.data = {}</font>
+<font color="green">  23.         if dict is not None:</font>
+<font color="red">  24.             self.update(dict)</font>
+<font color="green">  25.         if len(kwargs):</font>
+<font color="red">  26.             self.update(kwargs)</font>
+<font color="red">  27.     def __repr__(self): return repr(self.data)</font>
+<font color="red">  28.     def __cmp__(self, dict):</font>
+<font color="red">  29.         if isinstance(dict, UserDict):</font>
+<font color="red">  30.             return cmp(self.data, dict.data)</font>
+<font color="black">  31.         else:</font>
+<font color="red">  32.             return cmp(self.data, dict)</font>
+<font color="red">  33.     __hash__ = None # Avoid Py3k warning</font>
+<font color="red">  34.     def __len__(self): return len(self.data)</font>
+<font color="red">  35.     def __getitem__(self, key):</font>
+<font color="green">  36.         if key in self.data:</font>
+<font color="green">  37.             return self.data[key]</font>
+<font color="red">  38.         if hasattr(self.__class__, &quot;__missing__&quot;):</font>
+<font color="red">  39.             return self.__class__.__missing__(self, key)</font>
+<font color="red">  40.         raise KeyError(key)</font>
+<font color="red">  41.     def __setitem__(self, key, item): self.data[key] = item</font>
+<font color="red">  42.     def __delitem__(self, key): del self.data[key]</font>
+<font color="red">  43.     def clear(self): self.data.clear()</font>
+<font color="red">  44.     def copy(self):</font>
+<font color="red">  45.         if self.__class__ is UserDict:</font>
+<font color="red">  46.             return UserDict(self.data.copy())</font>
+<font color="red">  47.         import copy</font>
+<font color="red">  48.         data = self.data</font>
+<font color="red">  49.         try:</font>
+<font color="red">  50.             self.data = {}</font>
+<font color="red">  51.             c = copy.copy(self)</font>
+<font color="black">  52.         finally:</font>
+<font color="red">  53.             self.data = data</font>
+<font color="red">  54.         c.update(self)</font>
+<font color="red">  55.         return c</font>
+<font color="green">  56.     def keys(self): return self.data.keys()</font>
+<font color="green">  57.     def items(self): return self.data.items()</font>
+<font color="red">  58.     def iteritems(self): return self.data.iteritems()</font>
+<font color="red">  59.     def iterkeys(self): return self.data.iterkeys()</font>
+<font color="red">  60.     def itervalues(self): return self.data.itervalues()</font>
+<font color="red">  61.     def values(self): return self.data.values()</font>
+<font color="red">  62.     def has_key(self, key): return key in self.data</font>
+<font color="red">  63.     def update(*args, **kwargs):</font>
+<font color="red">  64.         if not args:</font>
+<font color="red">  65.             raise TypeError(&quot;descriptor 'update' of 'UserDict' object &quot;</font>
+<font color="black">  66.                             &quot;needs an argument&quot;)</font>
+<font color="red">  67.         self = args[0]</font>
+<font color="red">  68.         args = args[1:]</font>
+<font color="red">  69.         if len(args) &gt; 1:</font>
+<font color="red">  70.             raise TypeError('expected at most 1 arguments, got %d' % len(args))</font>
+<font color="red">  71.         if args:</font>
+<font color="red">  72.             dict = args[0]</font>
+<font color="red">  73.         elif 'dict' in kwargs:</font>
+<font color="red">  74.             dict = kwargs.pop('dict')</font>
+<font color="red">  75.             import warnings</font>
+<font color="red">  76.             warnings.warn(&quot;Passing 'dict' as keyword argument is deprecated&quot;,</font>
+<font color="red">  77.                           PendingDeprecationWarning, stacklevel=2)</font>
+<font color="black">  78.         else:</font>
+<font color="red">  79.             dict = None</font>
+<font color="red">  80.         if dict is None:</font>
+<font color="red">  81.             pass</font>
+<font color="red">  82.         elif isinstance(dict, UserDict):</font>
+<font color="red">  83.             self.data.update(dict.data)</font>
+<font color="red">  84.         elif isinstance(dict, type({})) or not hasattr(dict, 'items'):</font>
+<font color="red">  85.             self.data.update(dict)</font>
+<font color="black">  86.         else:</font>
+<font color="red">  87.             for k, v in dict.items():</font>
+<font color="red">  88.                 self[k] = v</font>
+<font color="red">  89.         if len(kwargs):</font>
+<font color="red">  90.             self.data.update(kwargs)</font>
+<font color="red">  91.     def get(self, key, failobj=None):</font>
+<font color="green">  92.         if key not in self:</font>
+<font color="green">  93.             return failobj</font>
+<font color="green">  94.         return self[key]</font>
+<font color="red">  95.     def setdefault(self, key, failobj=None):</font>
+<font color="red">  96.         if key not in self:</font>
+<font color="red">  97.             self[key] = failobj</font>
+<font color="red">  98.         return self[key]</font>
+<font color="red">  99.     def pop(self, key, *args):</font>
+<font color="red"> 100.         return self.data.pop(key, *args)</font>
+<font color="red"> 101.     def popitem(self):</font>
+<font color="red"> 102.         return self.data.popitem()</font>
+<font color="red"> 103.     def __contains__(self, key):</font>
+<font color="green"> 104.         return key in self.data</font>
+<font color="red"> 105.     @classmethod</font>
+<font color="red"> 106.     def fromkeys(cls, iterable, value=None):</font>
+<font color="red"> 107.         d = cls()</font>
+<font color="red"> 108.         for key in iterable:</font>
+<font color="red"> 109.             d[key] = value</font>
+<font color="red"> 110.         return d</font>
+<font color="black"> 111. </font>
+<font color="red"> 112. class IterableUserDict(UserDict):</font>
+<font color="red"> 113.     def __iter__(self):</font>
+<font color="red"> 114.         return iter(self.data)</font>
+<font color="black"> 115. </font>
+<font color="red"> 116. import _abcoll</font>
+<font color="red"> 117. _abcoll.MutableMapping.register(IterableUserDict)</font>
+<font color="black"> 118. </font>
+<font color="black"> 119. </font>
+<font color="red"> 120. class DictMixin:</font>
+<font color="black"> 121.     # Mixin defining all dictionary methods for classes that already have</font>
+<font color="black"> 122.     # a minimum dictionary interface including getitem, setitem, delitem,</font>
+<font color="black"> 123.     # and keys. Without knowledge of the subclass constructor, the mixin</font>
+<font color="black"> 124.     # does not define __init__() or copy().  In addition to the four base</font>
+<font color="black"> 125.     # methods, progressively more efficiency comes with defining</font>
+<font color="black"> 126.     # __contains__(), __iter__(), and iteritems().</font>
+<font color="black"> 127. </font>
+<font color="black"> 128.     # second level definitions support higher levels</font>
+<font color="red"> 129.     def __iter__(self):</font>
+<font color="red"> 130.         for k in self.keys():</font>
+<font color="red"> 131.             yield k</font>
+<font color="red"> 132.     def has_key(self, key):</font>
+<font color="red"> 133.         try:</font>
+<font color="red"> 134.             self[key]</font>
+<font color="red"> 135.         except KeyError:</font>
+<font color="red"> 136.             return False</font>
+<font color="red"> 137.         return True</font>
+<font color="red"> 138.     def __contains__(self, key):</font>
+<font color="red"> 139.         return self.has_key(key)</font>
+<font color="black"> 140. </font>
+<font color="black"> 141.     # third level takes advantage of second level definitions</font>
+<font color="red"> 142.     def iteritems(self):</font>
+<font color="red"> 143.         for k in self:</font>
+<font color="red"> 144.             yield (k, self[k])</font>
+<font color="red"> 145.     def iterkeys(self):</font>
+<font color="red"> 146.         return self.__iter__()</font>
+<font color="black"> 147. </font>
+<font color="black"> 148.     # fourth level uses definitions from lower levels</font>
+<font color="red"> 149.     def itervalues(self):</font>
+<font color="red"> 150.         for _, v in self.iteritems():</font>
+<font color="red"> 151.             yield v</font>
+<font color="red"> 152.     def values(self):</font>
+<font color="red"> 153.         return [v for _, v in self.iteritems()]</font>
+<font color="red"> 154.     def items(self):</font>
+<font color="red"> 155.         return list(self.iteritems())</font>
+<font color="red"> 156.     def clear(self):</font>
+<font color="red"> 157.         for key in self.keys():</font>
+<font color="red"> 158.             del self[key]</font>
+<font color="red"> 159.     def setdefault(self, key, default=None):</font>
+<font color="red"> 160.         try:</font>
+<font color="red"> 161.             return self[key]</font>
+<font color="red"> 162.         except KeyError:</font>
+<font color="red"> 163.             self[key] = default</font>
+<font color="red"> 164.         return default</font>
+<font color="red"> 165.     def pop(self, key, *args):</font>
+<font color="red"> 166.         if len(args) &gt; 1:</font>
+<font color="red"> 167.             raise TypeError, &quot;pop expected at most 2 arguments, got &quot;\</font>
+<font color="red"> 168.                               + repr(1 + len(args))</font>
+<font color="red"> 169.         try:</font>
+<font color="red"> 170.             value = self[key]</font>
+<font color="red"> 171.         except KeyError:</font>
+<font color="red"> 172.             if args:</font>
+<font color="red"> 173.                 return args[0]</font>
+<font color="red"> 174.             raise</font>
+<font color="red"> 175.         del self[key]</font>
+<font color="red"> 176.         return value</font>
+<font color="red"> 177.     def popitem(self):</font>
+<font color="red"> 178.         try:</font>
+<font color="red"> 179.             k, v = self.iteritems().next()</font>
+<font color="red"> 180.         except StopIteration:</font>
+<font color="red"> 181.             raise KeyError, 'container is empty'</font>
+<font color="red"> 182.         del self[k]</font>
+<font color="red"> 183.         return (k, v)</font>
+<font color="red"> 184.     def update(self, other=None, **kwargs):</font>
+<font color="black"> 185.         # Make progressively weaker assumptions about &quot;other&quot;</font>
+<font color="red"> 186.         if other is None:</font>
+<font color="red"> 187.             pass</font>
+<font color="red"> 188.         elif hasattr(other, 'iteritems'):  # iteritems saves memory and lookups</font>
+<font color="red"> 189.             for k, v in other.iteritems():</font>
+<font color="red"> 190.                 self[k] = v</font>
+<font color="red"> 191.         elif hasattr(other, 'keys'):</font>
+<font color="red"> 192.             for k in other.keys():</font>
+<font color="red"> 193.                 self[k] = other[k]</font>
+<font color="black"> 194.         else:</font>
+<font color="red"> 195.             for k, v in other:</font>
+<font color="red"> 196.                 self[k] = v</font>
+<font color="red"> 197.         if kwargs:</font>
+<font color="red"> 198.             self.update(kwargs)</font>
+<font color="red"> 199.     def get(self, key, default=None):</font>
+<font color="red"> 200.         try:</font>
+<font color="red"> 201.             return self[key]</font>
+<font color="red"> 202.         except KeyError:</font>
+<font color="red"> 203.             return default</font>
+<font color="red"> 204.     def __repr__(self):</font>
+<font color="red"> 205.         return repr(dict(self.iteritems()))</font>
+<font color="red"> 206.     def __cmp__(self, other):</font>
+<font color="red"> 207.         if other is None:</font>
+<font color="red"> 208.             return 1</font>
+<font color="red"> 209.         if isinstance(other, DictMixin):</font>
+<font color="red"> 210.             other = dict(other.iteritems())</font>
+<font color="red"> 211.         return cmp(dict(self.iteritems()), other)</font>
+<font color="red"> 212.     def __len__(self):</font>
+<font color="red"> 213.         return len(self.keys())</font>
+</pre>
+

@@ -1,0 +1,603 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/sre_compile.py</b><br>
+
+
+file stats: <b>437 lines, 314 executed: 71.9% covered</b>
+<pre>
+<font color="black">   1. # -*- coding: utf-8 -*-</font>
+<font color="black">   2. #</font>
+<font color="black">   3. # Secret Labs' Regular Expression Engine</font>
+<font color="black">   4. #</font>
+<font color="black">   5. # convert template to internal format</font>
+<font color="black">   6. #</font>
+<font color="black">   7. # Copyright (c) 1997-2001 by Secret Labs AB.  All rights reserved.</font>
+<font color="black">   8. #</font>
+<font color="black">   9. # See the sre.py file for information on usage and redistribution.</font>
+<font color="black">  10. #</font>
+<font color="black">  11. </font>
+<font color="red">  12. &quot;&quot;&quot;Internal support module for sre&quot;&quot;&quot;</font>
+<font color="black">  13. </font>
+<font color="red">  14. import _sre, sys</font>
+<font color="red">  15. import sre_parse</font>
+<font color="red">  16. from sre_constants import *</font>
+<font color="black">  17. </font>
+<font color="red">  18. assert _sre.MAGIC == MAGIC, &quot;SRE module mismatch&quot;</font>
+<font color="black">  19. </font>
+<font color="red">  20. if _sre.CODESIZE == 2:</font>
+<font color="red">  21.     MAXCODE = 65535</font>
+<font color="black">  22. else:</font>
+<font color="red">  23.     MAXCODE = 0xFFFFFFFFL</font>
+<font color="black">  24. </font>
+<font color="red">  25. _LITERAL_CODES = set([LITERAL, NOT_LITERAL])</font>
+<font color="red">  26. _REPEATING_CODES = set([REPEAT, MIN_REPEAT, MAX_REPEAT])</font>
+<font color="red">  27. _SUCCESS_CODES = set([SUCCESS, FAILURE])</font>
+<font color="red">  28. _ASSERT_CODES = set([ASSERT, ASSERT_NOT])</font>
+<font color="black">  29. </font>
+<font color="black">  30. # Sets of lowercase characters which have the same uppercase.</font>
+<font color="black">  31. _equivalences = (</font>
+<font color="black">  32.     # LATIN SMALL LETTER I, LATIN SMALL LETTER DOTLESS I</font>
+<font color="red">  33.     (0x69, 0x131), # iı</font>
+<font color="black">  34.     # LATIN SMALL LETTER S, LATIN SMALL LETTER LONG S</font>
+<font color="red">  35.     (0x73, 0x17f), # sſ</font>
+<font color="black">  36.     # MICRO SIGN, GREEK SMALL LETTER MU</font>
+<font color="red">  37.     (0xb5, 0x3bc), # µμ</font>
+<font color="black">  38.     # COMBINING GREEK YPOGEGRAMMENI, GREEK SMALL LETTER IOTA, GREEK PROSGEGRAMMENI</font>
+<font color="red">  39.     (0x345, 0x3b9, 0x1fbe), # \u0345ιι</font>
+<font color="black">  40.     # GREEK SMALL LETTER BETA, GREEK BETA SYMBOL</font>
+<font color="red">  41.     (0x3b2, 0x3d0), # βϐ</font>
+<font color="black">  42.     # GREEK SMALL LETTER EPSILON, GREEK LUNATE EPSILON SYMBOL</font>
+<font color="red">  43.     (0x3b5, 0x3f5), # εϵ</font>
+<font color="black">  44.     # GREEK SMALL LETTER THETA, GREEK THETA SYMBOL</font>
+<font color="red">  45.     (0x3b8, 0x3d1), # θϑ</font>
+<font color="black">  46.     # GREEK SMALL LETTER KAPPA, GREEK KAPPA SYMBOL</font>
+<font color="red">  47.     (0x3ba, 0x3f0), # κϰ</font>
+<font color="black">  48.     # GREEK SMALL LETTER PI, GREEK PI SYMBOL</font>
+<font color="red">  49.     (0x3c0, 0x3d6), # πϖ</font>
+<font color="black">  50.     # GREEK SMALL LETTER RHO, GREEK RHO SYMBOL</font>
+<font color="red">  51.     (0x3c1, 0x3f1), # ρϱ</font>
+<font color="black">  52.     # GREEK SMALL LETTER FINAL SIGMA, GREEK SMALL LETTER SIGMA</font>
+<font color="red">  53.     (0x3c2, 0x3c3), # ςσ</font>
+<font color="black">  54.     # GREEK SMALL LETTER PHI, GREEK PHI SYMBOL</font>
+<font color="red">  55.     (0x3c6, 0x3d5), # φϕ</font>
+<font color="black">  56.     # LATIN SMALL LETTER S WITH DOT ABOVE, LATIN SMALL LETTER LONG S WITH DOT ABOVE</font>
+<font color="red">  57.     (0x1e61, 0x1e9b), # ṡẛ</font>
+<font color="black">  58. )</font>
+<font color="black">  59. </font>
+<font color="black">  60. # Maps the lowercase code to lowercase codes which have the same uppercase.</font>
+<font color="red">  61. _ignorecase_fixes = {i: tuple(j for j in t if i != j)</font>
+<font color="red">  62.                      for t in _equivalences for i in t}</font>
+<font color="black">  63. </font>
+<font color="red">  64. def _compile(code, pattern, flags):</font>
+<font color="black">  65.     # internal: compile a (sub)pattern</font>
+<font color="green">  66.     emit = code.append</font>
+<font color="green">  67.     _len = len</font>
+<font color="green">  68.     LITERAL_CODES = _LITERAL_CODES</font>
+<font color="green">  69.     REPEATING_CODES = _REPEATING_CODES</font>
+<font color="green">  70.     SUCCESS_CODES = _SUCCESS_CODES</font>
+<font color="green">  71.     ASSERT_CODES = _ASSERT_CODES</font>
+<font color="green">  72.     if (flags &amp; SRE_FLAG_IGNORECASE and</font>
+<font color="green">  73.             not (flags &amp; SRE_FLAG_LOCALE) and</font>
+<font color="green">  74.             flags &amp; SRE_FLAG_UNICODE):</font>
+<font color="green">  75.         fixes = _ignorecase_fixes</font>
+<font color="black">  76.     else:</font>
+<font color="green">  77.         fixes = None</font>
+<font color="green">  78.     for op, av in pattern:</font>
+<font color="green">  79.         if op in LITERAL_CODES:</font>
+<font color="green">  80.             if flags &amp; SRE_FLAG_IGNORECASE:</font>
+<font color="green">  81.                 lo = _sre.getlower(av, flags)</font>
+<font color="green">  82.                 if fixes and lo in fixes:</font>
+<font color="green">  83.                     emit(OPCODES[IN_IGNORE])</font>
+<font color="green">  84.                     skip = _len(code); emit(0)</font>
+<font color="green">  85.                     if op is NOT_LITERAL:</font>
+<font color="red">  86.                         emit(OPCODES[NEGATE])</font>
+<font color="green">  87.                     for k in (lo,) + fixes[lo]:</font>
+<font color="green">  88.                         emit(OPCODES[LITERAL])</font>
+<font color="green">  89.                         emit(k)</font>
+<font color="green">  90.                     emit(OPCODES[FAILURE])</font>
+<font color="green">  91.                     code[skip] = _len(code) - skip</font>
+<font color="black">  92.                 else:</font>
+<font color="green">  93.                     emit(OPCODES[OP_IGNORE[op]])</font>
+<font color="green">  94.                     emit(lo)</font>
+<font color="black">  95.             else:</font>
+<font color="green">  96.                 emit(OPCODES[op])</font>
+<font color="green">  97.                 emit(av)</font>
+<font color="green">  98.         elif op is IN:</font>
+<font color="green">  99.             if flags &amp; SRE_FLAG_IGNORECASE:</font>
+<font color="green"> 100.                 emit(OPCODES[OP_IGNORE[op]])</font>
+<font color="green"> 101.                 def fixup(literal, flags=flags):</font>
+<font color="green"> 102.                     return _sre.getlower(literal, flags)</font>
+<font color="black"> 103.             else:</font>
+<font color="green"> 104.                 emit(OPCODES[op])</font>
+<font color="green"> 105.                 fixup = None</font>
+<font color="green"> 106.             skip = _len(code); emit(0)</font>
+<font color="green"> 107.             _compile_charset(av, flags, code, fixup, fixes)</font>
+<font color="green"> 108.             code[skip] = _len(code) - skip</font>
+<font color="green"> 109.         elif op is ANY:</font>
+<font color="green"> 110.             if flags &amp; SRE_FLAG_DOTALL:</font>
+<font color="green"> 111.                 emit(OPCODES[ANY_ALL])</font>
+<font color="black"> 112.             else:</font>
+<font color="green"> 113.                 emit(OPCODES[ANY])</font>
+<font color="green"> 114.         elif op in REPEATING_CODES:</font>
+<font color="green"> 115.             if flags &amp; SRE_FLAG_TEMPLATE:</font>
+<font color="red"> 116.                 raise error, &quot;internal: unsupported template operator&quot;</font>
+<font color="red"> 117.                 emit(OPCODES[REPEAT])</font>
+<font color="red"> 118.                 skip = _len(code); emit(0)</font>
+<font color="red"> 119.                 emit(av[0])</font>
+<font color="red"> 120.                 emit(av[1])</font>
+<font color="red"> 121.                 _compile(code, av[2], flags)</font>
+<font color="red"> 122.                 emit(OPCODES[SUCCESS])</font>
+<font color="red"> 123.                 code[skip] = _len(code) - skip</font>
+<font color="green"> 124.             elif _simple(av) and op is not REPEAT:</font>
+<font color="green"> 125.                 if op is MAX_REPEAT:</font>
+<font color="green"> 126.                     emit(OPCODES[REPEAT_ONE])</font>
+<font color="black"> 127.                 else:</font>
+<font color="green"> 128.                     emit(OPCODES[MIN_REPEAT_ONE])</font>
+<font color="green"> 129.                 skip = _len(code); emit(0)</font>
+<font color="green"> 130.                 emit(av[0])</font>
+<font color="green"> 131.                 emit(av[1])</font>
+<font color="green"> 132.                 _compile(code, av[2], flags)</font>
+<font color="green"> 133.                 emit(OPCODES[SUCCESS])</font>
+<font color="green"> 134.                 code[skip] = _len(code) - skip</font>
+<font color="black"> 135.             else:</font>
+<font color="green"> 136.                 emit(OPCODES[REPEAT])</font>
+<font color="green"> 137.                 skip = _len(code); emit(0)</font>
+<font color="green"> 138.                 emit(av[0])</font>
+<font color="green"> 139.                 emit(av[1])</font>
+<font color="green"> 140.                 _compile(code, av[2], flags)</font>
+<font color="green"> 141.                 code[skip] = _len(code) - skip</font>
+<font color="green"> 142.                 if op is MAX_REPEAT:</font>
+<font color="green"> 143.                     emit(OPCODES[MAX_UNTIL])</font>
+<font color="black"> 144.                 else:</font>
+<font color="red"> 145.                     emit(OPCODES[MIN_UNTIL])</font>
+<font color="green"> 146.         elif op is SUBPATTERN:</font>
+<font color="green"> 147.             if av[0]:</font>
+<font color="green"> 148.                 emit(OPCODES[MARK])</font>
+<font color="green"> 149.                 emit((av[0]-1)*2)</font>
+<font color="black"> 150.             # _compile_info(code, av[1], flags)</font>
+<font color="green"> 151.             _compile(code, av[1], flags)</font>
+<font color="green"> 152.             if av[0]:</font>
+<font color="green"> 153.                 emit(OPCODES[MARK])</font>
+<font color="green"> 154.                 emit((av[0]-1)*2+1)</font>
+<font color="green"> 155.         elif op in SUCCESS_CODES:</font>
+<font color="red"> 156.             emit(OPCODES[op])</font>
+<font color="green"> 157.         elif op in ASSERT_CODES:</font>
+<font color="green"> 158.             emit(OPCODES[op])</font>
+<font color="green"> 159.             skip = _len(code); emit(0)</font>
+<font color="green"> 160.             if av[0] &gt;= 0:</font>
+<font color="green"> 161.                 emit(0) # look ahead</font>
+<font color="black"> 162.             else:</font>
+<font color="green"> 163.                 lo, hi = av[1].getwidth()</font>
+<font color="green"> 164.                 if lo != hi:</font>
+<font color="red"> 165.                     raise error, &quot;look-behind requires fixed-width pattern&quot;</font>
+<font color="green"> 166.                 emit(lo) # look behind</font>
+<font color="green"> 167.             _compile(code, av[1], flags)</font>
+<font color="green"> 168.             emit(OPCODES[SUCCESS])</font>
+<font color="green"> 169.             code[skip] = _len(code) - skip</font>
+<font color="green"> 170.         elif op is CALL:</font>
+<font color="red"> 171.             emit(OPCODES[op])</font>
+<font color="red"> 172.             skip = _len(code); emit(0)</font>
+<font color="red"> 173.             _compile(code, av, flags)</font>
+<font color="red"> 174.             emit(OPCODES[SUCCESS])</font>
+<font color="red"> 175.             code[skip] = _len(code) - skip</font>
+<font color="green"> 176.         elif op is AT:</font>
+<font color="green"> 177.             emit(OPCODES[op])</font>
+<font color="green"> 178.             if flags &amp; SRE_FLAG_MULTILINE:</font>
+<font color="green"> 179.                 av = AT_MULTILINE.get(av, av)</font>
+<font color="green"> 180.             if flags &amp; SRE_FLAG_LOCALE:</font>
+<font color="red"> 181.                 av = AT_LOCALE.get(av, av)</font>
+<font color="green"> 182.             elif flags &amp; SRE_FLAG_UNICODE:</font>
+<font color="green"> 183.                 av = AT_UNICODE.get(av, av)</font>
+<font color="green"> 184.             emit(ATCODES[av])</font>
+<font color="green"> 185.         elif op is BRANCH:</font>
+<font color="green"> 186.             emit(OPCODES[op])</font>
+<font color="green"> 187.             tail = []</font>
+<font color="green"> 188.             tailappend = tail.append</font>
+<font color="green"> 189.             for av in av[1]:</font>
+<font color="green"> 190.                 skip = _len(code); emit(0)</font>
+<font color="black"> 191.                 # _compile_info(code, av, flags)</font>
+<font color="green"> 192.                 _compile(code, av, flags)</font>
+<font color="green"> 193.                 emit(OPCODES[JUMP])</font>
+<font color="green"> 194.                 tailappend(_len(code)); emit(0)</font>
+<font color="green"> 195.                 code[skip] = _len(code) - skip</font>
+<font color="green"> 196.             emit(0) # end of branch</font>
+<font color="green"> 197.             for tail in tail:</font>
+<font color="green"> 198.                 code[tail] = _len(code) - tail</font>
+<font color="green"> 199.         elif op is CATEGORY:</font>
+<font color="red"> 200.             emit(OPCODES[op])</font>
+<font color="red"> 201.             if flags &amp; SRE_FLAG_LOCALE:</font>
+<font color="red"> 202.                 av = CH_LOCALE[av]</font>
+<font color="red"> 203.             elif flags &amp; SRE_FLAG_UNICODE:</font>
+<font color="red"> 204.                 av = CH_UNICODE[av]</font>
+<font color="red"> 205.             emit(CHCODES[av])</font>
+<font color="green"> 206.         elif op is GROUPREF:</font>
+<font color="green"> 207.             if flags &amp; SRE_FLAG_IGNORECASE:</font>
+<font color="green"> 208.                 emit(OPCODES[OP_IGNORE[op]])</font>
+<font color="black"> 209.             else:</font>
+<font color="green"> 210.                 emit(OPCODES[op])</font>
+<font color="green"> 211.             emit(av-1)</font>
+<font color="red"> 212.         elif op is GROUPREF_EXISTS:</font>
+<font color="red"> 213.             emit(OPCODES[op])</font>
+<font color="red"> 214.             emit(av[0]-1)</font>
+<font color="red"> 215.             skipyes = _len(code); emit(0)</font>
+<font color="red"> 216.             _compile(code, av[1], flags)</font>
+<font color="red"> 217.             if av[2]:</font>
+<font color="red"> 218.                 emit(OPCODES[JUMP])</font>
+<font color="red"> 219.                 skipno = _len(code); emit(0)</font>
+<font color="red"> 220.                 code[skipyes] = _len(code) - skipyes + 1</font>
+<font color="red"> 221.                 _compile(code, av[2], flags)</font>
+<font color="red"> 222.                 code[skipno] = _len(code) - skipno</font>
+<font color="black"> 223.             else:</font>
+<font color="red"> 224.                 code[skipyes] = _len(code) - skipyes + 1</font>
+<font color="black"> 225.         else:</font>
+<font color="red"> 226.             raise ValueError, (&quot;unsupported operand type&quot;, op)</font>
+<font color="black"> 227. </font>
+<font color="red"> 228. def _compile_charset(charset, flags, code, fixup=None, fixes=None):</font>
+<font color="black"> 229.     # compile charset subprogram</font>
+<font color="green"> 230.     emit = code.append</font>
+<font color="green"> 231.     for op, av in _optimize_charset(charset, fixup, fixes,</font>
+<font color="green"> 232.                                     flags &amp; SRE_FLAG_UNICODE):</font>
+<font color="green"> 233.         emit(OPCODES[op])</font>
+<font color="green"> 234.         if op is NEGATE:</font>
+<font color="green"> 235.             pass</font>
+<font color="green"> 236.         elif op is LITERAL:</font>
+<font color="green"> 237.             emit(av)</font>
+<font color="green"> 238.         elif op is RANGE:</font>
+<font color="green"> 239.             emit(av[0])</font>
+<font color="green"> 240.             emit(av[1])</font>
+<font color="green"> 241.         elif op is CHARSET:</font>
+<font color="green"> 242.             code.extend(av)</font>
+<font color="green"> 243.         elif op is BIGCHARSET:</font>
+<font color="green"> 244.             code.extend(av)</font>
+<font color="green"> 245.         elif op is CATEGORY:</font>
+<font color="green"> 246.             if flags &amp; SRE_FLAG_LOCALE:</font>
+<font color="red"> 247.                 emit(CHCODES[CH_LOCALE[av]])</font>
+<font color="green"> 248.             elif flags &amp; SRE_FLAG_UNICODE:</font>
+<font color="green"> 249.                 emit(CHCODES[CH_UNICODE[av]])</font>
+<font color="black"> 250.             else:</font>
+<font color="green"> 251.                 emit(CHCODES[av])</font>
+<font color="black"> 252.         else:</font>
+<font color="red"> 253.             raise error, &quot;internal: unsupported set operator&quot;</font>
+<font color="green"> 254.     emit(OPCODES[FAILURE])</font>
+<font color="black"> 255. </font>
+<font color="red"> 256. def _optimize_charset(charset, fixup, fixes, isunicode):</font>
+<font color="black"> 257.     # internal: optimize character set</font>
+<font color="green"> 258.     out = []</font>
+<font color="green"> 259.     tail = []</font>
+<font color="green"> 260.     charmap = bytearray(256)</font>
+<font color="green"> 261.     for op, av in charset:</font>
+<font color="green"> 262.         while True:</font>
+<font color="green"> 263.             try:</font>
+<font color="green"> 264.                 if op is LITERAL:</font>
+<font color="green"> 265.                     if fixup:</font>
+<font color="green"> 266.                         i = fixup(av)</font>
+<font color="green"> 267.                         charmap[i] = 1</font>
+<font color="green"> 268.                         if fixes and i in fixes:</font>
+<font color="red"> 269.                             for k in fixes[i]:</font>
+<font color="red"> 270.                                 charmap[k] = 1</font>
+<font color="black"> 271.                     else:</font>
+<font color="green"> 272.                         charmap[av] = 1</font>
+<font color="green"> 273.                 elif op is RANGE:</font>
+<font color="green"> 274.                     r = range(av[0], av[1]+1)</font>
+<font color="green"> 275.                     if fixup:</font>
+<font color="green"> 276.                         r = map(fixup, r)</font>
+<font color="green"> 277.                     if fixup and fixes:</font>
+<font color="red"> 278.                         for i in r:</font>
+<font color="red"> 279.                             charmap[i] = 1</font>
+<font color="red"> 280.                             if i in fixes:</font>
+<font color="red"> 281.                                 for k in fixes[i]:</font>
+<font color="red"> 282.                                     charmap[k] = 1</font>
+<font color="black"> 283.                     else:</font>
+<font color="green"> 284.                         for i in r:</font>
+<font color="green"> 285.                             charmap[i] = 1</font>
+<font color="green"> 286.                 elif op is NEGATE:</font>
+<font color="green"> 287.                     out.append((op, av))</font>
+<font color="black"> 288.                 else:</font>
+<font color="green"> 289.                     tail.append((op, av))</font>
+<font color="green"> 290.             except IndexError:</font>
+<font color="green"> 291.                 if len(charmap) == 256:</font>
+<font color="black"> 292.                     # character set contains non-UCS1 character codes</font>
+<font color="green"> 293.                     charmap += b'\0' * 0xff00</font>
+<font color="green"> 294.                     continue</font>
+<font color="black"> 295.                 # character set contains non-BMP character codes</font>
+<font color="red"> 296.                 if fixup and isunicode and op is RANGE:</font>
+<font color="red"> 297.                     lo, hi = av</font>
+<font color="red"> 298.                     ranges = [av]</font>
+<font color="black"> 299.                     # There are only two ranges of cased astral characters:</font>
+<font color="black"> 300.                     # 10400-1044F (Deseret) and 118A0-118DF (Warang Citi).</font>
+<font color="red"> 301.                     _fixup_range(max(0x10000, lo), min(0x11fff, hi),</font>
+<font color="red"> 302.                                  ranges, fixup)</font>
+<font color="red"> 303.                     for lo, hi in ranges:</font>
+<font color="red"> 304.                         if lo == hi:</font>
+<font color="red"> 305.                             tail.append((LITERAL, hi))</font>
+<font color="black"> 306.                         else:</font>
+<font color="red"> 307.                             tail.append((RANGE, (lo, hi)))</font>
+<font color="black"> 308.                 else:</font>
+<font color="red"> 309.                     tail.append((op, av))</font>
+<font color="green"> 310.             break</font>
+<font color="black"> 311. </font>
+<font color="black"> 312.     # compress character map</font>
+<font color="green"> 313.     runs = []</font>
+<font color="green"> 314.     q = 0</font>
+<font color="green"> 315.     while True:</font>
+<font color="green"> 316.         p = charmap.find(b'\1', q)</font>
+<font color="green"> 317.         if p &lt; 0:</font>
+<font color="green"> 318.             break</font>
+<font color="green"> 319.         if len(runs) &gt;= 2:</font>
+<font color="green"> 320.             runs = None</font>
+<font color="green"> 321.             break</font>
+<font color="green"> 322.         q = charmap.find(b'\0', p)</font>
+<font color="green"> 323.         if q &lt; 0:</font>
+<font color="green"> 324.             runs.append((p, len(charmap)))</font>
+<font color="green"> 325.             break</font>
+<font color="green"> 326.         runs.append((p, q))</font>
+<font color="green"> 327.     if runs is not None:</font>
+<font color="black"> 328.         # use literal/range</font>
+<font color="green"> 329.         for p, q in runs:</font>
+<font color="green"> 330.             if q - p == 1:</font>
+<font color="green"> 331.                 out.append((LITERAL, p))</font>
+<font color="black"> 332.             else:</font>
+<font color="green"> 333.                 out.append((RANGE, (p, q - 1)))</font>
+<font color="green"> 334.         out += tail</font>
+<font color="black"> 335.         # if the case was changed or new representation is more compact</font>
+<font color="green"> 336.         if fixup or len(out) &lt; len(charset):</font>
+<font color="green"> 337.             return out</font>
+<font color="black"> 338.         # else original character set is good enough</font>
+<font color="green"> 339.         return charset</font>
+<font color="black"> 340. </font>
+<font color="black"> 341.     # use bitmap</font>
+<font color="green"> 342.     if len(charmap) == 256:</font>
+<font color="green"> 343.         data = _mk_bitmap(charmap)</font>
+<font color="green"> 344.         out.append((CHARSET, data))</font>
+<font color="green"> 345.         out += tail</font>
+<font color="green"> 346.         return out</font>
+<font color="black"> 347. </font>
+<font color="black"> 348.     # To represent a big charset, first a bitmap of all characters in the</font>
+<font color="black"> 349.     # set is constructed. Then, this bitmap is sliced into chunks of 256</font>
+<font color="black"> 350.     # characters, duplicate chunks are eliminated, and each chunk is</font>
+<font color="black"> 351.     # given a number. In the compiled expression, the charset is</font>
+<font color="black"> 352.     # represented by a 32-bit word sequence, consisting of one word for</font>
+<font color="black"> 353.     # the number of different chunks, a sequence of 256 bytes (64 words)</font>
+<font color="black"> 354.     # of chunk numbers indexed by their original chunk position, and a</font>
+<font color="black"> 355.     # sequence of 256-bit chunks (8 words each).</font>
+<font color="black"> 356. </font>
+<font color="black"> 357.     # Compression is normally good: in a typical charset, large ranges of</font>
+<font color="black"> 358.     # Unicode will be either completely excluded (e.g. if only cyrillic</font>
+<font color="black"> 359.     # letters are to be matched), or completely included (e.g. if large</font>
+<font color="black"> 360.     # subranges of Kanji match). These ranges will be represented by</font>
+<font color="black"> 361.     # chunks of all one-bits or all zero-bits.</font>
+<font color="black"> 362. </font>
+<font color="black"> 363.     # Matching can be also done efficiently: the more significant byte of</font>
+<font color="black"> 364.     # the Unicode character is an index into the chunk number, and the</font>
+<font color="black"> 365.     # less significant byte is a bit index in the chunk (just like the</font>
+<font color="black"> 366.     # CHARSET matching).</font>
+<font color="black"> 367. </font>
+<font color="black"> 368.     # In UCS-4 mode, the BIGCHARSET opcode still supports only subsets</font>
+<font color="black"> 369.     # of the basic multilingual plane; an efficient representation</font>
+<font color="black"> 370.     # for all of Unicode has not yet been developed.</font>
+<font color="black"> 371. </font>
+<font color="green"> 372.     charmap = bytes(charmap) # should be hashable</font>
+<font color="green"> 373.     comps = {}</font>
+<font color="green"> 374.     mapping = bytearray(256)</font>
+<font color="green"> 375.     block = 0</font>
+<font color="green"> 376.     data = bytearray()</font>
+<font color="green"> 377.     for i in range(0, 65536, 256):</font>
+<font color="green"> 378.         chunk = charmap[i: i + 256]</font>
+<font color="green"> 379.         if chunk in comps:</font>
+<font color="green"> 380.             mapping[i // 256] = comps[chunk]</font>
+<font color="black"> 381.         else:</font>
+<font color="green"> 382.             mapping[i // 256] = comps[chunk] = block</font>
+<font color="green"> 383.             block += 1</font>
+<font color="green"> 384.             data += chunk</font>
+<font color="green"> 385.     data = _mk_bitmap(data)</font>
+<font color="green"> 386.     data[0:0] = [block] + _bytes_to_codes(mapping)</font>
+<font color="green"> 387.     out.append((BIGCHARSET, data))</font>
+<font color="green"> 388.     out += tail</font>
+<font color="green"> 389.     return out</font>
+<font color="black"> 390. </font>
+<font color="red"> 391. def _fixup_range(lo, hi, ranges, fixup):</font>
+<font color="red"> 392.     for i in map(fixup, range(lo, hi+1)):</font>
+<font color="red"> 393.         for k, (lo, hi) in enumerate(ranges):</font>
+<font color="red"> 394.             if i &lt; lo:</font>
+<font color="red"> 395.                 if l == lo - 1:</font>
+<font color="red"> 396.                     ranges[k] = (i, hi)</font>
+<font color="black"> 397.                 else:</font>
+<font color="red"> 398.                     ranges.insert(k, (i, i))</font>
+<font color="red"> 399.                 break</font>
+<font color="red"> 400.             elif i &gt; hi:</font>
+<font color="red"> 401.                 if i == hi + 1:</font>
+<font color="red"> 402.                     ranges[k] = (lo, i)</font>
+<font color="red"> 403.                     break</font>
+<font color="black"> 404.             else:</font>
+<font color="red"> 405.                 break</font>
+<font color="black"> 406.         else:</font>
+<font color="red"> 407.             ranges.append((i, i))</font>
+<font color="black"> 408. </font>
+<font color="red"> 409. _CODEBITS = _sre.CODESIZE * 8</font>
+<font color="red"> 410. _BITS_TRANS = b'0' + b'1' * 255</font>
+<font color="red"> 411. def _mk_bitmap(bits, _CODEBITS=_CODEBITS, _int=int):</font>
+<font color="green"> 412.     s = bytes(bits).translate(_BITS_TRANS)[::-1]</font>
+<font color="green"> 413.     return [_int(s[i - _CODEBITS: i], 2)</font>
+<font color="green"> 414.             for i in range(len(s), 0, -_CODEBITS)]</font>
+<font color="black"> 415. </font>
+<font color="red"> 416. def _bytes_to_codes(b):</font>
+<font color="black"> 417.     # Convert block indices to word array</font>
+<font color="green"> 418.     import array</font>
+<font color="green"> 419.     if _sre.CODESIZE == 2:</font>
+<font color="red"> 420.         code = 'H'</font>
+<font color="black"> 421.     else:</font>
+<font color="green"> 422.         code = 'I'</font>
+<font color="green"> 423.     a = array.array(code, bytes(b))</font>
+<font color="green"> 424.     assert a.itemsize == _sre.CODESIZE</font>
+<font color="green"> 425.     assert len(a) * a.itemsize == len(b)</font>
+<font color="green"> 426.     return a.tolist()</font>
+<font color="black"> 427. </font>
+<font color="red"> 428. def _simple(av):</font>
+<font color="black"> 429.     # check if av is a &quot;simple&quot; operator</font>
+<font color="green"> 430.     lo, hi = av[2].getwidth()</font>
+<font color="green"> 431.     return lo == hi == 1 and av[2][0][0] != SUBPATTERN</font>
+<font color="black"> 432. </font>
+<font color="red"> 433. def _compile_info(code, pattern, flags):</font>
+<font color="black"> 434.     # internal: compile an info block.  in the current version,</font>
+<font color="black"> 435.     # this contains min/max pattern width, and an optional literal</font>
+<font color="black"> 436.     # prefix or a character map</font>
+<font color="green"> 437.     lo, hi = pattern.getwidth()</font>
+<font color="green"> 438.     if not lo and hi:</font>
+<font color="green"> 439.         return # not worth it</font>
+<font color="black"> 440.     # look for a literal prefix</font>
+<font color="green"> 441.     prefix = []</font>
+<font color="green"> 442.     prefixappend = prefix.append</font>
+<font color="green"> 443.     prefix_skip = 0</font>
+<font color="green"> 444.     charset = [] # not used</font>
+<font color="green"> 445.     charsetappend = charset.append</font>
+<font color="green"> 446.     if not (flags &amp; SRE_FLAG_IGNORECASE):</font>
+<font color="black"> 447.         # look for literal prefix</font>
+<font color="green"> 448.         for op, av in pattern.data:</font>
+<font color="green"> 449.             if op is LITERAL:</font>
+<font color="green"> 450.                 if len(prefix) == prefix_skip:</font>
+<font color="green"> 451.                     prefix_skip = prefix_skip + 1</font>
+<font color="green"> 452.                 prefixappend(av)</font>
+<font color="green"> 453.             elif op is SUBPATTERN and len(av[1]) == 1:</font>
+<font color="green"> 454.                 op, av = av[1][0]</font>
+<font color="green"> 455.                 if op is LITERAL:</font>
+<font color="green"> 456.                     prefixappend(av)</font>
+<font color="black"> 457.                 else:</font>
+<font color="green"> 458.                     break</font>
+<font color="black"> 459.             else:</font>
+<font color="green"> 460.                 break</font>
+<font color="black"> 461.         # if no prefix, look for charset prefix</font>
+<font color="green"> 462.         if not prefix and pattern.data:</font>
+<font color="green"> 463.             op, av = pattern.data[0]</font>
+<font color="green"> 464.             if op is SUBPATTERN and av[1]:</font>
+<font color="green"> 465.                 op, av = av[1][0]</font>
+<font color="green"> 466.                 if op is LITERAL:</font>
+<font color="green"> 467.                     charsetappend((op, av))</font>
+<font color="green"> 468.                 elif op is BRANCH:</font>
+<font color="green"> 469.                     c = []</font>
+<font color="green"> 470.                     cappend = c.append</font>
+<font color="green"> 471.                     for p in av[1]:</font>
+<font color="green"> 472.                         if not p:</font>
+<font color="red"> 473.                             break</font>
+<font color="green"> 474.                         op, av = p[0]</font>
+<font color="green"> 475.                         if op is LITERAL:</font>
+<font color="green"> 476.                             cappend((op, av))</font>
+<font color="black"> 477.                         else:</font>
+<font color="green"> 478.                             break</font>
+<font color="black"> 479.                     else:</font>
+<font color="green"> 480.                         charset = c</font>
+<font color="green"> 481.             elif op is BRANCH:</font>
+<font color="green"> 482.                 c = []</font>
+<font color="green"> 483.                 cappend = c.append</font>
+<font color="green"> 484.                 for p in av[1]:</font>
+<font color="green"> 485.                     if not p:</font>
+<font color="red"> 486.                         break</font>
+<font color="green"> 487.                     op, av = p[0]</font>
+<font color="green"> 488.                     if op is LITERAL:</font>
+<font color="green"> 489.                         cappend((op, av))</font>
+<font color="black"> 490.                     else:</font>
+<font color="green"> 491.                         break</font>
+<font color="black"> 492.                 else:</font>
+<font color="green"> 493.                     charset = c</font>
+<font color="green"> 494.             elif op is IN:</font>
+<font color="green"> 495.                 charset = av</font>
+<font color="black"> 496. ##     if prefix:</font>
+<font color="black"> 497. ##         print &quot;*** PREFIX&quot;, prefix, prefix_skip</font>
+<font color="black"> 498. ##     if charset:</font>
+<font color="black"> 499. ##         print &quot;*** CHARSET&quot;, charset</font>
+<font color="black"> 500.     # add an info block</font>
+<font color="green"> 501.     emit = code.append</font>
+<font color="green"> 502.     emit(OPCODES[INFO])</font>
+<font color="green"> 503.     skip = len(code); emit(0)</font>
+<font color="black"> 504.     # literal flag</font>
+<font color="green"> 505.     mask = 0</font>
+<font color="green"> 506.     if prefix:</font>
+<font color="green"> 507.         mask = SRE_INFO_PREFIX</font>
+<font color="green"> 508.         if len(prefix) == prefix_skip == len(pattern.data):</font>
+<font color="green"> 509.             mask = mask + SRE_INFO_LITERAL</font>
+<font color="green"> 510.     elif charset:</font>
+<font color="green"> 511.         mask = mask + SRE_INFO_CHARSET</font>
+<font color="green"> 512.     emit(mask)</font>
+<font color="black"> 513.     # pattern length</font>
+<font color="green"> 514.     if lo &lt; MAXCODE:</font>
+<font color="green"> 515.         emit(lo)</font>
+<font color="black"> 516.     else:</font>
+<font color="red"> 517.         emit(MAXCODE)</font>
+<font color="red"> 518.         prefix = prefix[:MAXCODE]</font>
+<font color="green"> 519.     if hi &lt; MAXCODE:</font>
+<font color="green"> 520.         emit(hi)</font>
+<font color="black"> 521.     else:</font>
+<font color="green"> 522.         emit(0)</font>
+<font color="black"> 523.     # add literal prefix</font>
+<font color="green"> 524.     if prefix:</font>
+<font color="green"> 525.         emit(len(prefix)) # length</font>
+<font color="green"> 526.         emit(prefix_skip) # skip</font>
+<font color="green"> 527.         code.extend(prefix)</font>
+<font color="black"> 528.         # generate overlap table</font>
+<font color="green"> 529.         table = [-1] + ([0]*len(prefix))</font>
+<font color="green"> 530.         for i in xrange(len(prefix)):</font>
+<font color="green"> 531.             table[i+1] = table[i]+1</font>
+<font color="green"> 532.             while table[i+1] &gt; 0 and prefix[i] != prefix[table[i+1]-1]:</font>
+<font color="green"> 533.                 table[i+1] = table[table[i+1]-1]+1</font>
+<font color="green"> 534.         code.extend(table[1:]) # don't store first entry</font>
+<font color="green"> 535.     elif charset:</font>
+<font color="green"> 536.         _compile_charset(charset, flags, code)</font>
+<font color="green"> 537.     code[skip] = len(code) - skip</font>
+<font color="black"> 538. </font>
+<font color="red"> 539. try:</font>
+<font color="red"> 540.     unicode</font>
+<font color="red"> 541. except NameError:</font>
+<font color="red"> 542.     STRING_TYPES = (type(&quot;&quot;),)</font>
+<font color="black"> 543. else:</font>
+<font color="red"> 544.     STRING_TYPES = (type(&quot;&quot;), type(unicode(&quot;&quot;)))</font>
+<font color="black"> 545. </font>
+<font color="red"> 546. def isstring(obj):</font>
+<font color="green"> 547.     for tp in STRING_TYPES:</font>
+<font color="green"> 548.         if isinstance(obj, tp):</font>
+<font color="green"> 549.             return 1</font>
+<font color="red"> 550.     return 0</font>
+<font color="black"> 551. </font>
+<font color="red"> 552. def _code(p, flags):</font>
+<font color="black"> 553. </font>
+<font color="green"> 554.     flags = p.pattern.flags | flags</font>
+<font color="green"> 555.     code = []</font>
+<font color="black"> 556. </font>
+<font color="black"> 557.     # compile info block</font>
+<font color="green"> 558.     _compile_info(code, p, flags)</font>
+<font color="black"> 559. </font>
+<font color="black"> 560.     # compile the pattern</font>
+<font color="green"> 561.     _compile(code, p.data, flags)</font>
+<font color="black"> 562. </font>
+<font color="green"> 563.     code.append(OPCODES[SUCCESS])</font>
+<font color="black"> 564. </font>
+<font color="green"> 565.     return code</font>
+<font color="black"> 566. </font>
+<font color="red"> 567. def compile(p, flags=0):</font>
+<font color="black"> 568.     # internal: convert pattern list to internal format</font>
+<font color="black"> 569. </font>
+<font color="green"> 570.     if isstring(p):</font>
+<font color="green"> 571.         pattern = p</font>
+<font color="green"> 572.         p = sre_parse.parse(p, flags)</font>
+<font color="black"> 573.     else:</font>
+<font color="red"> 574.         pattern = None</font>
+<font color="black"> 575. </font>
+<font color="green"> 576.     code = _code(p, flags)</font>
+<font color="black"> 577. </font>
+<font color="black"> 578.     # print code</font>
+<font color="black"> 579. </font>
+<font color="black"> 580.     # XXX: &lt;fl&gt; get rid of this limitation!</font>
+<font color="green"> 581.     if p.pattern.groups &gt; 100:</font>
+<font color="red"> 582.         raise AssertionError(</font>
+<font color="red"> 583.             &quot;sorry, but this version only supports 100 named groups&quot;</font>
+<font color="black"> 584.             )</font>
+<font color="black"> 585. </font>
+<font color="black"> 586.     # map in either direction</font>
+<font color="green"> 587.     groupindex = p.pattern.groupdict</font>
+<font color="green"> 588.     indexgroup = [None] * p.pattern.groups</font>
+<font color="green"> 589.     for k, i in groupindex.items():</font>
+<font color="green"> 590.         indexgroup[i] = k</font>
+<font color="black"> 591. </font>
+<font color="green"> 592.     return _sre.compile(</font>
+<font color="green"> 593.         pattern, flags | p.pattern.flags, code,</font>
+<font color="green"> 594.         p.pattern.groups-1,</font>
+<font color="green"> 595.         groupindex, indexgroup</font>
+<font color="black"> 596.         )</font>
+</pre>
+

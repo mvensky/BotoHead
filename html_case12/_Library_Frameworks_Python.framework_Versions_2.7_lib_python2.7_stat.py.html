@@ -1,0 +1,103 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/stat.py</b><br>
+
+
+file stats: <b>67 lines, 3 executed: 4.5% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Constants/functions for interpreting results of os.stat() and os.lstat().</font>
+<font color="black">   2. </font>
+<font color="black">   3. Suggested usage: from stat import *</font>
+<font color="red">   4. &quot;&quot;&quot;</font>
+<font color="black">   5. </font>
+<font color="black">   6. # Indices for stat struct members in the tuple returned by os.stat()</font>
+<font color="black">   7. </font>
+<font color="red">   8. ST_MODE  = 0</font>
+<font color="red">   9. ST_INO   = 1</font>
+<font color="red">  10. ST_DEV   = 2</font>
+<font color="red">  11. ST_NLINK = 3</font>
+<font color="red">  12. ST_UID   = 4</font>
+<font color="red">  13. ST_GID   = 5</font>
+<font color="red">  14. ST_SIZE  = 6</font>
+<font color="red">  15. ST_ATIME = 7</font>
+<font color="red">  16. ST_MTIME = 8</font>
+<font color="red">  17. ST_CTIME = 9</font>
+<font color="black">  18. </font>
+<font color="black">  19. # Extract bits from the mode</font>
+<font color="black">  20. </font>
+<font color="red">  21. def S_IMODE(mode):</font>
+<font color="red">  22.     return mode &amp; 07777</font>
+<font color="black">  23. </font>
+<font color="red">  24. def S_IFMT(mode):</font>
+<font color="green">  25.     return mode &amp; 0170000</font>
+<font color="black">  26. </font>
+<font color="black">  27. # Constants used as S_IFMT() for various file types</font>
+<font color="black">  28. # (not all are implemented on all systems)</font>
+<font color="black">  29. </font>
+<font color="red">  30. S_IFDIR  = 0040000</font>
+<font color="red">  31. S_IFCHR  = 0020000</font>
+<font color="red">  32. S_IFBLK  = 0060000</font>
+<font color="red">  33. S_IFREG  = 0100000</font>
+<font color="red">  34. S_IFIFO  = 0010000</font>
+<font color="red">  35. S_IFLNK  = 0120000</font>
+<font color="red">  36. S_IFSOCK = 0140000</font>
+<font color="black">  37. </font>
+<font color="black">  38. # Functions to test for each file type</font>
+<font color="black">  39. </font>
+<font color="red">  40. def S_ISDIR(mode):</font>
+<font color="green">  41.     return S_IFMT(mode) == S_IFDIR</font>
+<font color="black">  42. </font>
+<font color="red">  43. def S_ISCHR(mode):</font>
+<font color="red">  44.     return S_IFMT(mode) == S_IFCHR</font>
+<font color="black">  45. </font>
+<font color="red">  46. def S_ISBLK(mode):</font>
+<font color="red">  47.     return S_IFMT(mode) == S_IFBLK</font>
+<font color="black">  48. </font>
+<font color="red">  49. def S_ISREG(mode):</font>
+<font color="green">  50.     return S_IFMT(mode) == S_IFREG</font>
+<font color="black">  51. </font>
+<font color="red">  52. def S_ISFIFO(mode):</font>
+<font color="red">  53.     return S_IFMT(mode) == S_IFIFO</font>
+<font color="black">  54. </font>
+<font color="red">  55. def S_ISLNK(mode):</font>
+<font color="red">  56.     return S_IFMT(mode) == S_IFLNK</font>
+<font color="black">  57. </font>
+<font color="red">  58. def S_ISSOCK(mode):</font>
+<font color="red">  59.     return S_IFMT(mode) == S_IFSOCK</font>
+<font color="black">  60. </font>
+<font color="black">  61. # Names for permission bits</font>
+<font color="black">  62. </font>
+<font color="red">  63. S_ISUID = 04000</font>
+<font color="red">  64. S_ISGID = 02000</font>
+<font color="red">  65. S_ENFMT = S_ISGID</font>
+<font color="red">  66. S_ISVTX = 01000</font>
+<font color="red">  67. S_IREAD = 00400</font>
+<font color="red">  68. S_IWRITE = 00200</font>
+<font color="red">  69. S_IEXEC = 00100</font>
+<font color="red">  70. S_IRWXU = 00700</font>
+<font color="red">  71. S_IRUSR = 00400</font>
+<font color="red">  72. S_IWUSR = 00200</font>
+<font color="red">  73. S_IXUSR = 00100</font>
+<font color="red">  74. S_IRWXG = 00070</font>
+<font color="red">  75. S_IRGRP = 00040</font>
+<font color="red">  76. S_IWGRP = 00020</font>
+<font color="red">  77. S_IXGRP = 00010</font>
+<font color="red">  78. S_IRWXO = 00007</font>
+<font color="red">  79. S_IROTH = 00004</font>
+<font color="red">  80. S_IWOTH = 00002</font>
+<font color="red">  81. S_IXOTH = 00001</font>
+<font color="black">  82. </font>
+<font color="black">  83. # Names for file flags</font>
+<font color="black">  84. </font>
+<font color="red">  85. UF_NODUMP    = 0x00000001</font>
+<font color="red">  86. UF_IMMUTABLE = 0x00000002</font>
+<font color="red">  87. UF_APPEND    = 0x00000004</font>
+<font color="red">  88. UF_OPAQUE    = 0x00000008</font>
+<font color="red">  89. UF_NOUNLINK  = 0x00000010</font>
+<font color="red">  90. UF_COMPRESSED = 0x00000020  # OS X: file is hfs-compressed</font>
+<font color="red">  91. UF_HIDDEN    = 0x00008000   # OS X: file should not be displayed</font>
+<font color="red">  92. SF_ARCHIVED  = 0x00010000</font>
+<font color="red">  93. SF_IMMUTABLE = 0x00020000</font>
+<font color="red">  94. SF_APPEND    = 0x00040000</font>
+<font color="red">  95. SF_NOUNLINK  = 0x00100000</font>
+<font color="red">  96. SF_SNAPSHOT  = 0x00200000</font>
+</pre>
+

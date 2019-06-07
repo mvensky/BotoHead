@@ -1,0 +1,618 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/uuid.py</b><br>
+
+
+file stats: <b>346 lines, 104 executed: 30.1% covered</b>
+<pre>
+<font color="black">   1. r&quot;&quot;&quot;UUID objects (universally unique identifiers) according to RFC 4122.</font>
+<font color="black">   2. </font>
+<font color="black">   3. This module provides immutable UUID objects (class UUID) and the functions</font>
+<font color="black">   4. uuid1(), uuid3(), uuid4(), uuid5() for generating version 1, 3, 4, and 5</font>
+<font color="black">   5. UUIDs as specified in RFC 4122.</font>
+<font color="black">   6. </font>
+<font color="black">   7. If all you want is a unique ID, you should probably call uuid1() or uuid4().</font>
+<font color="black">   8. Note that uuid1() may compromise privacy since it creates a UUID containing</font>
+<font color="black">   9. the computer's network address.  uuid4() creates a random UUID.</font>
+<font color="black">  10. </font>
+<font color="black">  11. Typical usage:</font>
+<font color="black">  12. </font>
+<font color="black">  13.     &gt;&gt;&gt; import uuid</font>
+<font color="black">  14. </font>
+<font color="black">  15.     # make a UUID based on the host ID and current time</font>
+<font color="black">  16.     &gt;&gt;&gt; uuid.uuid1()</font>
+<font color="black">  17.     UUID('a8098c1a-f86e-11da-bd1a-00112444be1e')</font>
+<font color="black">  18. </font>
+<font color="black">  19.     # make a UUID using an MD5 hash of a namespace UUID and a name</font>
+<font color="black">  20.     &gt;&gt;&gt; uuid.uuid3(uuid.NAMESPACE_DNS, 'python.org')</font>
+<font color="black">  21.     UUID('6fa459ea-ee8a-3ca4-894e-db77e160355e')</font>
+<font color="black">  22. </font>
+<font color="black">  23.     # make a random UUID</font>
+<font color="black">  24.     &gt;&gt;&gt; uuid.uuid4()</font>
+<font color="black">  25.     UUID('16fd2706-8baf-433b-82eb-8c7fada847da')</font>
+<font color="black">  26. </font>
+<font color="black">  27.     # make a UUID using a SHA-1 hash of a namespace UUID and a name</font>
+<font color="black">  28.     &gt;&gt;&gt; uuid.uuid5(uuid.NAMESPACE_DNS, 'python.org')</font>
+<font color="black">  29.     UUID('886313e1-3b8a-5372-9b90-0c9aee199e5d')</font>
+<font color="black">  30. </font>
+<font color="black">  31.     # make a UUID from a string of hex digits (braces and hyphens ignored)</font>
+<font color="black">  32.     &gt;&gt;&gt; x = uuid.UUID('{00010203-0405-0607-0809-0a0b0c0d0e0f}')</font>
+<font color="black">  33. </font>
+<font color="black">  34.     # convert a UUID to a string of hex digits in standard form</font>
+<font color="black">  35.     &gt;&gt;&gt; str(x)</font>
+<font color="black">  36.     '00010203-0405-0607-0809-0a0b0c0d0e0f'</font>
+<font color="black">  37. </font>
+<font color="black">  38.     # get the raw 16 bytes of the UUID</font>
+<font color="black">  39.     &gt;&gt;&gt; x.bytes</font>
+<font color="black">  40.     '\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\x0c\r\x0e\x0f'</font>
+<font color="black">  41. </font>
+<font color="black">  42.     # make a UUID from a 16-byte string</font>
+<font color="black">  43.     &gt;&gt;&gt; uuid.UUID(bytes=x.bytes)</font>
+<font color="black">  44.     UUID('00010203-0405-0607-0809-0a0b0c0d0e0f')</font>
+<font color="green">  45. &quot;&quot;&quot;</font>
+<font color="black">  46. </font>
+<font color="green">  47. import os</font>
+<font color="black">  48. </font>
+<font color="green">  49. __author__ = 'Ka-Ping Yee &lt;ping@zesty.ca&gt;'</font>
+<font color="black">  50. </font>
+<font color="black">  51. RESERVED_NCS, RFC_4122, RESERVED_MICROSOFT, RESERVED_FUTURE = [</font>
+<font color="green">  52.     'reserved for NCS compatibility', 'specified in RFC 4122',</font>
+<font color="green">  53.     'reserved for Microsoft compatibility', 'reserved for future definition']</font>
+<font color="black">  54. </font>
+<font color="green">  55. class UUID(object):</font>
+<font color="black">  56.     &quot;&quot;&quot;Instances of the UUID class represent UUIDs as specified in RFC 4122.</font>
+<font color="black">  57.     UUID objects are immutable, hashable, and usable as dictionary keys.</font>
+<font color="black">  58.     Converting a UUID to a string with str() yields something in the form</font>
+<font color="black">  59.     '12345678-1234-1234-1234-123456789abc'.  The UUID constructor accepts</font>
+<font color="black">  60.     five possible forms: a similar string of hexadecimal digits, or a tuple</font>
+<font color="black">  61.     of six integer fields (with 32-bit, 16-bit, 16-bit, 8-bit, 8-bit, and</font>
+<font color="black">  62.     48-bit values respectively) as an argument named 'fields', or a string</font>
+<font color="black">  63.     of 16 bytes (with all the integer fields in big-endian order) as an</font>
+<font color="black">  64.     argument named 'bytes', or a string of 16 bytes (with the first three</font>
+<font color="black">  65.     fields in little-endian order) as an argument named 'bytes_le', or a</font>
+<font color="black">  66.     single 128-bit integer as an argument named 'int'.</font>
+<font color="black">  67. </font>
+<font color="black">  68.     UUIDs have these read-only attributes:</font>
+<font color="black">  69. </font>
+<font color="black">  70.         bytes       the UUID as a 16-byte string (containing the six</font>
+<font color="black">  71.                     integer fields in big-endian byte order)</font>
+<font color="black">  72. </font>
+<font color="black">  73.         bytes_le    the UUID as a 16-byte string (with time_low, time_mid,</font>
+<font color="black">  74.                     and time_hi_version in little-endian byte order)</font>
+<font color="black">  75. </font>
+<font color="black">  76.         fields      a tuple of the six integer fields of the UUID,</font>
+<font color="black">  77.                     which are also available as six individual attributes</font>
+<font color="black">  78.                     and two derived attributes:</font>
+<font color="black">  79. </font>
+<font color="black">  80.             time_low                the first 32 bits of the UUID</font>
+<font color="black">  81.             time_mid                the next 16 bits of the UUID</font>
+<font color="black">  82.             time_hi_version         the next 16 bits of the UUID</font>
+<font color="black">  83.             clock_seq_hi_variant    the next 8 bits of the UUID</font>
+<font color="black">  84.             clock_seq_low           the next 8 bits of the UUID</font>
+<font color="black">  85.             node                    the last 48 bits of the UUID</font>
+<font color="black">  86. </font>
+<font color="black">  87.             time                    the 60-bit timestamp</font>
+<font color="black">  88.             clock_seq               the 14-bit sequence number</font>
+<font color="black">  89. </font>
+<font color="black">  90.         hex         the UUID as a 32-character hexadecimal string</font>
+<font color="black">  91. </font>
+<font color="black">  92.         int         the UUID as a 128-bit integer</font>
+<font color="black">  93. </font>
+<font color="black">  94.         urn         the UUID as a URN as specified in RFC 4122</font>
+<font color="black">  95. </font>
+<font color="black">  96.         variant     the UUID variant (one of the constants RESERVED_NCS,</font>
+<font color="black">  97.                     RFC_4122, RESERVED_MICROSOFT, or RESERVED_FUTURE)</font>
+<font color="black">  98. </font>
+<font color="black">  99.         version     the UUID version number (1 through 5, meaningful only</font>
+<font color="black"> 100.                     when the variant is RFC_4122)</font>
+<font color="green"> 101.     &quot;&quot;&quot;</font>
+<font color="black"> 102. </font>
+<font color="green"> 103.     def __init__(self, hex=None, bytes=None, bytes_le=None, fields=None,</font>
+<font color="green"> 104.                        int=None, version=None):</font>
+<font color="black"> 105.         r&quot;&quot;&quot;Create a UUID from either a string of 32 hexadecimal digits,</font>
+<font color="black"> 106.         a string of 16 bytes as the 'bytes' argument, a string of 16 bytes</font>
+<font color="black"> 107.         in little-endian order as the 'bytes_le' argument, a tuple of six</font>
+<font color="black"> 108.         integers (32-bit time_low, 16-bit time_mid, 16-bit time_hi_version,</font>
+<font color="black"> 109.         8-bit clock_seq_hi_variant, 8-bit clock_seq_low, 48-bit node) as</font>
+<font color="black"> 110.         the 'fields' argument, or a single 128-bit integer as the 'int'</font>
+<font color="black"> 111.         argument.  When a string of hex digits is given, curly braces,</font>
+<font color="black"> 112.         hyphens, and a URN prefix are all optional.  For example, these</font>
+<font color="black"> 113.         expressions all yield the same UUID:</font>
+<font color="black"> 114. </font>
+<font color="black"> 115.         UUID('{12345678-1234-5678-1234-567812345678}')</font>
+<font color="black"> 116.         UUID('12345678123456781234567812345678')</font>
+<font color="black"> 117.         UUID('urn:uuid:12345678-1234-5678-1234-567812345678')</font>
+<font color="black"> 118.         UUID(bytes='\x12\x34\x56\x78'*4)</font>
+<font color="black"> 119.         UUID(bytes_le='\x78\x56\x34\x12\x34\x12\x78\x56' +</font>
+<font color="black"> 120.                       '\x12\x34\x56\x78\x12\x34\x56\x78')</font>
+<font color="black"> 121.         UUID(fields=(0x12345678, 0x1234, 0x5678, 0x12, 0x34, 0x567812345678))</font>
+<font color="black"> 122.         UUID(int=0x12345678123456781234567812345678)</font>
+<font color="black"> 123. </font>
+<font color="black"> 124.         Exactly one of 'hex', 'bytes', 'bytes_le', 'fields', or 'int' must</font>
+<font color="black"> 125.         be given.  The 'version' argument is optional; if given, the resulting</font>
+<font color="black"> 126.         UUID will have its variant and version set according to RFC 4122,</font>
+<font color="black"> 127.         overriding the given 'hex', 'bytes', 'bytes_le', 'fields', or 'int'.</font>
+<font color="black"> 128.         &quot;&quot;&quot;</font>
+<font color="black"> 129. </font>
+<font color="green"> 130.         if [hex, bytes, bytes_le, fields, int].count(None) != 4:</font>
+<font color="red"> 131.             raise TypeError('need one of hex, bytes, bytes_le, fields, or int')</font>
+<font color="green"> 132.         if hex is not None:</font>
+<font color="green"> 133.             hex = hex.replace('urn:', '').replace('uuid:', '')</font>
+<font color="green"> 134.             hex = hex.strip('{}').replace('-', '')</font>
+<font color="green"> 135.             if len(hex) != 32:</font>
+<font color="red"> 136.                 raise ValueError('badly formed hexadecimal UUID string')</font>
+<font color="green"> 137.             int = long(hex, 16)</font>
+<font color="green"> 138.         if bytes_le is not None:</font>
+<font color="red"> 139.             if len(bytes_le) != 16:</font>
+<font color="red"> 140.                 raise ValueError('bytes_le is not a 16-char string')</font>
+<font color="black"> 141.             bytes = (bytes_le[3] + bytes_le[2] + bytes_le[1] + bytes_le[0] +</font>
+<font color="red"> 142.                      bytes_le[5] + bytes_le[4] + bytes_le[7] + bytes_le[6] +</font>
+<font color="red"> 143.                      bytes_le[8:])</font>
+<font color="green"> 144.         if bytes is not None:</font>
+<font color="red"> 145.             if len(bytes) != 16:</font>
+<font color="red"> 146.                 raise ValueError('bytes is not a 16-char string')</font>
+<font color="red"> 147.             int = long(('%02x'*16) % tuple(map(ord, bytes)), 16)</font>
+<font color="green"> 148.         if fields is not None:</font>
+<font color="red"> 149.             if len(fields) != 6:</font>
+<font color="red"> 150.                 raise ValueError('fields is not a 6-tuple')</font>
+<font color="black"> 151.             (time_low, time_mid, time_hi_version,</font>
+<font color="red"> 152.              clock_seq_hi_variant, clock_seq_low, node) = fields</font>
+<font color="red"> 153.             if not 0 &lt;= time_low &lt; 1&lt;&lt;32L:</font>
+<font color="red"> 154.                 raise ValueError('field 1 out of range (need a 32-bit value)')</font>
+<font color="red"> 155.             if not 0 &lt;= time_mid &lt; 1&lt;&lt;16L:</font>
+<font color="red"> 156.                 raise ValueError('field 2 out of range (need a 16-bit value)')</font>
+<font color="red"> 157.             if not 0 &lt;= time_hi_version &lt; 1&lt;&lt;16L:</font>
+<font color="red"> 158.                 raise ValueError('field 3 out of range (need a 16-bit value)')</font>
+<font color="red"> 159.             if not 0 &lt;= clock_seq_hi_variant &lt; 1&lt;&lt;8L:</font>
+<font color="red"> 160.                 raise ValueError('field 4 out of range (need an 8-bit value)')</font>
+<font color="red"> 161.             if not 0 &lt;= clock_seq_low &lt; 1&lt;&lt;8L:</font>
+<font color="red"> 162.                 raise ValueError('field 5 out of range (need an 8-bit value)')</font>
+<font color="red"> 163.             if not 0 &lt;= node &lt; 1&lt;&lt;48L:</font>
+<font color="red"> 164.                 raise ValueError('field 6 out of range (need a 48-bit value)')</font>
+<font color="red"> 165.             clock_seq = (clock_seq_hi_variant &lt;&lt; 8L) | clock_seq_low</font>
+<font color="black"> 166.             int = ((time_low &lt;&lt; 96L) | (time_mid &lt;&lt; 80L) |</font>
+<font color="red"> 167.                    (time_hi_version &lt;&lt; 64L) | (clock_seq &lt;&lt; 48L) | node)</font>
+<font color="green"> 168.         if int is not None:</font>
+<font color="green"> 169.             if not 0 &lt;= int &lt; 1&lt;&lt;128L:</font>
+<font color="red"> 170.                 raise ValueError('int is out of range (need a 128-bit value)')</font>
+<font color="green"> 171.         if version is not None:</font>
+<font color="red"> 172.             if not 1 &lt;= version &lt;= 5:</font>
+<font color="red"> 173.                 raise ValueError('illegal version number')</font>
+<font color="black"> 174.             # Set the variant to RFC 4122.</font>
+<font color="red"> 175.             int &amp;= ~(0xc000 &lt;&lt; 48L)</font>
+<font color="red"> 176.             int |= 0x8000 &lt;&lt; 48L</font>
+<font color="black"> 177.             # Set the version number.</font>
+<font color="red"> 178.             int &amp;= ~(0xf000 &lt;&lt; 64L)</font>
+<font color="red"> 179.             int |= version &lt;&lt; 76L</font>
+<font color="green"> 180.         self.__dict__['int'] = int</font>
+<font color="black"> 181. </font>
+<font color="green"> 182.     def __cmp__(self, other):</font>
+<font color="red"> 183.         if isinstance(other, UUID):</font>
+<font color="red"> 184.             return cmp(self.int, other.int)</font>
+<font color="red"> 185.         return NotImplemented</font>
+<font color="black"> 186. </font>
+<font color="green"> 187.     def __hash__(self):</font>
+<font color="red"> 188.         return hash(self.int)</font>
+<font color="black"> 189. </font>
+<font color="green"> 190.     def __int__(self):</font>
+<font color="red"> 191.         return self.int</font>
+<font color="black"> 192. </font>
+<font color="green"> 193.     def __repr__(self):</font>
+<font color="red"> 194.         return 'UUID(%r)' % str(self)</font>
+<font color="black"> 195. </font>
+<font color="green"> 196.     def __setattr__(self, name, value):</font>
+<font color="red"> 197.         raise TypeError('UUID objects are immutable')</font>
+<font color="black"> 198. </font>
+<font color="green"> 199.     def __str__(self):</font>
+<font color="red"> 200.         hex = '%032x' % self.int</font>
+<font color="red"> 201.         return '%s-%s-%s-%s-%s' % (</font>
+<font color="red"> 202.             hex[:8], hex[8:12], hex[12:16], hex[16:20], hex[20:])</font>
+<font color="black"> 203. </font>
+<font color="green"> 204.     def get_bytes(self):</font>
+<font color="red"> 205.         bytes = ''</font>
+<font color="red"> 206.         for shift in range(0, 128, 8):</font>
+<font color="red"> 207.             bytes = chr((self.int &gt;&gt; shift) &amp; 0xff) + bytes</font>
+<font color="red"> 208.         return bytes</font>
+<font color="black"> 209. </font>
+<font color="green"> 210.     bytes = property(get_bytes)</font>
+<font color="black"> 211. </font>
+<font color="green"> 212.     def get_bytes_le(self):</font>
+<font color="red"> 213.         bytes = self.bytes</font>
+<font color="black"> 214.         return (bytes[3] + bytes[2] + bytes[1] + bytes[0] +</font>
+<font color="red"> 215.                 bytes[5] + bytes[4] + bytes[7] + bytes[6] + bytes[8:])</font>
+<font color="black"> 216. </font>
+<font color="green"> 217.     bytes_le = property(get_bytes_le)</font>
+<font color="black"> 218. </font>
+<font color="green"> 219.     def get_fields(self):</font>
+<font color="red"> 220.         return (self.time_low, self.time_mid, self.time_hi_version,</font>
+<font color="red"> 221.                 self.clock_seq_hi_variant, self.clock_seq_low, self.node)</font>
+<font color="black"> 222. </font>
+<font color="green"> 223.     fields = property(get_fields)</font>
+<font color="black"> 224. </font>
+<font color="green"> 225.     def get_time_low(self):</font>
+<font color="red"> 226.         return self.int &gt;&gt; 96L</font>
+<font color="black"> 227. </font>
+<font color="green"> 228.     time_low = property(get_time_low)</font>
+<font color="black"> 229. </font>
+<font color="green"> 230.     def get_time_mid(self):</font>
+<font color="red"> 231.         return (self.int &gt;&gt; 80L) &amp; 0xffff</font>
+<font color="black"> 232. </font>
+<font color="green"> 233.     time_mid = property(get_time_mid)</font>
+<font color="black"> 234. </font>
+<font color="green"> 235.     def get_time_hi_version(self):</font>
+<font color="red"> 236.         return (self.int &gt;&gt; 64L) &amp; 0xffff</font>
+<font color="black"> 237. </font>
+<font color="green"> 238.     time_hi_version = property(get_time_hi_version)</font>
+<font color="black"> 239. </font>
+<font color="green"> 240.     def get_clock_seq_hi_variant(self):</font>
+<font color="red"> 241.         return (self.int &gt;&gt; 56L) &amp; 0xff</font>
+<font color="black"> 242. </font>
+<font color="green"> 243.     clock_seq_hi_variant = property(get_clock_seq_hi_variant)</font>
+<font color="black"> 244. </font>
+<font color="green"> 245.     def get_clock_seq_low(self):</font>
+<font color="red"> 246.         return (self.int &gt;&gt; 48L) &amp; 0xff</font>
+<font color="black"> 247. </font>
+<font color="green"> 248.     clock_seq_low = property(get_clock_seq_low)</font>
+<font color="black"> 249. </font>
+<font color="green"> 250.     def get_time(self):</font>
+<font color="black"> 251.         return (((self.time_hi_version &amp; 0x0fffL) &lt;&lt; 48L) |</font>
+<font color="red"> 252.                 (self.time_mid &lt;&lt; 32L) | self.time_low)</font>
+<font color="black"> 253. </font>
+<font color="green"> 254.     time = property(get_time)</font>
+<font color="black"> 255. </font>
+<font color="green"> 256.     def get_clock_seq(self):</font>
+<font color="red"> 257.         return (((self.clock_seq_hi_variant &amp; 0x3fL) &lt;&lt; 8L) |</font>
+<font color="red"> 258.                 self.clock_seq_low)</font>
+<font color="black"> 259. </font>
+<font color="green"> 260.     clock_seq = property(get_clock_seq)</font>
+<font color="black"> 261. </font>
+<font color="green"> 262.     def get_node(self):</font>
+<font color="red"> 263.         return self.int &amp; 0xffffffffffff</font>
+<font color="black"> 264. </font>
+<font color="green"> 265.     node = property(get_node)</font>
+<font color="black"> 266. </font>
+<font color="green"> 267.     def get_hex(self):</font>
+<font color="red"> 268.         return '%032x' % self.int</font>
+<font color="black"> 269. </font>
+<font color="green"> 270.     hex = property(get_hex)</font>
+<font color="black"> 271. </font>
+<font color="green"> 272.     def get_urn(self):</font>
+<font color="red"> 273.         return 'urn:uuid:' + str(self)</font>
+<font color="black"> 274. </font>
+<font color="green"> 275.     urn = property(get_urn)</font>
+<font color="black"> 276. </font>
+<font color="green"> 277.     def get_variant(self):</font>
+<font color="red"> 278.         if not self.int &amp; (0x8000 &lt;&lt; 48L):</font>
+<font color="red"> 279.             return RESERVED_NCS</font>
+<font color="red"> 280.         elif not self.int &amp; (0x4000 &lt;&lt; 48L):</font>
+<font color="red"> 281.             return RFC_4122</font>
+<font color="red"> 282.         elif not self.int &amp; (0x2000 &lt;&lt; 48L):</font>
+<font color="red"> 283.             return RESERVED_MICROSOFT</font>
+<font color="black"> 284.         else:</font>
+<font color="red"> 285.             return RESERVED_FUTURE</font>
+<font color="black"> 286. </font>
+<font color="green"> 287.     variant = property(get_variant)</font>
+<font color="black"> 288. </font>
+<font color="green"> 289.     def get_version(self):</font>
+<font color="black"> 290.         # The version bits are only meaningful for RFC 4122 UUIDs.</font>
+<font color="red"> 291.         if self.variant == RFC_4122:</font>
+<font color="red"> 292.             return int((self.int &gt;&gt; 76L) &amp; 0xf)</font>
+<font color="black"> 293. </font>
+<font color="green"> 294.     version = property(get_version)</font>
+<font color="black"> 295. </font>
+<font color="green"> 296. def _popen(command, args):</font>
+<font color="red"> 297.     import os</font>
+<font color="red"> 298.     path = os.environ.get(&quot;PATH&quot;, os.defpath).split(os.pathsep)</font>
+<font color="red"> 299.     path.extend(('/sbin', '/usr/sbin'))</font>
+<font color="red"> 300.     for dir in path:</font>
+<font color="red"> 301.         executable = os.path.join(dir, command)</font>
+<font color="red"> 302.         if (os.path.exists(executable) and</font>
+<font color="red"> 303.             os.access(executable, os.F_OK | os.X_OK) and</font>
+<font color="red"> 304.             not os.path.isdir(executable)):</font>
+<font color="red"> 305.             break</font>
+<font color="black"> 306.     else:</font>
+<font color="red"> 307.         return None</font>
+<font color="black"> 308.     # LC_ALL to ensure English output, 2&gt;/dev/null to prevent output on</font>
+<font color="black"> 309.     # stderr (Note: we don't have an example where the words we search for</font>
+<font color="black"> 310.     # are actually localized, but in theory some system could do so.)</font>
+<font color="red"> 311.     cmd = 'LC_ALL=C %s %s 2&gt;/dev/null' % (executable, args)</font>
+<font color="red"> 312.     return os.popen(cmd)</font>
+<font color="black"> 313. </font>
+<font color="green"> 314. def _find_mac(command, args, hw_identifiers, get_index):</font>
+<font color="red"> 315.     try:</font>
+<font color="red"> 316.         pipe = _popen(command, args)</font>
+<font color="red"> 317.         if not pipe:</font>
+<font color="red"> 318.             return</font>
+<font color="red"> 319.         with pipe:</font>
+<font color="red"> 320.             for line in pipe:</font>
+<font color="red"> 321.                 words = line.lower().rstrip().split()</font>
+<font color="red"> 322.                 for i in range(len(words)):</font>
+<font color="red"> 323.                     if words[i] in hw_identifiers:</font>
+<font color="red"> 324.                         try:</font>
+<font color="red"> 325.                             word = words[get_index(i)]</font>
+<font color="red"> 326.                             mac = int(word.replace(':', ''), 16)</font>
+<font color="red"> 327.                             if mac:</font>
+<font color="red"> 328.                                 return mac</font>
+<font color="red"> 329.                         except (ValueError, IndexError):</font>
+<font color="black"> 330.                             # Virtual interfaces, such as those provided by</font>
+<font color="black"> 331.                             # VPNs, do not have a colon-delimited MAC address</font>
+<font color="black"> 332.                             # as expected, but a 16-byte HWAddr separated by</font>
+<font color="black"> 333.                             # dashes. These should be ignored in favor of a</font>
+<font color="black"> 334.                             # real MAC address</font>
+<font color="red"> 335.                             pass</font>
+<font color="red"> 336.     except IOError:</font>
+<font color="red"> 337.         pass</font>
+<font color="black"> 338. </font>
+<font color="green"> 339. def _ifconfig_getnode():</font>
+<font color="black"> 340.     &quot;&quot;&quot;Get the hardware address on Unix by running ifconfig.&quot;&quot;&quot;</font>
+<font color="black"> 341.     # This works on Linux ('' or '-a'), Tru64 ('-av'), but not all Unixes.</font>
+<font color="red"> 342.     keywords = ('hwaddr', 'ether', 'address:', 'lladdr')</font>
+<font color="red"> 343.     for args in ('', '-a', '-av'):</font>
+<font color="red"> 344.         mac = _find_mac('ifconfig', args, keywords, lambda i: i+1)</font>
+<font color="red"> 345.         if mac:</font>
+<font color="red"> 346.             return mac</font>
+<font color="black"> 347. </font>
+<font color="green"> 348. def _arp_getnode():</font>
+<font color="black"> 349.     &quot;&quot;&quot;Get the hardware address on Unix by running arp.&quot;&quot;&quot;</font>
+<font color="red"> 350.     import os, socket</font>
+<font color="red"> 351.     try:</font>
+<font color="red"> 352.         ip_addr = socket.gethostbyname(socket.gethostname())</font>
+<font color="red"> 353.     except EnvironmentError:</font>
+<font color="red"> 354.         return None</font>
+<font color="black"> 355. </font>
+<font color="black"> 356.     # Try getting the MAC addr from arp based on our IP address (Solaris).</font>
+<font color="red"> 357.     mac = _find_mac('arp', '-an', [ip_addr], lambda i: -1)</font>
+<font color="red"> 358.     if mac:</font>
+<font color="red"> 359.         return mac</font>
+<font color="black"> 360. </font>
+<font color="black"> 361.     # This works on OpenBSD</font>
+<font color="red"> 362.     mac = _find_mac('arp', '-an', [ip_addr], lambda i: i+1)</font>
+<font color="red"> 363.     if mac:</font>
+<font color="red"> 364.         return mac</font>
+<font color="black"> 365. </font>
+<font color="black"> 366.     # This works on Linux, FreeBSD and NetBSD</font>
+<font color="red"> 367.     mac = _find_mac('arp', '-an', ['(%s)' % ip_addr],</font>
+<font color="red"> 368.                     lambda i: i+2)</font>
+<font color="red"> 369.     if mac:</font>
+<font color="red"> 370.         return mac</font>
+<font color="black"> 371. </font>
+<font color="green"> 372. def _lanscan_getnode():</font>
+<font color="black"> 373.     &quot;&quot;&quot;Get the hardware address on Unix by running lanscan.&quot;&quot;&quot;</font>
+<font color="black"> 374.     # This might work on HP-UX.</font>
+<font color="red"> 375.     return _find_mac('lanscan', '-ai', ['lan0'], lambda i: 0)</font>
+<font color="black"> 376. </font>
+<font color="green"> 377. def _netstat_getnode():</font>
+<font color="black"> 378.     &quot;&quot;&quot;Get the hardware address on Unix by running netstat.&quot;&quot;&quot;</font>
+<font color="black"> 379.     # This might work on AIX, Tru64 UNIX and presumably on IRIX.</font>
+<font color="red"> 380.     try:</font>
+<font color="red"> 381.         pipe = _popen('netstat', '-ia')</font>
+<font color="red"> 382.         if not pipe:</font>
+<font color="red"> 383.             return</font>
+<font color="red"> 384.         with pipe:</font>
+<font color="red"> 385.             words = pipe.readline().rstrip().split()</font>
+<font color="red"> 386.             try:</font>
+<font color="red"> 387.                 i = words.index('Address')</font>
+<font color="red"> 388.             except ValueError:</font>
+<font color="red"> 389.                 return</font>
+<font color="red"> 390.             for line in pipe:</font>
+<font color="red"> 391.                 try:</font>
+<font color="red"> 392.                     words = line.rstrip().split()</font>
+<font color="red"> 393.                     word = words[i]</font>
+<font color="red"> 394.                     if len(word) == 17 and word.count(':') == 5:</font>
+<font color="red"> 395.                         mac = int(word.replace(':', ''), 16)</font>
+<font color="red"> 396.                         if mac:</font>
+<font color="red"> 397.                             return mac</font>
+<font color="red"> 398.                 except (ValueError, IndexError):</font>
+<font color="red"> 399.                     pass</font>
+<font color="red"> 400.     except OSError:</font>
+<font color="red"> 401.         pass</font>
+<font color="black"> 402. </font>
+<font color="green"> 403. def _ipconfig_getnode():</font>
+<font color="black"> 404.     &quot;&quot;&quot;Get the hardware address on Windows by running ipconfig.exe.&quot;&quot;&quot;</font>
+<font color="red"> 405.     import os, re</font>
+<font color="red"> 406.     dirs = ['', r'c:\windows\system32', r'c:\winnt\system32']</font>
+<font color="red"> 407.     try:</font>
+<font color="red"> 408.         import ctypes</font>
+<font color="red"> 409.         buffer = ctypes.create_string_buffer(300)</font>
+<font color="red"> 410.         ctypes.windll.kernel32.GetSystemDirectoryA(buffer, 300)</font>
+<font color="red"> 411.         dirs.insert(0, buffer.value.decode('mbcs'))</font>
+<font color="red"> 412.     except:</font>
+<font color="red"> 413.         pass</font>
+<font color="red"> 414.     for dir in dirs:</font>
+<font color="red"> 415.         try:</font>
+<font color="red"> 416.             pipe = os.popen(os.path.join(dir, 'ipconfig') + ' /all')</font>
+<font color="red"> 417.         except IOError:</font>
+<font color="red"> 418.             continue</font>
+<font color="red"> 419.         with pipe:</font>
+<font color="red"> 420.             for line in pipe:</font>
+<font color="red"> 421.                 value = line.split(':')[-1].strip().lower()</font>
+<font color="red"> 422.                 if re.match('([0-9a-f][0-9a-f]-){5}[0-9a-f][0-9a-f]', value):</font>
+<font color="red"> 423.                     return int(value.replace('-', ''), 16)</font>
+<font color="black"> 424. </font>
+<font color="green"> 425. def _netbios_getnode():</font>
+<font color="black"> 426.     &quot;&quot;&quot;Get the hardware address on Windows using NetBIOS calls.</font>
+<font color="black"> 427.     See http://support.microsoft.com/kb/118623 for details.&quot;&quot;&quot;</font>
+<font color="red"> 428.     import win32wnet, netbios</font>
+<font color="red"> 429.     ncb = netbios.NCB()</font>
+<font color="red"> 430.     ncb.Command = netbios.NCBENUM</font>
+<font color="red"> 431.     ncb.Buffer = adapters = netbios.LANA_ENUM()</font>
+<font color="red"> 432.     adapters._pack()</font>
+<font color="red"> 433.     if win32wnet.Netbios(ncb) != 0:</font>
+<font color="red"> 434.         return</font>
+<font color="red"> 435.     adapters._unpack()</font>
+<font color="red"> 436.     for i in range(adapters.length):</font>
+<font color="red"> 437.         ncb.Reset()</font>
+<font color="red"> 438.         ncb.Command = netbios.NCBRESET</font>
+<font color="red"> 439.         ncb.Lana_num = ord(adapters.lana[i])</font>
+<font color="red"> 440.         if win32wnet.Netbios(ncb) != 0:</font>
+<font color="red"> 441.             continue</font>
+<font color="red"> 442.         ncb.Reset()</font>
+<font color="red"> 443.         ncb.Command = netbios.NCBASTAT</font>
+<font color="red"> 444.         ncb.Lana_num = ord(adapters.lana[i])</font>
+<font color="red"> 445.         ncb.Callname = '*'.ljust(16)</font>
+<font color="red"> 446.         ncb.Buffer = status = netbios.ADAPTER_STATUS()</font>
+<font color="red"> 447.         if win32wnet.Netbios(ncb) != 0:</font>
+<font color="red"> 448.             continue</font>
+<font color="red"> 449.         status._unpack()</font>
+<font color="red"> 450.         bytes = map(ord, status.adapter_address)</font>
+<font color="black"> 451.         return ((bytes[0]&lt;&lt;40L) + (bytes[1]&lt;&lt;32L) + (bytes[2]&lt;&lt;24L) +</font>
+<font color="red"> 452.                 (bytes[3]&lt;&lt;16L) + (bytes[4]&lt;&lt;8L) + bytes[5])</font>
+<font color="black"> 453. </font>
+<font color="black"> 454. # Thanks to Thomas Heller for ctypes and for his help with its use here.</font>
+<font color="black"> 455. </font>
+<font color="black"> 456. # If ctypes is available, use it to find system routines for UUID generation.</font>
+<font color="green"> 457. _uuid_generate_time = _UuidCreate = None</font>
+<font color="green"> 458. try:</font>
+<font color="green"> 459.     import ctypes, ctypes.util</font>
+<font color="green"> 460.     import sys</font>
+<font color="black"> 461. </font>
+<font color="black"> 462.     # The uuid_generate_* routines are provided by libuuid on at least</font>
+<font color="black"> 463.     # Linux and FreeBSD, and provided by libc on Mac OS X.</font>
+<font color="green"> 464.     _libnames = ['uuid']</font>
+<font color="green"> 465.     if not sys.platform.startswith('win'):</font>
+<font color="green"> 466.         _libnames.append('c')</font>
+<font color="green"> 467.     for libname in _libnames:</font>
+<font color="green"> 468.         try:</font>
+<font color="green"> 469.             lib = ctypes.CDLL(ctypes.util.find_library(libname))</font>
+<font color="red"> 470.         except:</font>
+<font color="red"> 471.             continue</font>
+<font color="green"> 472.         if hasattr(lib, 'uuid_generate_time'):</font>
+<font color="green"> 473.             _uuid_generate_time = lib.uuid_generate_time</font>
+<font color="green"> 474.             break</font>
+<font color="green"> 475.     del _libnames</font>
+<font color="black"> 476. </font>
+<font color="black"> 477.     # The uuid_generate_* functions are broken on MacOS X 10.5, as noted</font>
+<font color="black"> 478.     # in issue #8621 the function generates the same sequence of values</font>
+<font color="black"> 479.     # in the parent process and all children created using fork (unless</font>
+<font color="black"> 480.     # those children use exec as well).</font>
+<font color="black"> 481.     #</font>
+<font color="black"> 482.     # Assume that the uuid_generate functions are broken from 10.5 onward,</font>
+<font color="black"> 483.     # the test can be adjusted when a later version is fixed.</font>
+<font color="green"> 484.     if sys.platform == 'darwin':</font>
+<font color="green"> 485.         import os</font>
+<font color="green"> 486.         if int(os.uname()[2].split('.')[0]) &gt;= 9:</font>
+<font color="green"> 487.             _uuid_generate_time = None</font>
+<font color="black"> 488. </font>
+<font color="black"> 489.     # On Windows prior to 2000, UuidCreate gives a UUID containing the</font>
+<font color="black"> 490.     # hardware address.  On Windows 2000 and later, UuidCreate makes a</font>
+<font color="black"> 491.     # random UUID and UuidCreateSequential gives a UUID containing the</font>
+<font color="black"> 492.     # hardware address.  These routines are provided by the RPC runtime.</font>
+<font color="black"> 493.     # NOTE:  at least on Tim's WinXP Pro SP2 desktop box, while the last</font>
+<font color="black"> 494.     # 6 bytes returned by UuidCreateSequential are fixed, they don't appear</font>
+<font color="black"> 495.     # to bear any relationship to the MAC address of any network device</font>
+<font color="black"> 496.     # on the box.</font>
+<font color="green"> 497.     try:</font>
+<font color="green"> 498.         lib = ctypes.windll.rpcrt4</font>
+<font color="green"> 499.     except:</font>
+<font color="green"> 500.         lib = None</font>
+<font color="green"> 501.     _UuidCreate = getattr(lib, 'UuidCreateSequential',</font>
+<font color="green"> 502.                           getattr(lib, 'UuidCreate', None))</font>
+<font color="red"> 503. except:</font>
+<font color="red"> 504.     pass</font>
+<font color="black"> 505. </font>
+<font color="green"> 506. def _unixdll_getnode():</font>
+<font color="black"> 507.     &quot;&quot;&quot;Get the hardware address on Unix using ctypes.&quot;&quot;&quot;</font>
+<font color="red"> 508.     _buffer = ctypes.create_string_buffer(16)</font>
+<font color="red"> 509.     _uuid_generate_time(_buffer)</font>
+<font color="red"> 510.     return UUID(bytes=_buffer.raw).node</font>
+<font color="black"> 511. </font>
+<font color="green"> 512. def _windll_getnode():</font>
+<font color="black"> 513.     &quot;&quot;&quot;Get the hardware address on Windows using ctypes.&quot;&quot;&quot;</font>
+<font color="red"> 514.     _buffer = ctypes.create_string_buffer(16)</font>
+<font color="red"> 515.     if _UuidCreate(_buffer) == 0:</font>
+<font color="red"> 516.         return UUID(bytes=_buffer.raw).node</font>
+<font color="black"> 517. </font>
+<font color="green"> 518. def _random_getnode():</font>
+<font color="black"> 519.     &quot;&quot;&quot;Get a random node ID, with eighth bit set as suggested by RFC 4122.&quot;&quot;&quot;</font>
+<font color="red"> 520.     import random</font>
+<font color="red"> 521.     return random.randrange(0, 1&lt;&lt;48L) | 0x010000000000L</font>
+<font color="black"> 522. </font>
+<font color="green"> 523. _node = None</font>
+<font color="black"> 524. </font>
+<font color="green"> 525. def getnode():</font>
+<font color="black"> 526.     &quot;&quot;&quot;Get the hardware address as a 48-bit positive integer.</font>
+<font color="black"> 527. </font>
+<font color="black"> 528.     The first time this runs, it may launch a separate program, which could</font>
+<font color="black"> 529.     be quite slow.  If all attempts to obtain the hardware address fail, we</font>
+<font color="black"> 530.     choose a random 48-bit number with its eighth bit set to 1 as recommended</font>
+<font color="black"> 531.     in RFC 4122.</font>
+<font color="black"> 532.     &quot;&quot;&quot;</font>
+<font color="black"> 533. </font>
+<font color="black"> 534.     global _node</font>
+<font color="red"> 535.     if _node is not None:</font>
+<font color="red"> 536.         return _node</font>
+<font color="black"> 537. </font>
+<font color="red"> 538.     import sys</font>
+<font color="red"> 539.     if sys.platform == 'win32':</font>
+<font color="red"> 540.         getters = [_windll_getnode, _netbios_getnode, _ipconfig_getnode]</font>
+<font color="black"> 541.     else:</font>
+<font color="red"> 542.         getters = [_unixdll_getnode, _ifconfig_getnode, _arp_getnode,</font>
+<font color="red"> 543.                    _lanscan_getnode, _netstat_getnode]</font>
+<font color="black"> 544. </font>
+<font color="red"> 545.     for getter in getters + [_random_getnode]:</font>
+<font color="red"> 546.         try:</font>
+<font color="red"> 547.             _node = getter()</font>
+<font color="red"> 548.         except:</font>
+<font color="red"> 549.             continue</font>
+<font color="red"> 550.         if _node is not None:</font>
+<font color="red"> 551.             return _node</font>
+<font color="black"> 552. </font>
+<font color="green"> 553. _last_timestamp = None</font>
+<font color="black"> 554. </font>
+<font color="green"> 555. def uuid1(node=None, clock_seq=None):</font>
+<font color="black"> 556.     &quot;&quot;&quot;Generate a UUID from a host ID, sequence number, and the current time.</font>
+<font color="black"> 557.     If 'node' is not given, getnode() is used to obtain the hardware</font>
+<font color="black"> 558.     address.  If 'clock_seq' is given, it is used as the sequence number;</font>
+<font color="black"> 559.     otherwise a random 14-bit sequence number is chosen.&quot;&quot;&quot;</font>
+<font color="black"> 560. </font>
+<font color="black"> 561.     # When the system provides a version-1 UUID generator, use it (but don't</font>
+<font color="black"> 562.     # use UuidCreate here because its UUIDs don't conform to RFC 4122).</font>
+<font color="red"> 563.     if _uuid_generate_time and node is clock_seq is None:</font>
+<font color="red"> 564.         _buffer = ctypes.create_string_buffer(16)</font>
+<font color="red"> 565.         _uuid_generate_time(_buffer)</font>
+<font color="red"> 566.         return UUID(bytes=_buffer.raw)</font>
+<font color="black"> 567. </font>
+<font color="black"> 568.     global _last_timestamp</font>
+<font color="red"> 569.     import time</font>
+<font color="red"> 570.     nanoseconds = int(time.time() * 1e9)</font>
+<font color="black"> 571.     # 0x01b21dd213814000 is the number of 100-ns intervals between the</font>
+<font color="black"> 572.     # UUID epoch 1582-10-15 00:00:00 and the Unix epoch 1970-01-01 00:00:00.</font>
+<font color="red"> 573.     timestamp = int(nanoseconds//100) + 0x01b21dd213814000L</font>
+<font color="red"> 574.     if _last_timestamp is not None and timestamp &lt;= _last_timestamp:</font>
+<font color="red"> 575.         timestamp = _last_timestamp + 1</font>
+<font color="red"> 576.     _last_timestamp = timestamp</font>
+<font color="red"> 577.     if clock_seq is None:</font>
+<font color="red"> 578.         import random</font>
+<font color="red"> 579.         clock_seq = random.randrange(1&lt;&lt;14L) # instead of stable storage</font>
+<font color="red"> 580.     time_low = timestamp &amp; 0xffffffffL</font>
+<font color="red"> 581.     time_mid = (timestamp &gt;&gt; 32L) &amp; 0xffffL</font>
+<font color="red"> 582.     time_hi_version = (timestamp &gt;&gt; 48L) &amp; 0x0fffL</font>
+<font color="red"> 583.     clock_seq_low = clock_seq &amp; 0xffL</font>
+<font color="red"> 584.     clock_seq_hi_variant = (clock_seq &gt;&gt; 8L) &amp; 0x3fL</font>
+<font color="red"> 585.     if node is None:</font>
+<font color="red"> 586.         node = getnode()</font>
+<font color="red"> 587.     return UUID(fields=(time_low, time_mid, time_hi_version,</font>
+<font color="red"> 588.                         clock_seq_hi_variant, clock_seq_low, node), version=1)</font>
+<font color="black"> 589. </font>
+<font color="green"> 590. def uuid3(namespace, name):</font>
+<font color="black"> 591.     &quot;&quot;&quot;Generate a UUID from the MD5 hash of a namespace UUID and a name.&quot;&quot;&quot;</font>
+<font color="red"> 592.     from hashlib import md5</font>
+<font color="red"> 593.     hash = md5(namespace.bytes + name).digest()</font>
+<font color="red"> 594.     return UUID(bytes=hash[:16], version=3)</font>
+<font color="black"> 595. </font>
+<font color="green"> 596. def uuid4():</font>
+<font color="black"> 597.     &quot;&quot;&quot;Generate a random UUID.&quot;&quot;&quot;</font>
+<font color="red"> 598.     return UUID(bytes=os.urandom(16), version=4)</font>
+<font color="black"> 599. </font>
+<font color="green"> 600. def uuid5(namespace, name):</font>
+<font color="black"> 601.     &quot;&quot;&quot;Generate a UUID from the SHA-1 hash of a namespace UUID and a name.&quot;&quot;&quot;</font>
+<font color="red"> 602.     from hashlib import sha1</font>
+<font color="red"> 603.     hash = sha1(namespace.bytes + name).digest()</font>
+<font color="red"> 604.     return UUID(bytes=hash[:16], version=5)</font>
+<font color="black"> 605. </font>
+<font color="black"> 606. # The following standard UUIDs are for use with uuid3() or uuid5().</font>
+<font color="black"> 607. </font>
+<font color="green"> 608. NAMESPACE_DNS = UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')</font>
+<font color="green"> 609. NAMESPACE_URL = UUID('6ba7b811-9dad-11d1-80b4-00c04fd430c8')</font>
+<font color="green"> 610. NAMESPACE_OID = UUID('6ba7b812-9dad-11d1-80b4-00c04fd430c8')</font>
+<font color="green"> 611. NAMESPACE_X500 = UUID('6ba7b814-9dad-11d1-80b4-00c04fd430c8')</font>
+</pre>
+

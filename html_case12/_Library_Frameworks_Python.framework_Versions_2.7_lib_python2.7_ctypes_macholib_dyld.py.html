@@ -1,0 +1,173 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/ctypes/macholib/dyld.py</b><br>
+
+
+file stats: <b>106 lines, 74 executed: 69.8% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;</font>
+<font color="black">   2. dyld emulation</font>
+<font color="green">   3. &quot;&quot;&quot;</font>
+<font color="black">   4. </font>
+<font color="green">   5. import os</font>
+<font color="green">   6. from framework import framework_info</font>
+<font color="green">   7. from dylib import dylib_info</font>
+<font color="green">   8. from itertools import *</font>
+<font color="black">   9. </font>
+<font color="black">  10. __all__ = [</font>
+<font color="green">  11.     'dyld_find', 'framework_find',</font>
+<font color="green">  12.     'framework_info', 'dylib_info',</font>
+<font color="black">  13. ]</font>
+<font color="black">  14. </font>
+<font color="black">  15. # These are the defaults as per man dyld(1)</font>
+<font color="black">  16. #</font>
+<font color="black">  17. DEFAULT_FRAMEWORK_FALLBACK = [</font>
+<font color="green">  18.     os.path.expanduser(&quot;~/Library/Frameworks&quot;),</font>
+<font color="green">  19.     &quot;/Library/Frameworks&quot;,</font>
+<font color="green">  20.     &quot;/Network/Library/Frameworks&quot;,</font>
+<font color="green">  21.     &quot;/System/Library/Frameworks&quot;,</font>
+<font color="black">  22. ]</font>
+<font color="black">  23. </font>
+<font color="black">  24. DEFAULT_LIBRARY_FALLBACK = [</font>
+<font color="green">  25.     os.path.expanduser(&quot;~/lib&quot;),</font>
+<font color="green">  26.     &quot;/usr/local/lib&quot;,</font>
+<font color="green">  27.     &quot;/lib&quot;,</font>
+<font color="green">  28.     &quot;/usr/lib&quot;,</font>
+<font color="black">  29. ]</font>
+<font color="black">  30. </font>
+<font color="green">  31. def ensure_utf8(s):</font>
+<font color="black">  32.     &quot;&quot;&quot;Not all of PyObjC and Python understand unicode paths very well yet&quot;&quot;&quot;</font>
+<font color="green">  33.     if isinstance(s, unicode):</font>
+<font color="red">  34.         return s.encode('utf8')</font>
+<font color="green">  35.     return s</font>
+<font color="black">  36. </font>
+<font color="green">  37. def dyld_env(env, var):</font>
+<font color="green">  38.     if env is None:</font>
+<font color="green">  39.         env = os.environ</font>
+<font color="green">  40.     rval = env.get(var)</font>
+<font color="green">  41.     if rval is None:</font>
+<font color="green">  42.         return []</font>
+<font color="red">  43.     return rval.split(':')</font>
+<font color="black">  44. </font>
+<font color="green">  45. def dyld_image_suffix(env=None):</font>
+<font color="green">  46.     if env is None:</font>
+<font color="green">  47.         env = os.environ</font>
+<font color="green">  48.     return env.get('DYLD_IMAGE_SUFFIX')</font>
+<font color="black">  49. </font>
+<font color="green">  50. def dyld_framework_path(env=None):</font>
+<font color="green">  51.     return dyld_env(env, 'DYLD_FRAMEWORK_PATH')</font>
+<font color="black">  52. </font>
+<font color="green">  53. def dyld_library_path(env=None):</font>
+<font color="green">  54.     return dyld_env(env, 'DYLD_LIBRARY_PATH')</font>
+<font color="black">  55. </font>
+<font color="green">  56. def dyld_fallback_framework_path(env=None):</font>
+<font color="green">  57.     return dyld_env(env, 'DYLD_FALLBACK_FRAMEWORK_PATH')</font>
+<font color="black">  58. </font>
+<font color="green">  59. def dyld_fallback_library_path(env=None):</font>
+<font color="green">  60.     return dyld_env(env, 'DYLD_FALLBACK_LIBRARY_PATH')</font>
+<font color="black">  61. </font>
+<font color="green">  62. def dyld_image_suffix_search(iterator, env=None):</font>
+<font color="black">  63.     &quot;&quot;&quot;For a potential path iterator, add DYLD_IMAGE_SUFFIX semantics&quot;&quot;&quot;</font>
+<font color="green">  64.     suffix = dyld_image_suffix(env)</font>
+<font color="green">  65.     if suffix is None:</font>
+<font color="green">  66.         return iterator</font>
+<font color="red">  67.     def _inject(iterator=iterator, suffix=suffix):</font>
+<font color="red">  68.         for path in iterator:</font>
+<font color="red">  69.             if path.endswith('.dylib'):</font>
+<font color="red">  70.                 yield path[:-len('.dylib')] + suffix + '.dylib'</font>
+<font color="black">  71.             else:</font>
+<font color="red">  72.                 yield path + suffix</font>
+<font color="red">  73.             yield path</font>
+<font color="red">  74.     return _inject()</font>
+<font color="black">  75. </font>
+<font color="green">  76. def dyld_override_search(name, env=None):</font>
+<font color="black">  77.     # If DYLD_FRAMEWORK_PATH is set and this dylib_name is a</font>
+<font color="black">  78.     # framework name, use the first file that exists in the framework</font>
+<font color="black">  79.     # path if any.  If there is none go on to search the DYLD_LIBRARY_PATH</font>
+<font color="black">  80.     # if any.</font>
+<font color="black">  81. </font>
+<font color="green">  82.     framework = framework_info(name)</font>
+<font color="black">  83. </font>
+<font color="green">  84.     if framework is not None:</font>
+<font color="green">  85.         for path in dyld_framework_path(env):</font>
+<font color="red">  86.             yield os.path.join(path, framework['name'])</font>
+<font color="black">  87. </font>
+<font color="black">  88.     # If DYLD_LIBRARY_PATH is set then use the first file that exists</font>
+<font color="black">  89.     # in the path.  If none use the original name.</font>
+<font color="green">  90.     for path in dyld_library_path(env):</font>
+<font color="red">  91.         yield os.path.join(path, os.path.basename(name))</font>
+<font color="black">  92. </font>
+<font color="green">  93. def dyld_executable_path_search(name, executable_path=None):</font>
+<font color="black">  94.     # If we haven't done any searching and found a library and the</font>
+<font color="black">  95.     # dylib_name starts with &quot;@executable_path/&quot; then construct the</font>
+<font color="black">  96.     # library name.</font>
+<font color="green">  97.     if name.startswith('@executable_path/') and executable_path is not None:</font>
+<font color="red">  98.         yield os.path.join(executable_path, name[len('@executable_path/'):])</font>
+<font color="black">  99. </font>
+<font color="green"> 100. def dyld_default_search(name, env=None):</font>
+<font color="green"> 101.     yield name</font>
+<font color="black"> 102. </font>
+<font color="green"> 103.     framework = framework_info(name)</font>
+<font color="black"> 104. </font>
+<font color="green"> 105.     if framework is not None:</font>
+<font color="green"> 106.         fallback_framework_path = dyld_fallback_framework_path(env)</font>
+<font color="green"> 107.         for path in fallback_framework_path:</font>
+<font color="red"> 108.             yield os.path.join(path, framework['name'])</font>
+<font color="black"> 109. </font>
+<font color="green"> 110.     fallback_library_path = dyld_fallback_library_path(env)</font>
+<font color="green"> 111.     for path in fallback_library_path:</font>
+<font color="red"> 112.         yield os.path.join(path, os.path.basename(name))</font>
+<font color="black"> 113. </font>
+<font color="green"> 114.     if framework is not None and not fallback_framework_path:</font>
+<font color="green"> 115.         for path in DEFAULT_FRAMEWORK_FALLBACK:</font>
+<font color="green"> 116.             yield os.path.join(path, framework['name'])</font>
+<font color="black"> 117. </font>
+<font color="green"> 118.     if not fallback_library_path:</font>
+<font color="green"> 119.         for path in DEFAULT_LIBRARY_FALLBACK:</font>
+<font color="green"> 120.             yield os.path.join(path, os.path.basename(name))</font>
+<font color="black"> 121. </font>
+<font color="green"> 122. def dyld_find(name, executable_path=None, env=None):</font>
+<font color="black"> 123.     &quot;&quot;&quot;</font>
+<font color="black"> 124.     Find a library or framework using dyld semantics</font>
+<font color="black"> 125.     &quot;&quot;&quot;</font>
+<font color="green"> 126.     name = ensure_utf8(name)</font>
+<font color="green"> 127.     executable_path = ensure_utf8(executable_path)</font>
+<font color="green"> 128.     for path in dyld_image_suffix_search(chain(</font>
+<font color="green"> 129.                 dyld_override_search(name, env),</font>
+<font color="green"> 130.                 dyld_executable_path_search(name, executable_path),</font>
+<font color="green"> 131.                 dyld_default_search(name, env),</font>
+<font color="green"> 132.             ), env):</font>
+<font color="green"> 133.         if os.path.isfile(path):</font>
+<font color="red"> 134.             return path</font>
+<font color="green"> 135.     raise ValueError(&quot;dylib %s could not be found&quot; % (name,))</font>
+<font color="black"> 136. </font>
+<font color="green"> 137. def framework_find(fn, executable_path=None, env=None):</font>
+<font color="black"> 138.     &quot;&quot;&quot;</font>
+<font color="black"> 139.     Find a framework using dyld semantics in a very loose manner.</font>
+<font color="black"> 140. </font>
+<font color="black"> 141.     Will take input such as:</font>
+<font color="black"> 142.         Python</font>
+<font color="black"> 143.         Python.framework</font>
+<font color="black"> 144.         Python.framework/Versions/Current</font>
+<font color="black"> 145.     &quot;&quot;&quot;</font>
+<font color="red"> 146.     try:</font>
+<font color="red"> 147.         return dyld_find(fn, executable_path=executable_path, env=env)</font>
+<font color="red"> 148.     except ValueError, e:</font>
+<font color="red"> 149.         pass</font>
+<font color="red"> 150.     fmwk_index = fn.rfind('.framework')</font>
+<font color="red"> 151.     if fmwk_index == -1:</font>
+<font color="red"> 152.         fmwk_index = len(fn)</font>
+<font color="red"> 153.         fn += '.framework'</font>
+<font color="red"> 154.     fn = os.path.join(fn, os.path.basename(fn[:fmwk_index]))</font>
+<font color="red"> 155.     try:</font>
+<font color="red"> 156.         return dyld_find(fn, executable_path=executable_path, env=env)</font>
+<font color="red"> 157.     except ValueError:</font>
+<font color="red"> 158.         raise e</font>
+<font color="black"> 159. </font>
+<font color="green"> 160. def test_dyld_find():</font>
+<font color="red"> 161.     env = {}</font>
+<font color="red"> 162.     assert dyld_find('libSystem.dylib') == '/usr/lib/libSystem.dylib'</font>
+<font color="red"> 163.     assert dyld_find('System.framework/System') == '/System/Library/Frameworks/System.framework/System'</font>
+<font color="black"> 164. </font>
+<font color="green"> 165. if __name__ == '__main__':</font>
+<font color="red"> 166.     test_dyld_find()</font>
+</pre>
+

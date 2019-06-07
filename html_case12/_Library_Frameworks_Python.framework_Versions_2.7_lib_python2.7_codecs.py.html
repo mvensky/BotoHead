@@ -1,0 +1,1122 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/codecs.py</b><br>
+
+
+file stats: <b>423 lines, 10 executed: 2.4% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot; codecs -- Python Codec Registry, API and helpers.</font>
+<font color="black">   2. </font>
+<font color="black">   3. </font>
+<font color="black">   4. Written by Marc-Andre Lemburg (mal@lemburg.com).</font>
+<font color="black">   5. </font>
+<font color="black">   6. (c) Copyright CNRI, All Rights Reserved. NO WARRANTY.</font>
+<font color="black">   7. </font>
+<font color="red">   8. &quot;&quot;&quot;#&quot;</font>
+<font color="black">   9. </font>
+<font color="red">  10. import __builtin__, sys</font>
+<font color="black">  11. </font>
+<font color="black">  12. ### Registry and builtin stateless codec functions</font>
+<font color="black">  13. </font>
+<font color="red">  14. try:</font>
+<font color="red">  15.     from _codecs import *</font>
+<font color="red">  16. except ImportError, why:</font>
+<font color="red">  17.     raise SystemError('Failed to load the builtin codecs: %s' % why)</font>
+<font color="black">  18. </font>
+<font color="red">  19. __all__ = [&quot;register&quot;, &quot;lookup&quot;, &quot;open&quot;, &quot;EncodedFile&quot;, &quot;BOM&quot;, &quot;BOM_BE&quot;,</font>
+<font color="red">  20.            &quot;BOM_LE&quot;, &quot;BOM32_BE&quot;, &quot;BOM32_LE&quot;, &quot;BOM64_BE&quot;, &quot;BOM64_LE&quot;,</font>
+<font color="red">  21.            &quot;BOM_UTF8&quot;, &quot;BOM_UTF16&quot;, &quot;BOM_UTF16_LE&quot;, &quot;BOM_UTF16_BE&quot;,</font>
+<font color="red">  22.            &quot;BOM_UTF32&quot;, &quot;BOM_UTF32_LE&quot;, &quot;BOM_UTF32_BE&quot;,</font>
+<font color="red">  23.            &quot;CodecInfo&quot;, &quot;Codec&quot;, &quot;IncrementalEncoder&quot;, &quot;IncrementalDecoder&quot;,</font>
+<font color="red">  24.            &quot;StreamReader&quot;, &quot;StreamWriter&quot;,</font>
+<font color="red">  25.            &quot;StreamReaderWriter&quot;, &quot;StreamRecoder&quot;,</font>
+<font color="red">  26.            &quot;getencoder&quot;, &quot;getdecoder&quot;, &quot;getincrementalencoder&quot;,</font>
+<font color="red">  27.            &quot;getincrementaldecoder&quot;, &quot;getreader&quot;, &quot;getwriter&quot;,</font>
+<font color="red">  28.            &quot;encode&quot;, &quot;decode&quot;, &quot;iterencode&quot;, &quot;iterdecode&quot;,</font>
+<font color="red">  29.            &quot;strict_errors&quot;, &quot;ignore_errors&quot;, &quot;replace_errors&quot;,</font>
+<font color="red">  30.            &quot;xmlcharrefreplace_errors&quot;, &quot;backslashreplace_errors&quot;,</font>
+<font color="red">  31.            &quot;register_error&quot;, &quot;lookup_error&quot;]</font>
+<font color="black">  32. </font>
+<font color="black">  33. ### Constants</font>
+<font color="black">  34. </font>
+<font color="black">  35. #</font>
+<font color="black">  36. # Byte Order Mark (BOM = ZERO WIDTH NO-BREAK SPACE = U+FEFF)</font>
+<font color="black">  37. # and its possible byte string values</font>
+<font color="black">  38. # for UTF8/UTF16/UTF32 output and little/big endian machines</font>
+<font color="black">  39. #</font>
+<font color="black">  40. </font>
+<font color="black">  41. # UTF-8</font>
+<font color="red">  42. BOM_UTF8 = '\xef\xbb\xbf'</font>
+<font color="black">  43. </font>
+<font color="black">  44. # UTF-16, little endian</font>
+<font color="red">  45. BOM_LE = BOM_UTF16_LE = '\xff\xfe'</font>
+<font color="black">  46. </font>
+<font color="black">  47. # UTF-16, big endian</font>
+<font color="red">  48. BOM_BE = BOM_UTF16_BE = '\xfe\xff'</font>
+<font color="black">  49. </font>
+<font color="black">  50. # UTF-32, little endian</font>
+<font color="red">  51. BOM_UTF32_LE = '\xff\xfe\x00\x00'</font>
+<font color="black">  52. </font>
+<font color="black">  53. # UTF-32, big endian</font>
+<font color="red">  54. BOM_UTF32_BE = '\x00\x00\xfe\xff'</font>
+<font color="black">  55. </font>
+<font color="red">  56. if sys.byteorder == 'little':</font>
+<font color="black">  57. </font>
+<font color="black">  58.     # UTF-16, native endianness</font>
+<font color="red">  59.     BOM = BOM_UTF16 = BOM_UTF16_LE</font>
+<font color="black">  60. </font>
+<font color="black">  61.     # UTF-32, native endianness</font>
+<font color="red">  62.     BOM_UTF32 = BOM_UTF32_LE</font>
+<font color="black">  63. </font>
+<font color="black">  64. else:</font>
+<font color="black">  65. </font>
+<font color="black">  66.     # UTF-16, native endianness</font>
+<font color="red">  67.     BOM = BOM_UTF16 = BOM_UTF16_BE</font>
+<font color="black">  68. </font>
+<font color="black">  69.     # UTF-32, native endianness</font>
+<font color="red">  70.     BOM_UTF32 = BOM_UTF32_BE</font>
+<font color="black">  71. </font>
+<font color="black">  72. # Old broken names (don't use in new code)</font>
+<font color="red">  73. BOM32_LE = BOM_UTF16_LE</font>
+<font color="red">  74. BOM32_BE = BOM_UTF16_BE</font>
+<font color="red">  75. BOM64_LE = BOM_UTF32_LE</font>
+<font color="red">  76. BOM64_BE = BOM_UTF32_BE</font>
+<font color="black">  77. </font>
+<font color="black">  78. </font>
+<font color="black">  79. ### Codec base classes (defining the API)</font>
+<font color="black">  80. </font>
+<font color="red">  81. class CodecInfo(tuple):</font>
+<font color="red">  82.     &quot;&quot;&quot;Codec details when looking up the codec registry&quot;&quot;&quot;</font>
+<font color="black">  83. </font>
+<font color="black">  84.     # Private API to allow Python to blacklist the known non-Unicode</font>
+<font color="black">  85.     # codecs in the standard library. A more general mechanism to</font>
+<font color="black">  86.     # reliably distinguish test encodings from other codecs will hopefully</font>
+<font color="black">  87.     # be defined for Python 3.5</font>
+<font color="black">  88.     #</font>
+<font color="black">  89.     # See http://bugs.python.org/issue19619</font>
+<font color="red">  90.     _is_text_encoding = True # Assume codecs are text encodings by default</font>
+<font color="black">  91. </font>
+<font color="red">  92.     def __new__(cls, encode, decode, streamreader=None, streamwriter=None,</font>
+<font color="red">  93.         incrementalencoder=None, incrementaldecoder=None, name=None,</font>
+<font color="red">  94.         _is_text_encoding=None):</font>
+<font color="green">  95.         self = tuple.__new__(cls, (encode, decode, streamreader, streamwriter))</font>
+<font color="green">  96.         self.name = name</font>
+<font color="green">  97.         self.encode = encode</font>
+<font color="green">  98.         self.decode = decode</font>
+<font color="green">  99.         self.incrementalencoder = incrementalencoder</font>
+<font color="green"> 100.         self.incrementaldecoder = incrementaldecoder</font>
+<font color="green"> 101.         self.streamwriter = streamwriter</font>
+<font color="green"> 102.         self.streamreader = streamreader</font>
+<font color="green"> 103.         if _is_text_encoding is not None:</font>
+<font color="red"> 104.             self._is_text_encoding = _is_text_encoding</font>
+<font color="green"> 105.         return self</font>
+<font color="black"> 106. </font>
+<font color="red"> 107.     def __repr__(self):</font>
+<font color="red"> 108.         return &quot;&lt;%s.%s object for encoding %s at 0x%x&gt;&quot; % (self.__class__.__module__, self.__class__.__name__, self.name, id(self))</font>
+<font color="black"> 109. </font>
+<font color="red"> 110. class Codec:</font>
+<font color="black"> 111. </font>
+<font color="black"> 112.     &quot;&quot;&quot; Defines the interface for stateless encoders/decoders.</font>
+<font color="black"> 113. </font>
+<font color="black"> 114.         The .encode()/.decode() methods may use different error</font>
+<font color="black"> 115.         handling schemes by providing the errors argument. These</font>
+<font color="black"> 116.         string values are predefined:</font>
+<font color="black"> 117. </font>
+<font color="black"> 118.          'strict' - raise a ValueError error (or a subclass)</font>
+<font color="black"> 119.          'ignore' - ignore the character and continue with the next</font>
+<font color="black"> 120.          'replace' - replace with a suitable replacement character;</font>
+<font color="black"> 121.                     Python will use the official U+FFFD REPLACEMENT</font>
+<font color="black"> 122.                     CHARACTER for the builtin Unicode codecs on</font>
+<font color="black"> 123.                     decoding and '?' on encoding.</font>
+<font color="black"> 124.          'xmlcharrefreplace' - Replace with the appropriate XML</font>
+<font color="black"> 125.                                character reference (only for encoding).</font>
+<font color="black"> 126.          'backslashreplace'  - Replace with backslashed escape sequences</font>
+<font color="black"> 127.                                (only for encoding).</font>
+<font color="black"> 128. </font>
+<font color="black"> 129.         The set of allowed values can be extended via register_error.</font>
+<font color="black"> 130. </font>
+<font color="red"> 131.     &quot;&quot;&quot;</font>
+<font color="red"> 132.     def encode(self, input, errors='strict'):</font>
+<font color="black"> 133. </font>
+<font color="black"> 134.         &quot;&quot;&quot; Encodes the object input and returns a tuple (output</font>
+<font color="black"> 135.             object, length consumed).</font>
+<font color="black"> 136. </font>
+<font color="black"> 137.             errors defines the error handling to apply. It defaults to</font>
+<font color="black"> 138.             'strict' handling.</font>
+<font color="black"> 139. </font>
+<font color="black"> 140.             The method may not store state in the Codec instance. Use</font>
+<font color="black"> 141.             StreamWriter for codecs which have to keep state in order to</font>
+<font color="black"> 142.             make encoding efficient.</font>
+<font color="black"> 143. </font>
+<font color="black"> 144.             The encoder must be able to handle zero length input and</font>
+<font color="black"> 145.             return an empty object of the output object type in this</font>
+<font color="black"> 146.             situation.</font>
+<font color="black"> 147. </font>
+<font color="black"> 148.         &quot;&quot;&quot;</font>
+<font color="red"> 149.         raise NotImplementedError</font>
+<font color="black"> 150. </font>
+<font color="red"> 151.     def decode(self, input, errors='strict'):</font>
+<font color="black"> 152. </font>
+<font color="black"> 153.         &quot;&quot;&quot; Decodes the object input and returns a tuple (output</font>
+<font color="black"> 154.             object, length consumed).</font>
+<font color="black"> 155. </font>
+<font color="black"> 156.             input must be an object which provides the bf_getreadbuf</font>
+<font color="black"> 157.             buffer slot. Python strings, buffer objects and memory</font>
+<font color="black"> 158.             mapped files are examples of objects providing this slot.</font>
+<font color="black"> 159. </font>
+<font color="black"> 160.             errors defines the error handling to apply. It defaults to</font>
+<font color="black"> 161.             'strict' handling.</font>
+<font color="black"> 162. </font>
+<font color="black"> 163.             The method may not store state in the Codec instance. Use</font>
+<font color="black"> 164.             StreamReader for codecs which have to keep state in order to</font>
+<font color="black"> 165.             make decoding efficient.</font>
+<font color="black"> 166. </font>
+<font color="black"> 167.             The decoder must be able to handle zero length input and</font>
+<font color="black"> 168.             return an empty object of the output object type in this</font>
+<font color="black"> 169.             situation.</font>
+<font color="black"> 170. </font>
+<font color="black"> 171.         &quot;&quot;&quot;</font>
+<font color="red"> 172.         raise NotImplementedError</font>
+<font color="black"> 173. </font>
+<font color="red"> 174. class IncrementalEncoder(object):</font>
+<font color="black"> 175.     &quot;&quot;&quot;</font>
+<font color="black"> 176.     An IncrementalEncoder encodes an input in multiple steps. The input can be</font>
+<font color="black"> 177.     passed piece by piece to the encode() method. The IncrementalEncoder remembers</font>
+<font color="black"> 178.     the state of the Encoding process between calls to encode().</font>
+<font color="red"> 179.     &quot;&quot;&quot;</font>
+<font color="red"> 180.     def __init__(self, errors='strict'):</font>
+<font color="black"> 181.         &quot;&quot;&quot;</font>
+<font color="black"> 182.         Creates an IncrementalEncoder instance.</font>
+<font color="black"> 183. </font>
+<font color="black"> 184.         The IncrementalEncoder may use different error handling schemes by</font>
+<font color="black"> 185.         providing the errors keyword argument. See the module docstring</font>
+<font color="black"> 186.         for a list of possible values.</font>
+<font color="black"> 187.         &quot;&quot;&quot;</font>
+<font color="red"> 188.         self.errors = errors</font>
+<font color="red"> 189.         self.buffer = &quot;&quot;</font>
+<font color="black"> 190. </font>
+<font color="red"> 191.     def encode(self, input, final=False):</font>
+<font color="black"> 192.         &quot;&quot;&quot;</font>
+<font color="black"> 193.         Encodes input and returns the resulting object.</font>
+<font color="black"> 194.         &quot;&quot;&quot;</font>
+<font color="red"> 195.         raise NotImplementedError</font>
+<font color="black"> 196. </font>
+<font color="red"> 197.     def reset(self):</font>
+<font color="black"> 198.         &quot;&quot;&quot;</font>
+<font color="black"> 199.         Resets the encoder to the initial state.</font>
+<font color="black"> 200.         &quot;&quot;&quot;</font>
+<font color="black"> 201. </font>
+<font color="red"> 202.     def getstate(self):</font>
+<font color="black"> 203.         &quot;&quot;&quot;</font>
+<font color="black"> 204.         Return the current state of the encoder.</font>
+<font color="black"> 205.         &quot;&quot;&quot;</font>
+<font color="red"> 206.         return 0</font>
+<font color="black"> 207. </font>
+<font color="red"> 208.     def setstate(self, state):</font>
+<font color="black"> 209.         &quot;&quot;&quot;</font>
+<font color="black"> 210.         Set the current state of the encoder. state must have been</font>
+<font color="black"> 211.         returned by getstate().</font>
+<font color="black"> 212.         &quot;&quot;&quot;</font>
+<font color="black"> 213. </font>
+<font color="red"> 214. class BufferedIncrementalEncoder(IncrementalEncoder):</font>
+<font color="black"> 215.     &quot;&quot;&quot;</font>
+<font color="black"> 216.     This subclass of IncrementalEncoder can be used as the baseclass for an</font>
+<font color="black"> 217.     incremental encoder if the encoder must keep some of the output in a</font>
+<font color="black"> 218.     buffer between calls to encode().</font>
+<font color="red"> 219.     &quot;&quot;&quot;</font>
+<font color="red"> 220.     def __init__(self, errors='strict'):</font>
+<font color="red"> 221.         IncrementalEncoder.__init__(self, errors)</font>
+<font color="red"> 222.         self.buffer = &quot;&quot; # unencoded input that is kept between calls to encode()</font>
+<font color="black"> 223. </font>
+<font color="red"> 224.     def _buffer_encode(self, input, errors, final):</font>
+<font color="black"> 225.         # Overwrite this method in subclasses: It must encode input</font>
+<font color="black"> 226.         # and return an (output, length consumed) tuple</font>
+<font color="red"> 227.         raise NotImplementedError</font>
+<font color="black"> 228. </font>
+<font color="red"> 229.     def encode(self, input, final=False):</font>
+<font color="black"> 230.         # encode input (taking the buffer into account)</font>
+<font color="red"> 231.         data = self.buffer + input</font>
+<font color="red"> 232.         (result, consumed) = self._buffer_encode(data, self.errors, final)</font>
+<font color="black"> 233.         # keep unencoded input until the next call</font>
+<font color="red"> 234.         self.buffer = data[consumed:]</font>
+<font color="red"> 235.         return result</font>
+<font color="black"> 236. </font>
+<font color="red"> 237.     def reset(self):</font>
+<font color="red"> 238.         IncrementalEncoder.reset(self)</font>
+<font color="red"> 239.         self.buffer = &quot;&quot;</font>
+<font color="black"> 240. </font>
+<font color="red"> 241.     def getstate(self):</font>
+<font color="red"> 242.         return self.buffer or 0</font>
+<font color="black"> 243. </font>
+<font color="red"> 244.     def setstate(self, state):</font>
+<font color="red"> 245.         self.buffer = state or &quot;&quot;</font>
+<font color="black"> 246. </font>
+<font color="red"> 247. class IncrementalDecoder(object):</font>
+<font color="black"> 248.     &quot;&quot;&quot;</font>
+<font color="black"> 249.     An IncrementalDecoder decodes an input in multiple steps. The input can be</font>
+<font color="black"> 250.     passed piece by piece to the decode() method. The IncrementalDecoder</font>
+<font color="black"> 251.     remembers the state of the decoding process between calls to decode().</font>
+<font color="red"> 252.     &quot;&quot;&quot;</font>
+<font color="red"> 253.     def __init__(self, errors='strict'):</font>
+<font color="black"> 254.         &quot;&quot;&quot;</font>
+<font color="black"> 255.         Creates an IncrementalDecoder instance.</font>
+<font color="black"> 256. </font>
+<font color="black"> 257.         The IncrementalDecoder may use different error handling schemes by</font>
+<font color="black"> 258.         providing the errors keyword argument. See the module docstring</font>
+<font color="black"> 259.         for a list of possible values.</font>
+<font color="black"> 260.         &quot;&quot;&quot;</font>
+<font color="red"> 261.         self.errors = errors</font>
+<font color="black"> 262. </font>
+<font color="red"> 263.     def decode(self, input, final=False):</font>
+<font color="black"> 264.         &quot;&quot;&quot;</font>
+<font color="black"> 265.         Decodes input and returns the resulting object.</font>
+<font color="black"> 266.         &quot;&quot;&quot;</font>
+<font color="red"> 267.         raise NotImplementedError</font>
+<font color="black"> 268. </font>
+<font color="red"> 269.     def reset(self):</font>
+<font color="black"> 270.         &quot;&quot;&quot;</font>
+<font color="black"> 271.         Resets the decoder to the initial state.</font>
+<font color="black"> 272.         &quot;&quot;&quot;</font>
+<font color="black"> 273. </font>
+<font color="red"> 274.     def getstate(self):</font>
+<font color="black"> 275.         &quot;&quot;&quot;</font>
+<font color="black"> 276.         Return the current state of the decoder.</font>
+<font color="black"> 277. </font>
+<font color="black"> 278.         This must be a (buffered_input, additional_state_info) tuple.</font>
+<font color="black"> 279.         buffered_input must be a bytes object containing bytes that</font>
+<font color="black"> 280.         were passed to decode() that have not yet been converted.</font>
+<font color="black"> 281.         additional_state_info must be a non-negative integer</font>
+<font color="black"> 282.         representing the state of the decoder WITHOUT yet having</font>
+<font color="black"> 283.         processed the contents of buffered_input.  In the initial state</font>
+<font color="black"> 284.         and after reset(), getstate() must return (b&quot;&quot;, 0).</font>
+<font color="black"> 285.         &quot;&quot;&quot;</font>
+<font color="red"> 286.         return (b&quot;&quot;, 0)</font>
+<font color="black"> 287. </font>
+<font color="red"> 288.     def setstate(self, state):</font>
+<font color="black"> 289.         &quot;&quot;&quot;</font>
+<font color="black"> 290.         Set the current state of the decoder.</font>
+<font color="black"> 291. </font>
+<font color="black"> 292.         state must have been returned by getstate().  The effect of</font>
+<font color="black"> 293.         setstate((b&quot;&quot;, 0)) must be equivalent to reset().</font>
+<font color="black"> 294.         &quot;&quot;&quot;</font>
+<font color="black"> 295. </font>
+<font color="red"> 296. class BufferedIncrementalDecoder(IncrementalDecoder):</font>
+<font color="black"> 297.     &quot;&quot;&quot;</font>
+<font color="black"> 298.     This subclass of IncrementalDecoder can be used as the baseclass for an</font>
+<font color="black"> 299.     incremental decoder if the decoder must be able to handle incomplete byte</font>
+<font color="black"> 300.     sequences.</font>
+<font color="red"> 301.     &quot;&quot;&quot;</font>
+<font color="red"> 302.     def __init__(self, errors='strict'):</font>
+<font color="red"> 303.         IncrementalDecoder.__init__(self, errors)</font>
+<font color="red"> 304.         self.buffer = &quot;&quot; # undecoded input that is kept between calls to decode()</font>
+<font color="black"> 305. </font>
+<font color="red"> 306.     def _buffer_decode(self, input, errors, final):</font>
+<font color="black"> 307.         # Overwrite this method in subclasses: It must decode input</font>
+<font color="black"> 308.         # and return an (output, length consumed) tuple</font>
+<font color="red"> 309.         raise NotImplementedError</font>
+<font color="black"> 310. </font>
+<font color="red"> 311.     def decode(self, input, final=False):</font>
+<font color="black"> 312.         # decode input (taking the buffer into account)</font>
+<font color="red"> 313.         data = self.buffer + input</font>
+<font color="red"> 314.         (result, consumed) = self._buffer_decode(data, self.errors, final)</font>
+<font color="black"> 315.         # keep undecoded input until the next call</font>
+<font color="red"> 316.         self.buffer = data[consumed:]</font>
+<font color="red"> 317.         return result</font>
+<font color="black"> 318. </font>
+<font color="red"> 319.     def reset(self):</font>
+<font color="red"> 320.         IncrementalDecoder.reset(self)</font>
+<font color="red"> 321.         self.buffer = &quot;&quot;</font>
+<font color="black"> 322. </font>
+<font color="red"> 323.     def getstate(self):</font>
+<font color="black"> 324.         # additional state info is always 0</font>
+<font color="red"> 325.         return (self.buffer, 0)</font>
+<font color="black"> 326. </font>
+<font color="red"> 327.     def setstate(self, state):</font>
+<font color="black"> 328.         # ignore additional state info</font>
+<font color="red"> 329.         self.buffer = state[0]</font>
+<font color="black"> 330. </font>
+<font color="black"> 331. #</font>
+<font color="black"> 332. # The StreamWriter and StreamReader class provide generic working</font>
+<font color="black"> 333. # interfaces which can be used to implement new encoding submodules</font>
+<font color="black"> 334. # very easily. See encodings/utf_8.py for an example on how this is</font>
+<font color="black"> 335. # done.</font>
+<font color="black"> 336. #</font>
+<font color="black"> 337. </font>
+<font color="red"> 338. class StreamWriter(Codec):</font>
+<font color="black"> 339. </font>
+<font color="red"> 340.     def __init__(self, stream, errors='strict'):</font>
+<font color="black"> 341. </font>
+<font color="black"> 342.         &quot;&quot;&quot; Creates a StreamWriter instance.</font>
+<font color="black"> 343. </font>
+<font color="black"> 344.             stream must be a file-like object open for writing</font>
+<font color="black"> 345.             (binary) data.</font>
+<font color="black"> 346. </font>
+<font color="black"> 347.             The StreamWriter may use different error handling</font>
+<font color="black"> 348.             schemes by providing the errors keyword argument. These</font>
+<font color="black"> 349.             parameters are predefined:</font>
+<font color="black"> 350. </font>
+<font color="black"> 351.              'strict' - raise a ValueError (or a subclass)</font>
+<font color="black"> 352.              'ignore' - ignore the character and continue with the next</font>
+<font color="black"> 353.              'replace'- replace with a suitable replacement character</font>
+<font color="black"> 354.              'xmlcharrefreplace' - Replace with the appropriate XML</font>
+<font color="black"> 355.                                    character reference.</font>
+<font color="black"> 356.              'backslashreplace'  - Replace with backslashed escape</font>
+<font color="black"> 357.                                    sequences (only for encoding).</font>
+<font color="black"> 358. </font>
+<font color="black"> 359.             The set of allowed parameter values can be extended via</font>
+<font color="black"> 360.             register_error.</font>
+<font color="black"> 361.         &quot;&quot;&quot;</font>
+<font color="red"> 362.         self.stream = stream</font>
+<font color="red"> 363.         self.errors = errors</font>
+<font color="black"> 364. </font>
+<font color="red"> 365.     def write(self, object):</font>
+<font color="black"> 366. </font>
+<font color="black"> 367.         &quot;&quot;&quot; Writes the object's contents encoded to self.stream.</font>
+<font color="black"> 368.         &quot;&quot;&quot;</font>
+<font color="red"> 369.         data, consumed = self.encode(object, self.errors)</font>
+<font color="red"> 370.         self.stream.write(data)</font>
+<font color="black"> 371. </font>
+<font color="red"> 372.     def writelines(self, list):</font>
+<font color="black"> 373. </font>
+<font color="black"> 374.         &quot;&quot;&quot; Writes the concatenated list of strings to the stream</font>
+<font color="black"> 375.             using .write().</font>
+<font color="black"> 376.         &quot;&quot;&quot;</font>
+<font color="red"> 377.         self.write(''.join(list))</font>
+<font color="black"> 378. </font>
+<font color="red"> 379.     def reset(self):</font>
+<font color="black"> 380. </font>
+<font color="black"> 381.         &quot;&quot;&quot; Flushes and resets the codec buffers used for keeping state.</font>
+<font color="black"> 382. </font>
+<font color="black"> 383.             Calling this method should ensure that the data on the</font>
+<font color="black"> 384.             output is put into a clean state, that allows appending</font>
+<font color="black"> 385.             of new fresh data without having to rescan the whole</font>
+<font color="black"> 386.             stream to recover state.</font>
+<font color="black"> 387. </font>
+<font color="black"> 388.         &quot;&quot;&quot;</font>
+<font color="red"> 389.         pass</font>
+<font color="black"> 390. </font>
+<font color="red"> 391.     def seek(self, offset, whence=0):</font>
+<font color="red"> 392.         self.stream.seek(offset, whence)</font>
+<font color="red"> 393.         if whence == 0 and offset == 0:</font>
+<font color="red"> 394.             self.reset()</font>
+<font color="black"> 395. </font>
+<font color="black"> 396.     def __getattr__(self, name,</font>
+<font color="red"> 397.                     getattr=getattr):</font>
+<font color="black"> 398. </font>
+<font color="black"> 399.         &quot;&quot;&quot; Inherit all other methods from the underlying stream.</font>
+<font color="black"> 400.         &quot;&quot;&quot;</font>
+<font color="red"> 401.         return getattr(self.stream, name)</font>
+<font color="black"> 402. </font>
+<font color="red"> 403.     def __enter__(self):</font>
+<font color="red"> 404.         return self</font>
+<font color="black"> 405. </font>
+<font color="red"> 406.     def __exit__(self, type, value, tb):</font>
+<font color="red"> 407.         self.stream.close()</font>
+<font color="black"> 408. </font>
+<font color="black"> 409. ###</font>
+<font color="black"> 410. </font>
+<font color="red"> 411. class StreamReader(Codec):</font>
+<font color="black"> 412. </font>
+<font color="red"> 413.     def __init__(self, stream, errors='strict'):</font>
+<font color="black"> 414. </font>
+<font color="black"> 415.         &quot;&quot;&quot; Creates a StreamReader instance.</font>
+<font color="black"> 416. </font>
+<font color="black"> 417.             stream must be a file-like object open for reading</font>
+<font color="black"> 418.             (binary) data.</font>
+<font color="black"> 419. </font>
+<font color="black"> 420.             The StreamReader may use different error handling</font>
+<font color="black"> 421.             schemes by providing the errors keyword argument. These</font>
+<font color="black"> 422.             parameters are predefined:</font>
+<font color="black"> 423. </font>
+<font color="black"> 424.              'strict' - raise a ValueError (or a subclass)</font>
+<font color="black"> 425.              'ignore' - ignore the character and continue with the next</font>
+<font color="black"> 426.              'replace'- replace with a suitable replacement character;</font>
+<font color="black"> 427. </font>
+<font color="black"> 428.             The set of allowed parameter values can be extended via</font>
+<font color="black"> 429.             register_error.</font>
+<font color="black"> 430.         &quot;&quot;&quot;</font>
+<font color="red"> 431.         self.stream = stream</font>
+<font color="red"> 432.         self.errors = errors</font>
+<font color="red"> 433.         self.bytebuffer = &quot;&quot;</font>
+<font color="black"> 434.         # For str-&gt;str decoding this will stay a str</font>
+<font color="black"> 435.         # For str-&gt;unicode decoding the first read will promote it to unicode</font>
+<font color="red"> 436.         self.charbuffer = &quot;&quot;</font>
+<font color="red"> 437.         self.linebuffer = None</font>
+<font color="black"> 438. </font>
+<font color="red"> 439.     def decode(self, input, errors='strict'):</font>
+<font color="red"> 440.         raise NotImplementedError</font>
+<font color="black"> 441. </font>
+<font color="red"> 442.     def read(self, size=-1, chars=-1, firstline=False):</font>
+<font color="black"> 443. </font>
+<font color="black"> 444.         &quot;&quot;&quot; Decodes data from the stream self.stream and returns the</font>
+<font color="black"> 445.             resulting object.</font>
+<font color="black"> 446. </font>
+<font color="black"> 447.             chars indicates the number of characters to read from the</font>
+<font color="black"> 448.             stream. read() will never return more than chars</font>
+<font color="black"> 449.             characters, but it might return less, if there are not enough</font>
+<font color="black"> 450.             characters available.</font>
+<font color="black"> 451. </font>
+<font color="black"> 452.             size indicates the approximate maximum number of bytes to</font>
+<font color="black"> 453.             read from the stream for decoding purposes. The decoder</font>
+<font color="black"> 454.             can modify this setting as appropriate. The default value</font>
+<font color="black"> 455.             -1 indicates to read and decode as much as possible.  size</font>
+<font color="black"> 456.             is intended to prevent having to decode huge files in one</font>
+<font color="black"> 457.             step.</font>
+<font color="black"> 458. </font>
+<font color="black"> 459.             If firstline is true, and a UnicodeDecodeError happens</font>
+<font color="black"> 460.             after the first line terminator in the input only the first line</font>
+<font color="black"> 461.             will be returned, the rest of the input will be kept until the</font>
+<font color="black"> 462.             next call to read().</font>
+<font color="black"> 463. </font>
+<font color="black"> 464.             The method should use a greedy read strategy meaning that</font>
+<font color="black"> 465.             it should read as much data as is allowed within the</font>
+<font color="black"> 466.             definition of the encoding and the given size, e.g.  if</font>
+<font color="black"> 467.             optional encoding endings or state markers are available</font>
+<font color="black"> 468.             on the stream, these should be read too.</font>
+<font color="black"> 469.         &quot;&quot;&quot;</font>
+<font color="black"> 470.         # If we have lines cached, first merge them back into characters</font>
+<font color="red"> 471.         if self.linebuffer:</font>
+<font color="red"> 472.             self.charbuffer = &quot;&quot;.join(self.linebuffer)</font>
+<font color="red"> 473.             self.linebuffer = None</font>
+<font color="black"> 474. </font>
+<font color="red"> 475.         if chars &lt; 0:</font>
+<font color="black"> 476.             # For compatibility with other read() methods that take a</font>
+<font color="black"> 477.             # single argument</font>
+<font color="red"> 478.             chars = size</font>
+<font color="black"> 479. </font>
+<font color="black"> 480.         # read until we get the required number of characters (if available)</font>
+<font color="red"> 481.         while True:</font>
+<font color="black"> 482.             # can the request be satisfied from the character buffer?</font>
+<font color="red"> 483.             if chars &gt;= 0:</font>
+<font color="red"> 484.                 if len(self.charbuffer) &gt;= chars:</font>
+<font color="red"> 485.                     break</font>
+<font color="black"> 486.             # we need more data</font>
+<font color="red"> 487.             if size &lt; 0:</font>
+<font color="red"> 488.                 newdata = self.stream.read()</font>
+<font color="black"> 489.             else:</font>
+<font color="red"> 490.                 newdata = self.stream.read(size)</font>
+<font color="black"> 491.             # decode bytes (those remaining from the last call included)</font>
+<font color="red"> 492.             data = self.bytebuffer + newdata</font>
+<font color="red"> 493.             try:</font>
+<font color="red"> 494.                 newchars, decodedbytes = self.decode(data, self.errors)</font>
+<font color="red"> 495.             except UnicodeDecodeError, exc:</font>
+<font color="red"> 496.                 if firstline:</font>
+<font color="red"> 497.                     newchars, decodedbytes = self.decode(data[:exc.start], self.errors)</font>
+<font color="red"> 498.                     lines = newchars.splitlines(True)</font>
+<font color="red"> 499.                     if len(lines)&lt;=1:</font>
+<font color="red"> 500.                         raise</font>
+<font color="black"> 501.                 else:</font>
+<font color="red"> 502.                     raise</font>
+<font color="black"> 503.             # keep undecoded bytes until the next call</font>
+<font color="red"> 504.             self.bytebuffer = data[decodedbytes:]</font>
+<font color="black"> 505.             # put new characters in the character buffer</font>
+<font color="red"> 506.             self.charbuffer += newchars</font>
+<font color="black"> 507.             # there was no data available</font>
+<font color="red"> 508.             if not newdata:</font>
+<font color="red"> 509.                 break</font>
+<font color="red"> 510.         if chars &lt; 0:</font>
+<font color="black"> 511.             # Return everything we've got</font>
+<font color="red"> 512.             result = self.charbuffer</font>
+<font color="red"> 513.             self.charbuffer = &quot;&quot;</font>
+<font color="black"> 514.         else:</font>
+<font color="black"> 515.             # Return the first chars characters</font>
+<font color="red"> 516.             result = self.charbuffer[:chars]</font>
+<font color="red"> 517.             self.charbuffer = self.charbuffer[chars:]</font>
+<font color="red"> 518.         return result</font>
+<font color="black"> 519. </font>
+<font color="red"> 520.     def readline(self, size=None, keepends=True):</font>
+<font color="black"> 521. </font>
+<font color="black"> 522.         &quot;&quot;&quot; Read one line from the input stream and return the</font>
+<font color="black"> 523.             decoded data.</font>
+<font color="black"> 524. </font>
+<font color="black"> 525.             size, if given, is passed as size argument to the</font>
+<font color="black"> 526.             read() method.</font>
+<font color="black"> 527. </font>
+<font color="black"> 528.         &quot;&quot;&quot;</font>
+<font color="black"> 529.         # If we have lines cached from an earlier read, return</font>
+<font color="black"> 530.         # them unconditionally</font>
+<font color="red"> 531.         if self.linebuffer:</font>
+<font color="red"> 532.             line = self.linebuffer[0]</font>
+<font color="red"> 533.             del self.linebuffer[0]</font>
+<font color="red"> 534.             if len(self.linebuffer) == 1:</font>
+<font color="black"> 535.                 # revert to charbuffer mode; we might need more data</font>
+<font color="black"> 536.                 # next time</font>
+<font color="red"> 537.                 self.charbuffer = self.linebuffer[0]</font>
+<font color="red"> 538.                 self.linebuffer = None</font>
+<font color="red"> 539.             if not keepends:</font>
+<font color="red"> 540.                 line = line.splitlines(False)[0]</font>
+<font color="red"> 541.             return line</font>
+<font color="black"> 542. </font>
+<font color="red"> 543.         readsize = size or 72</font>
+<font color="red"> 544.         line = &quot;&quot;</font>
+<font color="black"> 545.         # If size is given, we call read() only once</font>
+<font color="red"> 546.         while True:</font>
+<font color="red"> 547.             data = self.read(readsize, firstline=True)</font>
+<font color="red"> 548.             if data:</font>
+<font color="black"> 549.                 # If we're at a &quot;\r&quot; read one extra character (which might</font>
+<font color="black"> 550.                 # be a &quot;\n&quot;) to get a proper line ending. If the stream is</font>
+<font color="black"> 551.                 # temporarily exhausted we return the wrong line ending.</font>
+<font color="red"> 552.                 if data.endswith(&quot;\r&quot;):</font>
+<font color="red"> 553.                     data += self.read(size=1, chars=1)</font>
+<font color="black"> 554. </font>
+<font color="red"> 555.             line += data</font>
+<font color="red"> 556.             lines = line.splitlines(True)</font>
+<font color="red"> 557.             if lines:</font>
+<font color="red"> 558.                 if len(lines) &gt; 1:</font>
+<font color="black"> 559.                     # More than one line result; the first line is a full line</font>
+<font color="black"> 560.                     # to return</font>
+<font color="red"> 561.                     line = lines[0]</font>
+<font color="red"> 562.                     del lines[0]</font>
+<font color="red"> 563.                     if len(lines) &gt; 1:</font>
+<font color="black"> 564.                         # cache the remaining lines</font>
+<font color="red"> 565.                         lines[-1] += self.charbuffer</font>
+<font color="red"> 566.                         self.linebuffer = lines</font>
+<font color="red"> 567.                         self.charbuffer = None</font>
+<font color="black"> 568.                     else:</font>
+<font color="black"> 569.                         # only one remaining line, put it back into charbuffer</font>
+<font color="red"> 570.                         self.charbuffer = lines[0] + self.charbuffer</font>
+<font color="red"> 571.                     if not keepends:</font>
+<font color="red"> 572.                         line = line.splitlines(False)[0]</font>
+<font color="red"> 573.                     break</font>
+<font color="red"> 574.                 line0withend = lines[0]</font>
+<font color="red"> 575.                 line0withoutend = lines[0].splitlines(False)[0]</font>
+<font color="red"> 576.                 if line0withend != line0withoutend: # We really have a line end</font>
+<font color="black"> 577.                     # Put the rest back together and keep it until the next call</font>
+<font color="red"> 578.                     self.charbuffer = &quot;&quot;.join(lines[1:]) + self.charbuffer</font>
+<font color="red"> 579.                     if keepends:</font>
+<font color="red"> 580.                         line = line0withend</font>
+<font color="black"> 581.                     else:</font>
+<font color="red"> 582.                         line = line0withoutend</font>
+<font color="red"> 583.                     break</font>
+<font color="black"> 584.             # we didn't get anything or this was our only try</font>
+<font color="red"> 585.             if not data or size is not None:</font>
+<font color="red"> 586.                 if line and not keepends:</font>
+<font color="red"> 587.                     line = line.splitlines(False)[0]</font>
+<font color="red"> 588.                 break</font>
+<font color="red"> 589.             if readsize&lt;8000:</font>
+<font color="red"> 590.                 readsize *= 2</font>
+<font color="red"> 591.         return line</font>
+<font color="black"> 592. </font>
+<font color="red"> 593.     def readlines(self, sizehint=None, keepends=True):</font>
+<font color="black"> 594. </font>
+<font color="black"> 595.         &quot;&quot;&quot; Read all lines available on the input stream</font>
+<font color="black"> 596.             and return them as list of lines.</font>
+<font color="black"> 597. </font>
+<font color="black"> 598.             Line breaks are implemented using the codec's decoder</font>
+<font color="black"> 599.             method and are included in the list entries.</font>
+<font color="black"> 600. </font>
+<font color="black"> 601.             sizehint, if given, is ignored since there is no efficient</font>
+<font color="black"> 602.             way to finding the true end-of-line.</font>
+<font color="black"> 603. </font>
+<font color="black"> 604.         &quot;&quot;&quot;</font>
+<font color="red"> 605.         data = self.read()</font>
+<font color="red"> 606.         return data.splitlines(keepends)</font>
+<font color="black"> 607. </font>
+<font color="red"> 608.     def reset(self):</font>
+<font color="black"> 609. </font>
+<font color="black"> 610.         &quot;&quot;&quot; Resets the codec buffers used for keeping state.</font>
+<font color="black"> 611. </font>
+<font color="black"> 612.             Note that no stream repositioning should take place.</font>
+<font color="black"> 613.             This method is primarily intended to be able to recover</font>
+<font color="black"> 614.             from decoding errors.</font>
+<font color="black"> 615. </font>
+<font color="black"> 616.         &quot;&quot;&quot;</font>
+<font color="red"> 617.         self.bytebuffer = &quot;&quot;</font>
+<font color="red"> 618.         self.charbuffer = u&quot;&quot;</font>
+<font color="red"> 619.         self.linebuffer = None</font>
+<font color="black"> 620. </font>
+<font color="red"> 621.     def seek(self, offset, whence=0):</font>
+<font color="black"> 622.         &quot;&quot;&quot; Set the input stream's current position.</font>
+<font color="black"> 623. </font>
+<font color="black"> 624.             Resets the codec buffers used for keeping state.</font>
+<font color="black"> 625.         &quot;&quot;&quot;</font>
+<font color="red"> 626.         self.stream.seek(offset, whence)</font>
+<font color="red"> 627.         self.reset()</font>
+<font color="black"> 628. </font>
+<font color="red"> 629.     def next(self):</font>
+<font color="black"> 630. </font>
+<font color="black"> 631.         &quot;&quot;&quot; Return the next decoded line from the input stream.&quot;&quot;&quot;</font>
+<font color="red"> 632.         line = self.readline()</font>
+<font color="red"> 633.         if line:</font>
+<font color="red"> 634.             return line</font>
+<font color="red"> 635.         raise StopIteration</font>
+<font color="black"> 636. </font>
+<font color="red"> 637.     def __iter__(self):</font>
+<font color="red"> 638.         return self</font>
+<font color="black"> 639. </font>
+<font color="black"> 640.     def __getattr__(self, name,</font>
+<font color="red"> 641.                     getattr=getattr):</font>
+<font color="black"> 642. </font>
+<font color="black"> 643.         &quot;&quot;&quot; Inherit all other methods from the underlying stream.</font>
+<font color="black"> 644.         &quot;&quot;&quot;</font>
+<font color="red"> 645.         return getattr(self.stream, name)</font>
+<font color="black"> 646. </font>
+<font color="red"> 647.     def __enter__(self):</font>
+<font color="red"> 648.         return self</font>
+<font color="black"> 649. </font>
+<font color="red"> 650.     def __exit__(self, type, value, tb):</font>
+<font color="red"> 651.         self.stream.close()</font>
+<font color="black"> 652. </font>
+<font color="black"> 653. ###</font>
+<font color="black"> 654. </font>
+<font color="red"> 655. class StreamReaderWriter:</font>
+<font color="black"> 656. </font>
+<font color="black"> 657.     &quot;&quot;&quot; StreamReaderWriter instances allow wrapping streams which</font>
+<font color="black"> 658.         work in both read and write modes.</font>
+<font color="black"> 659. </font>
+<font color="black"> 660.         The design is such that one can use the factory functions</font>
+<font color="black"> 661.         returned by the codec.lookup() function to construct the</font>
+<font color="black"> 662.         instance.</font>
+<font color="black"> 663. </font>
+<font color="red"> 664.     &quot;&quot;&quot;</font>
+<font color="black"> 665.     # Optional attributes set by the file wrappers below</font>
+<font color="red"> 666.     encoding = 'unknown'</font>
+<font color="black"> 667. </font>
+<font color="red"> 668.     def __init__(self, stream, Reader, Writer, errors='strict'):</font>
+<font color="black"> 669. </font>
+<font color="black"> 670.         &quot;&quot;&quot; Creates a StreamReaderWriter instance.</font>
+<font color="black"> 671. </font>
+<font color="black"> 672.             stream must be a Stream-like object.</font>
+<font color="black"> 673. </font>
+<font color="black"> 674.             Reader, Writer must be factory functions or classes</font>
+<font color="black"> 675.             providing the StreamReader, StreamWriter interface resp.</font>
+<font color="black"> 676. </font>
+<font color="black"> 677.             Error handling is done in the same way as defined for the</font>
+<font color="black"> 678.             StreamWriter/Readers.</font>
+<font color="black"> 679. </font>
+<font color="black"> 680.         &quot;&quot;&quot;</font>
+<font color="red"> 681.         self.stream = stream</font>
+<font color="red"> 682.         self.reader = Reader(stream, errors)</font>
+<font color="red"> 683.         self.writer = Writer(stream, errors)</font>
+<font color="red"> 684.         self.errors = errors</font>
+<font color="black"> 685. </font>
+<font color="red"> 686.     def read(self, size=-1):</font>
+<font color="black"> 687. </font>
+<font color="red"> 688.         return self.reader.read(size)</font>
+<font color="black"> 689. </font>
+<font color="red"> 690.     def readline(self, size=None):</font>
+<font color="black"> 691. </font>
+<font color="red"> 692.         return self.reader.readline(size)</font>
+<font color="black"> 693. </font>
+<font color="red"> 694.     def readlines(self, sizehint=None):</font>
+<font color="black"> 695. </font>
+<font color="red"> 696.         return self.reader.readlines(sizehint)</font>
+<font color="black"> 697. </font>
+<font color="red"> 698.     def next(self):</font>
+<font color="black"> 699. </font>
+<font color="black"> 700.         &quot;&quot;&quot; Return the next decoded line from the input stream.&quot;&quot;&quot;</font>
+<font color="red"> 701.         return self.reader.next()</font>
+<font color="black"> 702. </font>
+<font color="red"> 703.     def __iter__(self):</font>
+<font color="red"> 704.         return self</font>
+<font color="black"> 705. </font>
+<font color="red"> 706.     def write(self, data):</font>
+<font color="black"> 707. </font>
+<font color="red"> 708.         return self.writer.write(data)</font>
+<font color="black"> 709. </font>
+<font color="red"> 710.     def writelines(self, list):</font>
+<font color="black"> 711. </font>
+<font color="red"> 712.         return self.writer.writelines(list)</font>
+<font color="black"> 713. </font>
+<font color="red"> 714.     def reset(self):</font>
+<font color="black"> 715. </font>
+<font color="red"> 716.         self.reader.reset()</font>
+<font color="red"> 717.         self.writer.reset()</font>
+<font color="black"> 718. </font>
+<font color="red"> 719.     def seek(self, offset, whence=0):</font>
+<font color="red"> 720.         self.stream.seek(offset, whence)</font>
+<font color="red"> 721.         self.reader.reset()</font>
+<font color="red"> 722.         if whence == 0 and offset == 0:</font>
+<font color="red"> 723.             self.writer.reset()</font>
+<font color="black"> 724. </font>
+<font color="black"> 725.     def __getattr__(self, name,</font>
+<font color="red"> 726.                     getattr=getattr):</font>
+<font color="black"> 727. </font>
+<font color="black"> 728.         &quot;&quot;&quot; Inherit all other methods from the underlying stream.</font>
+<font color="black"> 729.         &quot;&quot;&quot;</font>
+<font color="red"> 730.         return getattr(self.stream, name)</font>
+<font color="black"> 731. </font>
+<font color="black"> 732.     # these are needed to make &quot;with codecs.open(...)&quot; work properly</font>
+<font color="black"> 733. </font>
+<font color="red"> 734.     def __enter__(self):</font>
+<font color="red"> 735.         return self</font>
+<font color="black"> 736. </font>
+<font color="red"> 737.     def __exit__(self, type, value, tb):</font>
+<font color="red"> 738.         self.stream.close()</font>
+<font color="black"> 739. </font>
+<font color="black"> 740. ###</font>
+<font color="black"> 741. </font>
+<font color="red"> 742. class StreamRecoder:</font>
+<font color="black"> 743. </font>
+<font color="black"> 744.     &quot;&quot;&quot; StreamRecoder instances provide a frontend - backend</font>
+<font color="black"> 745.         view of encoding data.</font>
+<font color="black"> 746. </font>
+<font color="black"> 747.         They use the complete set of APIs returned by the</font>
+<font color="black"> 748.         codecs.lookup() function to implement their task.</font>
+<font color="black"> 749. </font>
+<font color="black"> 750.         Data written to the stream is first decoded into an</font>
+<font color="black"> 751.         intermediate format (which is dependent on the given codec</font>
+<font color="black"> 752.         combination) and then written to the stream using an instance</font>
+<font color="black"> 753.         of the provided Writer class.</font>
+<font color="black"> 754. </font>
+<font color="black"> 755.         In the other direction, data is read from the stream using a</font>
+<font color="black"> 756.         Reader instance and then return encoded data to the caller.</font>
+<font color="black"> 757. </font>
+<font color="red"> 758.     &quot;&quot;&quot;</font>
+<font color="black"> 759.     # Optional attributes set by the file wrappers below</font>
+<font color="red"> 760.     data_encoding = 'unknown'</font>
+<font color="red"> 761.     file_encoding = 'unknown'</font>
+<font color="black"> 762. </font>
+<font color="black"> 763.     def __init__(self, stream, encode, decode, Reader, Writer,</font>
+<font color="red"> 764.                  errors='strict'):</font>
+<font color="black"> 765. </font>
+<font color="black"> 766.         &quot;&quot;&quot; Creates a StreamRecoder instance which implements a two-way</font>
+<font color="black"> 767.             conversion: encode and decode work on the frontend (the</font>
+<font color="black"> 768.             input to .read() and output of .write()) while</font>
+<font color="black"> 769.             Reader and Writer work on the backend (reading and</font>
+<font color="black"> 770.             writing to the stream).</font>
+<font color="black"> 771. </font>
+<font color="black"> 772.             You can use these objects to do transparent direct</font>
+<font color="black"> 773.             recodings from e.g. latin-1 to utf-8 and back.</font>
+<font color="black"> 774. </font>
+<font color="black"> 775.             stream must be a file-like object.</font>
+<font color="black"> 776. </font>
+<font color="black"> 777.             encode, decode must adhere to the Codec interface, Reader,</font>
+<font color="black"> 778.             Writer must be factory functions or classes providing the</font>
+<font color="black"> 779.             StreamReader, StreamWriter interface resp.</font>
+<font color="black"> 780. </font>
+<font color="black"> 781.             encode and decode are needed for the frontend translation,</font>
+<font color="black"> 782.             Reader and Writer for the backend translation. Unicode is</font>
+<font color="black"> 783.             used as intermediate encoding.</font>
+<font color="black"> 784. </font>
+<font color="black"> 785.             Error handling is done in the same way as defined for the</font>
+<font color="black"> 786.             StreamWriter/Readers.</font>
+<font color="black"> 787. </font>
+<font color="black"> 788.         &quot;&quot;&quot;</font>
+<font color="red"> 789.         self.stream = stream</font>
+<font color="red"> 790.         self.encode = encode</font>
+<font color="red"> 791.         self.decode = decode</font>
+<font color="red"> 792.         self.reader = Reader(stream, errors)</font>
+<font color="red"> 793.         self.writer = Writer(stream, errors)</font>
+<font color="red"> 794.         self.errors = errors</font>
+<font color="black"> 795. </font>
+<font color="red"> 796.     def read(self, size=-1):</font>
+<font color="black"> 797. </font>
+<font color="red"> 798.         data = self.reader.read(size)</font>
+<font color="red"> 799.         data, bytesencoded = self.encode(data, self.errors)</font>
+<font color="red"> 800.         return data</font>
+<font color="black"> 801. </font>
+<font color="red"> 802.     def readline(self, size=None):</font>
+<font color="black"> 803. </font>
+<font color="red"> 804.         if size is None:</font>
+<font color="red"> 805.             data = self.reader.readline()</font>
+<font color="black"> 806.         else:</font>
+<font color="red"> 807.             data = self.reader.readline(size)</font>
+<font color="red"> 808.         data, bytesencoded = self.encode(data, self.errors)</font>
+<font color="red"> 809.         return data</font>
+<font color="black"> 810. </font>
+<font color="red"> 811.     def readlines(self, sizehint=None):</font>
+<font color="black"> 812. </font>
+<font color="red"> 813.         data = self.reader.read()</font>
+<font color="red"> 814.         data, bytesencoded = self.encode(data, self.errors)</font>
+<font color="red"> 815.         return data.splitlines(1)</font>
+<font color="black"> 816. </font>
+<font color="red"> 817.     def next(self):</font>
+<font color="black"> 818. </font>
+<font color="black"> 819.         &quot;&quot;&quot; Return the next decoded line from the input stream.&quot;&quot;&quot;</font>
+<font color="red"> 820.         data = self.reader.next()</font>
+<font color="red"> 821.         data, bytesencoded = self.encode(data, self.errors)</font>
+<font color="red"> 822.         return data</font>
+<font color="black"> 823. </font>
+<font color="red"> 824.     def __iter__(self):</font>
+<font color="red"> 825.         return self</font>
+<font color="black"> 826. </font>
+<font color="red"> 827.     def write(self, data):</font>
+<font color="black"> 828. </font>
+<font color="red"> 829.         data, bytesdecoded = self.decode(data, self.errors)</font>
+<font color="red"> 830.         return self.writer.write(data)</font>
+<font color="black"> 831. </font>
+<font color="red"> 832.     def writelines(self, list):</font>
+<font color="black"> 833. </font>
+<font color="red"> 834.         data = ''.join(list)</font>
+<font color="red"> 835.         data, bytesdecoded = self.decode(data, self.errors)</font>
+<font color="red"> 836.         return self.writer.write(data)</font>
+<font color="black"> 837. </font>
+<font color="red"> 838.     def reset(self):</font>
+<font color="black"> 839. </font>
+<font color="red"> 840.         self.reader.reset()</font>
+<font color="red"> 841.         self.writer.reset()</font>
+<font color="black"> 842. </font>
+<font color="black"> 843.     def __getattr__(self, name,</font>
+<font color="red"> 844.                     getattr=getattr):</font>
+<font color="black"> 845. </font>
+<font color="black"> 846.         &quot;&quot;&quot; Inherit all other methods from the underlying stream.</font>
+<font color="black"> 847.         &quot;&quot;&quot;</font>
+<font color="red"> 848.         return getattr(self.stream, name)</font>
+<font color="black"> 849. </font>
+<font color="red"> 850.     def __enter__(self):</font>
+<font color="red"> 851.         return self</font>
+<font color="black"> 852. </font>
+<font color="red"> 853.     def __exit__(self, type, value, tb):</font>
+<font color="red"> 854.         self.stream.close()</font>
+<font color="black"> 855. </font>
+<font color="black"> 856. ### Shortcuts</font>
+<font color="black"> 857. </font>
+<font color="red"> 858. def open(filename, mode='rb', encoding=None, errors='strict', buffering=1):</font>
+<font color="black"> 859. </font>
+<font color="black"> 860.     &quot;&quot;&quot; Open an encoded file using the given mode and return</font>
+<font color="black"> 861.         a wrapped version providing transparent encoding/decoding.</font>
+<font color="black"> 862. </font>
+<font color="black"> 863.         Note: The wrapped version will only accept the object format</font>
+<font color="black"> 864.         defined by the codecs, i.e. Unicode objects for most builtin</font>
+<font color="black"> 865.         codecs. Output is also codec dependent and will usually be</font>
+<font color="black"> 866.         Unicode as well.</font>
+<font color="black"> 867. </font>
+<font color="black"> 868.         Files are always opened in binary mode, even if no binary mode</font>
+<font color="black"> 869.         was specified. This is done to avoid data loss due to encodings</font>
+<font color="black"> 870.         using 8-bit values. The default file mode is 'rb' meaning to</font>
+<font color="black"> 871.         open the file in binary read mode.</font>
+<font color="black"> 872. </font>
+<font color="black"> 873.         encoding specifies the encoding which is to be used for the</font>
+<font color="black"> 874.         file.</font>
+<font color="black"> 875. </font>
+<font color="black"> 876.         errors may be given to define the error handling. It defaults</font>
+<font color="black"> 877.         to 'strict' which causes ValueErrors to be raised in case an</font>
+<font color="black"> 878.         encoding error occurs.</font>
+<font color="black"> 879. </font>
+<font color="black"> 880.         buffering has the same meaning as for the builtin open() API.</font>
+<font color="black"> 881.         It defaults to line buffered.</font>
+<font color="black"> 882. </font>
+<font color="black"> 883.         The returned wrapped file object provides an extra attribute</font>
+<font color="black"> 884.         .encoding which allows querying the used encoding. This</font>
+<font color="black"> 885.         attribute is only available if an encoding was specified as</font>
+<font color="black"> 886.         parameter.</font>
+<font color="black"> 887. </font>
+<font color="black"> 888.     &quot;&quot;&quot;</font>
+<font color="red"> 889.     if encoding is not None:</font>
+<font color="red"> 890.         if 'U' in mode:</font>
+<font color="black"> 891.             # No automatic conversion of '\n' is done on reading and writing</font>
+<font color="red"> 892.             mode = mode.strip().replace('U', '')</font>
+<font color="red"> 893.             if mode[:1] not in set('rwa'):</font>
+<font color="red"> 894.                 mode = 'r' + mode</font>
+<font color="red"> 895.         if 'b' not in mode:</font>
+<font color="black"> 896.             # Force opening of the file in binary mode</font>
+<font color="red"> 897.             mode = mode + 'b'</font>
+<font color="red"> 898.     file = __builtin__.open(filename, mode, buffering)</font>
+<font color="red"> 899.     if encoding is None:</font>
+<font color="red"> 900.         return file</font>
+<font color="red"> 901.     info = lookup(encoding)</font>
+<font color="red"> 902.     srw = StreamReaderWriter(file, info.streamreader, info.streamwriter, errors)</font>
+<font color="black"> 903.     # Add attributes to simplify introspection</font>
+<font color="red"> 904.     srw.encoding = encoding</font>
+<font color="red"> 905.     return srw</font>
+<font color="black"> 906. </font>
+<font color="red"> 907. def EncodedFile(file, data_encoding, file_encoding=None, errors='strict'):</font>
+<font color="black"> 908. </font>
+<font color="black"> 909.     &quot;&quot;&quot; Return a wrapped version of file which provides transparent</font>
+<font color="black"> 910.         encoding translation.</font>
+<font color="black"> 911. </font>
+<font color="black"> 912.         Strings written to the wrapped file are interpreted according</font>
+<font color="black"> 913.         to the given data_encoding and then written to the original</font>
+<font color="black"> 914.         file as string using file_encoding. The intermediate encoding</font>
+<font color="black"> 915.         will usually be Unicode but depends on the specified codecs.</font>
+<font color="black"> 916. </font>
+<font color="black"> 917.         Strings are read from the file using file_encoding and then</font>
+<font color="black"> 918.         passed back to the caller as string using data_encoding.</font>
+<font color="black"> 919. </font>
+<font color="black"> 920.         If file_encoding is not given, it defaults to data_encoding.</font>
+<font color="black"> 921. </font>
+<font color="black"> 922.         errors may be given to define the error handling. It defaults</font>
+<font color="black"> 923.         to 'strict' which causes ValueErrors to be raised in case an</font>
+<font color="black"> 924.         encoding error occurs.</font>
+<font color="black"> 925. </font>
+<font color="black"> 926.         The returned wrapped file object provides two extra attributes</font>
+<font color="black"> 927.         .data_encoding and .file_encoding which reflect the given</font>
+<font color="black"> 928.         parameters of the same name. The attributes can be used for</font>
+<font color="black"> 929.         introspection by Python programs.</font>
+<font color="black"> 930. </font>
+<font color="black"> 931.     &quot;&quot;&quot;</font>
+<font color="red"> 932.     if file_encoding is None:</font>
+<font color="red"> 933.         file_encoding = data_encoding</font>
+<font color="red"> 934.     data_info = lookup(data_encoding)</font>
+<font color="red"> 935.     file_info = lookup(file_encoding)</font>
+<font color="red"> 936.     sr = StreamRecoder(file, data_info.encode, data_info.decode,</font>
+<font color="red"> 937.                        file_info.streamreader, file_info.streamwriter, errors)</font>
+<font color="black"> 938.     # Add attributes to simplify introspection</font>
+<font color="red"> 939.     sr.data_encoding = data_encoding</font>
+<font color="red"> 940.     sr.file_encoding = file_encoding</font>
+<font color="red"> 941.     return sr</font>
+<font color="black"> 942. </font>
+<font color="black"> 943. ### Helpers for codec lookup</font>
+<font color="black"> 944. </font>
+<font color="red"> 945. def getencoder(encoding):</font>
+<font color="black"> 946. </font>
+<font color="black"> 947.     &quot;&quot;&quot; Lookup up the codec for the given encoding and return</font>
+<font color="black"> 948.         its encoder function.</font>
+<font color="black"> 949. </font>
+<font color="black"> 950.         Raises a LookupError in case the encoding cannot be found.</font>
+<font color="black"> 951. </font>
+<font color="black"> 952.     &quot;&quot;&quot;</font>
+<font color="red"> 953.     return lookup(encoding).encode</font>
+<font color="black"> 954. </font>
+<font color="red"> 955. def getdecoder(encoding):</font>
+<font color="black"> 956. </font>
+<font color="black"> 957.     &quot;&quot;&quot; Lookup up the codec for the given encoding and return</font>
+<font color="black"> 958.         its decoder function.</font>
+<font color="black"> 959. </font>
+<font color="black"> 960.         Raises a LookupError in case the encoding cannot be found.</font>
+<font color="black"> 961. </font>
+<font color="black"> 962.     &quot;&quot;&quot;</font>
+<font color="red"> 963.     return lookup(encoding).decode</font>
+<font color="black"> 964. </font>
+<font color="red"> 965. def getincrementalencoder(encoding):</font>
+<font color="black"> 966. </font>
+<font color="black"> 967.     &quot;&quot;&quot; Lookup up the codec for the given encoding and return</font>
+<font color="black"> 968.         its IncrementalEncoder class or factory function.</font>
+<font color="black"> 969. </font>
+<font color="black"> 970.         Raises a LookupError in case the encoding cannot be found</font>
+<font color="black"> 971.         or the codecs doesn't provide an incremental encoder.</font>
+<font color="black"> 972. </font>
+<font color="black"> 973.     &quot;&quot;&quot;</font>
+<font color="red"> 974.     encoder = lookup(encoding).incrementalencoder</font>
+<font color="red"> 975.     if encoder is None:</font>
+<font color="red"> 976.         raise LookupError(encoding)</font>
+<font color="red"> 977.     return encoder</font>
+<font color="black"> 978. </font>
+<font color="red"> 979. def getincrementaldecoder(encoding):</font>
+<font color="black"> 980. </font>
+<font color="black"> 981.     &quot;&quot;&quot; Lookup up the codec for the given encoding and return</font>
+<font color="black"> 982.         its IncrementalDecoder class or factory function.</font>
+<font color="black"> 983. </font>
+<font color="black"> 984.         Raises a LookupError in case the encoding cannot be found</font>
+<font color="black"> 985.         or the codecs doesn't provide an incremental decoder.</font>
+<font color="black"> 986. </font>
+<font color="black"> 987.     &quot;&quot;&quot;</font>
+<font color="red"> 988.     decoder = lookup(encoding).incrementaldecoder</font>
+<font color="red"> 989.     if decoder is None:</font>
+<font color="red"> 990.         raise LookupError(encoding)</font>
+<font color="red"> 991.     return decoder</font>
+<font color="black"> 992. </font>
+<font color="red"> 993. def getreader(encoding):</font>
+<font color="black"> 994. </font>
+<font color="black"> 995.     &quot;&quot;&quot; Lookup up the codec for the given encoding and return</font>
+<font color="black"> 996.         its StreamReader class or factory function.</font>
+<font color="black"> 997. </font>
+<font color="black"> 998.         Raises a LookupError in case the encoding cannot be found.</font>
+<font color="black"> 999. </font>
+<font color="black">1000.     &quot;&quot;&quot;</font>
+<font color="red">1001.     return lookup(encoding).streamreader</font>
+<font color="black">1002. </font>
+<font color="red">1003. def getwriter(encoding):</font>
+<font color="black">1004. </font>
+<font color="black">1005.     &quot;&quot;&quot; Lookup up the codec for the given encoding and return</font>
+<font color="black">1006.         its StreamWriter class or factory function.</font>
+<font color="black">1007. </font>
+<font color="black">1008.         Raises a LookupError in case the encoding cannot be found.</font>
+<font color="black">1009. </font>
+<font color="black">1010.     &quot;&quot;&quot;</font>
+<font color="red">1011.     return lookup(encoding).streamwriter</font>
+<font color="black">1012. </font>
+<font color="red">1013. def iterencode(iterator, encoding, errors='strict', **kwargs):</font>
+<font color="black">1014.     &quot;&quot;&quot;</font>
+<font color="black">1015.     Encoding iterator.</font>
+<font color="black">1016. </font>
+<font color="black">1017.     Encodes the input strings from the iterator using an IncrementalEncoder.</font>
+<font color="black">1018. </font>
+<font color="black">1019.     errors and kwargs are passed through to the IncrementalEncoder</font>
+<font color="black">1020.     constructor.</font>
+<font color="black">1021.     &quot;&quot;&quot;</font>
+<font color="red">1022.     encoder = getincrementalencoder(encoding)(errors, **kwargs)</font>
+<font color="red">1023.     for input in iterator:</font>
+<font color="red">1024.         output = encoder.encode(input)</font>
+<font color="red">1025.         if output:</font>
+<font color="red">1026.             yield output</font>
+<font color="red">1027.     output = encoder.encode(&quot;&quot;, True)</font>
+<font color="red">1028.     if output:</font>
+<font color="red">1029.         yield output</font>
+<font color="black">1030. </font>
+<font color="red">1031. def iterdecode(iterator, encoding, errors='strict', **kwargs):</font>
+<font color="black">1032.     &quot;&quot;&quot;</font>
+<font color="black">1033.     Decoding iterator.</font>
+<font color="black">1034. </font>
+<font color="black">1035.     Decodes the input strings from the iterator using an IncrementalDecoder.</font>
+<font color="black">1036. </font>
+<font color="black">1037.     errors and kwargs are passed through to the IncrementalDecoder</font>
+<font color="black">1038.     constructor.</font>
+<font color="black">1039.     &quot;&quot;&quot;</font>
+<font color="red">1040.     decoder = getincrementaldecoder(encoding)(errors, **kwargs)</font>
+<font color="red">1041.     for input in iterator:</font>
+<font color="red">1042.         output = decoder.decode(input)</font>
+<font color="red">1043.         if output:</font>
+<font color="red">1044.             yield output</font>
+<font color="red">1045.     output = decoder.decode(&quot;&quot;, True)</font>
+<font color="red">1046.     if output:</font>
+<font color="red">1047.         yield output</font>
+<font color="black">1048. </font>
+<font color="black">1049. ### Helpers for charmap-based codecs</font>
+<font color="black">1050. </font>
+<font color="red">1051. def make_identity_dict(rng):</font>
+<font color="black">1052. </font>
+<font color="black">1053.     &quot;&quot;&quot; make_identity_dict(rng) -&gt; dict</font>
+<font color="black">1054. </font>
+<font color="black">1055.         Return a dictionary where elements of the rng sequence are</font>
+<font color="black">1056.         mapped to themselves.</font>
+<font color="black">1057. </font>
+<font color="black">1058.     &quot;&quot;&quot;</font>
+<font color="red">1059.     res = {}</font>
+<font color="red">1060.     for i in rng:</font>
+<font color="red">1061.         res[i]=i</font>
+<font color="red">1062.     return res</font>
+<font color="black">1063. </font>
+<font color="red">1064. def make_encoding_map(decoding_map):</font>
+<font color="black">1065. </font>
+<font color="black">1066.     &quot;&quot;&quot; Creates an encoding map from a decoding map.</font>
+<font color="black">1067. </font>
+<font color="black">1068.         If a target mapping in the decoding map occurs multiple</font>
+<font color="black">1069.         times, then that target is mapped to None (undefined mapping),</font>
+<font color="black">1070.         causing an exception when encountered by the charmap codec</font>
+<font color="black">1071.         during translation.</font>
+<font color="black">1072. </font>
+<font color="black">1073.         One example where this happens is cp875.py which decodes</font>
+<font color="black">1074.         multiple character to \\u001a.</font>
+<font color="black">1075. </font>
+<font color="black">1076.     &quot;&quot;&quot;</font>
+<font color="red">1077.     m = {}</font>
+<font color="red">1078.     for k,v in decoding_map.items():</font>
+<font color="red">1079.         if not v in m:</font>
+<font color="red">1080.             m[v] = k</font>
+<font color="black">1081.         else:</font>
+<font color="red">1082.             m[v] = None</font>
+<font color="red">1083.     return m</font>
+<font color="black">1084. </font>
+<font color="black">1085. ### error handlers</font>
+<font color="black">1086. </font>
+<font color="red">1087. try:</font>
+<font color="red">1088.     strict_errors = lookup_error(&quot;strict&quot;)</font>
+<font color="red">1089.     ignore_errors = lookup_error(&quot;ignore&quot;)</font>
+<font color="red">1090.     replace_errors = lookup_error(&quot;replace&quot;)</font>
+<font color="red">1091.     xmlcharrefreplace_errors = lookup_error(&quot;xmlcharrefreplace&quot;)</font>
+<font color="red">1092.     backslashreplace_errors = lookup_error(&quot;backslashreplace&quot;)</font>
+<font color="red">1093. except LookupError:</font>
+<font color="black">1094.     # In --disable-unicode builds, these error handler are missing</font>
+<font color="red">1095.     strict_errors = None</font>
+<font color="red">1096.     ignore_errors = None</font>
+<font color="red">1097.     replace_errors = None</font>
+<font color="red">1098.     xmlcharrefreplace_errors = None</font>
+<font color="red">1099.     backslashreplace_errors = None</font>
+<font color="black">1100. </font>
+<font color="black">1101. # Tell modulefinder that using codecs probably needs the encodings</font>
+<font color="black">1102. # package</font>
+<font color="red">1103. _false = 0</font>
+<font color="red">1104. if _false:</font>
+<font color="red">1105.     import encodings</font>
+<font color="black">1106. </font>
+<font color="black">1107. ### Tests</font>
+<font color="black">1108. </font>
+<font color="red">1109. if __name__ == '__main__':</font>
+<font color="black">1110. </font>
+<font color="black">1111.     # Make stdout translate Latin-1 output into UTF-8 output</font>
+<font color="red">1112.     sys.stdout = EncodedFile(sys.stdout, 'latin-1', 'utf-8')</font>
+<font color="black">1113. </font>
+<font color="black">1114.     # Have stdin translate Latin-1 input into UTF-8 input</font>
+<font color="red">1115.     sys.stdin = EncodedFile(sys.stdin, 'utf-8', 'latin-1')</font>
+</pre>
+

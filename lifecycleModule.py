@@ -38,13 +38,8 @@ def folderFinder(aBucket):
 
 # to get around tzinfo in datatime.datetime type
 def notSerial(time):
-    #print '************** heres the time ***********'
-    #print time
     from_zone = tz.gettz('UTC')
     to_zone = tz.gettz('America/Los_Angeles')
-    #zuluGone = datetime.strptime(str(time), '%Y-%m-%d %H:%M:%S.%f+00:00')
-    #zuluGone = datetime.strptime(str(time), '%Y-%m-%d %H:%M:%S.%d+00:00')
-    #zuluGone = datetime.strptime(str(time), '%Y-%m-%d %H:%M:%S+00:00')
     zuluGone = datetime.strptime(str(time), '%Y-%m-%d %H:%M:%S+00:00')
     zuluGone = zuluGone.replace(tzinfo=from_zone)
     la_datetime = str(zuluGone.astimezone(to_zone) )
@@ -63,15 +58,6 @@ def buildTransitionOnly(policy, transformDays,bucketName,index, prefix):
                      'StorageClass': 'GLACIER'
                  },
              ],
-#            'NoncurrentVersionTransitions': [
-#                {
-#                    'NoncurrentDays': transformDays,
-#                    'StorageClass': 'GLACIER'
-#                },
-#            ],
-#            'AbortIncompleteMultipartUpload': {
-#                'DaysAfterInitiation': 7
-#            }
          }
     )
 
@@ -87,12 +73,6 @@ def buildExpirationOnly(policy, expireDays,bucketName,index, prefix):
              'ID': bucketName + 'Rule' + str(index),
              'Prefix': prefix,
              'Status': 'Enabled',
-#            'NoncurrentVersionExpiration': {
-#                'NoncurrentDays': expireDays
-#            },
-#            'AbortIncompleteMultipartUpload': {
-#                'DaysAfterInitiation': 7
-#            }
          }
     )
 
@@ -115,18 +95,6 @@ def buildTransAndExpire(policy, transformDays,expireDays,bucketName,index, prefi
                      'StorageClass': 'GLACIER'
                  },
              ],
-#            'NoncurrentVersionTransitions': [
-#                {
-#                    'NoncurrentDays': transformDays,
-#                    'StorageClass': 'GLACIER'
-#                },
-#            ],
-#            'NoncurrentVersionExpiration': {
-#                'NoncurrentDays': int(transformDays)*2
-#            },
-#            'AbortIncompleteMultipartUpload': {
-#                'DaysAfterInitiation': 7
-#            }
          }
     )
 
@@ -411,10 +379,6 @@ def main(callBucket, levelParam, glacierDays, expireDays, forceParam):
         elif args.force == 'True':
             force = True
     
-        #print "Force lifecycle overwrite = ", force
-        #print "Force args lifecycle overwrite = ", args.force
-        #print type(force)
-        #print type(args.force)
         newLifecyclePolicy = {}
     
         if args.interactive != 'True':
@@ -432,9 +396,7 @@ def main(callBucket, levelParam, glacierDays, expireDays, forceParam):
                     returnedDict['glacierOnly'] = True
         
                 returnedDict['forceOverwrite'] = force
-                #if args.testRun != 'True':
-                #    s3.put_bucket_lifecycle_configuration(Bucket=bucket,LifecycleConfiguration=newLifecyclePolicy)
-        
+
             if (not(hasLifecycle) and not(versionEnabled) and not(force) ) or (not(hasLifecycle) and not(versionEnabled) and force ) or\
                (hasLifecycle and not(versionEnabled) and force ):
                 #print "fire policy NO delete"
@@ -487,7 +449,4 @@ if __name__ == '__main__':
     if len(sys.argv) == 1 or sys.argv[1][0:1] == "-":
         main(" ", " ", " ", " ", " ")
         
-#pauseMe = raw_input("Stop here")
-
-# non-current will not be considered for this version
 

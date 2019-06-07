@@ -1,0 +1,315 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/ctypes/util.py</b><br>
+
+
+file stats: <b>221 lines, 19 executed: 8.6% covered</b>
+<pre>
+<font color="green">   1. import os</font>
+<font color="green">   2. import subprocess</font>
+<font color="green">   3. import sys</font>
+<font color="black">   4. </font>
+<font color="black">   5. # find_library(name) returns the pathname of a library, or None.</font>
+<font color="green">   6. if os.name == &quot;nt&quot;:</font>
+<font color="black">   7. </font>
+<font color="red">   8.     def _get_build_version():</font>
+<font color="black">   9.         &quot;&quot;&quot;Return the version of MSVC that was used to build Python.</font>
+<font color="black">  10. </font>
+<font color="black">  11.         For Python 2.3 and up, the version number is included in</font>
+<font color="black">  12.         sys.version.  For earlier versions, assume the compiler is MSVC 6.</font>
+<font color="black">  13.         &quot;&quot;&quot;</font>
+<font color="black">  14.         # This function was copied from Lib/distutils/msvccompiler.py</font>
+<font color="red">  15.         prefix = &quot;MSC v.&quot;</font>
+<font color="red">  16.         i = sys.version.find(prefix)</font>
+<font color="red">  17.         if i == -1:</font>
+<font color="red">  18.             return 6</font>
+<font color="red">  19.         i = i + len(prefix)</font>
+<font color="red">  20.         s, rest = sys.version[i:].split(&quot; &quot;, 1)</font>
+<font color="red">  21.         majorVersion = int(s[:-2]) - 6</font>
+<font color="red">  22.         minorVersion = int(s[2:3]) / 10.0</font>
+<font color="black">  23.         # I don't think paths are affected by minor version in version 6</font>
+<font color="red">  24.         if majorVersion == 6:</font>
+<font color="red">  25.             minorVersion = 0</font>
+<font color="red">  26.         if majorVersion &gt;= 6:</font>
+<font color="red">  27.             return majorVersion + minorVersion</font>
+<font color="black">  28.         # else we don't know what version of the compiler this is</font>
+<font color="red">  29.         return None</font>
+<font color="black">  30. </font>
+<font color="red">  31.     def find_msvcrt():</font>
+<font color="black">  32.         &quot;&quot;&quot;Return the name of the VC runtime dll&quot;&quot;&quot;</font>
+<font color="red">  33.         version = _get_build_version()</font>
+<font color="red">  34.         if version is None:</font>
+<font color="black">  35.             # better be safe than sorry</font>
+<font color="red">  36.             return None</font>
+<font color="red">  37.         if version &lt;= 6:</font>
+<font color="red">  38.             clibname = 'msvcrt'</font>
+<font color="black">  39.         else:</font>
+<font color="red">  40.             clibname = 'msvcr%d' % (version * 10)</font>
+<font color="black">  41. </font>
+<font color="black">  42.         # If python was built with in debug mode</font>
+<font color="red">  43.         import imp</font>
+<font color="red">  44.         if imp.get_suffixes()[0][0] == '_d.pyd':</font>
+<font color="red">  45.             clibname += 'd'</font>
+<font color="red">  46.         return clibname+'.dll'</font>
+<font color="black">  47. </font>
+<font color="red">  48.     def find_library(name):</font>
+<font color="red">  49.         if name in ('c', 'm'):</font>
+<font color="red">  50.             return find_msvcrt()</font>
+<font color="black">  51.         # See MSDN for the REAL search order.</font>
+<font color="red">  52.         for directory in os.environ['PATH'].split(os.pathsep):</font>
+<font color="red">  53.             fname = os.path.join(directory, name)</font>
+<font color="red">  54.             if os.path.isfile(fname):</font>
+<font color="red">  55.                 return fname</font>
+<font color="red">  56.             if fname.lower().endswith(&quot;.dll&quot;):</font>
+<font color="red">  57.                 continue</font>
+<font color="red">  58.             fname = fname + &quot;.dll&quot;</font>
+<font color="red">  59.             if os.path.isfile(fname):</font>
+<font color="red">  60.                 return fname</font>
+<font color="red">  61.         return None</font>
+<font color="black">  62. </font>
+<font color="green">  63. if os.name == &quot;ce&quot;:</font>
+<font color="black">  64.     # search path according to MSDN:</font>
+<font color="black">  65.     # - absolute path specified by filename</font>
+<font color="black">  66.     # - The .exe launch directory</font>
+<font color="black">  67.     # - the Windows directory</font>
+<font color="black">  68.     # - ROM dll files (where are they?)</font>
+<font color="black">  69.     # - OEM specified search path: HKLM\Loader\SystemPath</font>
+<font color="red">  70.     def find_library(name):</font>
+<font color="red">  71.         return name</font>
+<font color="black">  72. </font>
+<font color="green">  73. if os.name == &quot;posix&quot; and sys.platform == &quot;darwin&quot;:</font>
+<font color="green">  74.     from ctypes.macholib.dyld import dyld_find as _dyld_find</font>
+<font color="green">  75.     def find_library(name):</font>
+<font color="green">  76.         possible = ['lib%s.dylib' % name,</font>
+<font color="green">  77.                     '%s.dylib' % name,</font>
+<font color="green">  78.                     '%s.framework/%s' % (name, name)]</font>
+<font color="green">  79.         for name in possible:</font>
+<font color="green">  80.             try:</font>
+<font color="green">  81.                 return _dyld_find(name)</font>
+<font color="green">  82.             except ValueError:</font>
+<font color="green">  83.                 continue</font>
+<font color="green">  84.         return None</font>
+<font color="black">  85. </font>
+<font color="red">  86. elif os.name == &quot;posix&quot;:</font>
+<font color="black">  87.     # Andreas Degert's find functions, using gcc, /sbin/ldconfig, objdump</font>
+<font color="red">  88.     import re, tempfile, errno</font>
+<font color="black">  89. </font>
+<font color="red">  90.     def _findLib_gcc(name):</font>
+<font color="black">  91.         # Run GCC's linker with the -t (aka --trace) option and examine the</font>
+<font color="black">  92.         # library name it prints out. The GCC command will fail because we</font>
+<font color="black">  93.         # haven't supplied a proper program with main(), but that does not</font>
+<font color="black">  94.         # matter.</font>
+<font color="red">  95.         expr = r'[^\(\)\s]*lib%s\.[^\(\)\s]*' % re.escape(name)</font>
+<font color="red">  96.         cmd = 'if type gcc &gt;/dev/null 2&gt;&amp;1; then CC=gcc; elif type cc &gt;/dev/null 2&gt;&amp;1; then CC=cc;else exit; fi;' \</font>
+<font color="black">  97.               'LANG=C LC_ALL=C $CC -Wl,-t -o &quot;$2&quot; 2&gt;&amp;1 -l&quot;$1&quot;'</font>
+<font color="black">  98. </font>
+<font color="red">  99.         temp = tempfile.NamedTemporaryFile()</font>
+<font color="red"> 100.         try:</font>
+<font color="red"> 101.             proc = subprocess.Popen((cmd, '_findLib_gcc', name, temp.name),</font>
+<font color="red"> 102.                                     shell=True,</font>
+<font color="red"> 103.                                     stdout=subprocess.PIPE)</font>
+<font color="red"> 104.             [trace, _] = proc.communicate()</font>
+<font color="black"> 105.         finally:</font>
+<font color="red"> 106.             try:</font>
+<font color="red"> 107.                 temp.close()</font>
+<font color="red"> 108.             except OSError, e:</font>
+<font color="black"> 109.                 # ENOENT is raised if the file was already removed, which is</font>
+<font color="black"> 110.                 # the normal behaviour of GCC if linking fails</font>
+<font color="red"> 111.                 if e.errno != errno.ENOENT:</font>
+<font color="red"> 112.                     raise</font>
+<font color="red"> 113.         res = re.search(expr, trace)</font>
+<font color="red"> 114.         if not res:</font>
+<font color="red"> 115.             return None</font>
+<font color="red"> 116.         return res.group(0)</font>
+<font color="black"> 117. </font>
+<font color="black"> 118. </font>
+<font color="red"> 119.     if sys.platform == &quot;sunos5&quot;:</font>
+<font color="black"> 120.         # use /usr/ccs/bin/dump on solaris</font>
+<font color="red"> 121.         def _get_soname(f):</font>
+<font color="red"> 122.             if not f:</font>
+<font color="red"> 123.                 return None</font>
+<font color="black"> 124. </font>
+<font color="red"> 125.             null = open(os.devnull, &quot;wb&quot;)</font>
+<font color="red"> 126.             try:</font>
+<font color="red"> 127.                 with null:</font>
+<font color="red"> 128.                     proc = subprocess.Popen((&quot;/usr/ccs/bin/dump&quot;, &quot;-Lpv&quot;, f),</font>
+<font color="red"> 129.                                             stdout=subprocess.PIPE,</font>
+<font color="red"> 130.                                             stderr=null)</font>
+<font color="red"> 131.             except OSError:  # E.g. command not found</font>
+<font color="red"> 132.                 return None</font>
+<font color="red"> 133.             [data, _] = proc.communicate()</font>
+<font color="red"> 134.             res = re.search(br'\[.*\]\sSONAME\s+([^\s]+)', data)</font>
+<font color="red"> 135.             if not res:</font>
+<font color="red"> 136.                 return None</font>
+<font color="red"> 137.             return res.group(1)</font>
+<font color="black"> 138.     else:</font>
+<font color="red"> 139.         def _get_soname(f):</font>
+<font color="black"> 140.             # assuming GNU binutils / ELF</font>
+<font color="red"> 141.             if not f:</font>
+<font color="red"> 142.                 return None</font>
+<font color="red"> 143.             cmd = 'if ! type objdump &gt;/dev/null 2&gt;&amp;1; then exit; fi;' \</font>
+<font color="black"> 144.                   'objdump -p -j .dynamic 2&gt;/dev/null &quot;$1&quot;'</font>
+<font color="red"> 145.             proc = subprocess.Popen((cmd, '_get_soname', f), shell=True,</font>
+<font color="red"> 146.                                     stdout=subprocess.PIPE)</font>
+<font color="red"> 147.             [dump, _] = proc.communicate()</font>
+<font color="red"> 148.             res = re.search(br'\sSONAME\s+([^\s]+)', dump)</font>
+<font color="red"> 149.             if not res:</font>
+<font color="red"> 150.                 return None</font>
+<font color="red"> 151.             return res.group(1)</font>
+<font color="black"> 152. </font>
+<font color="red"> 153.     if (sys.platform.startswith(&quot;freebsd&quot;)</font>
+<font color="red"> 154.         or sys.platform.startswith(&quot;openbsd&quot;)</font>
+<font color="red"> 155.         or sys.platform.startswith(&quot;dragonfly&quot;)):</font>
+<font color="black"> 156. </font>
+<font color="red"> 157.         def _num_version(libname):</font>
+<font color="black"> 158.             # &quot;libxyz.so.MAJOR.MINOR&quot; =&gt; [ MAJOR, MINOR ]</font>
+<font color="red"> 159.             parts = libname.split(b&quot;.&quot;)</font>
+<font color="red"> 160.             nums = []</font>
+<font color="red"> 161.             try:</font>
+<font color="red"> 162.                 while parts:</font>
+<font color="red"> 163.                     nums.insert(0, int(parts.pop()))</font>
+<font color="red"> 164.             except ValueError:</font>
+<font color="red"> 165.                 pass</font>
+<font color="red"> 166.             return nums or [sys.maxint]</font>
+<font color="black"> 167. </font>
+<font color="red"> 168.         def find_library(name):</font>
+<font color="red"> 169.             ename = re.escape(name)</font>
+<font color="red"> 170.             expr = r':-l%s\.\S+ =&gt; \S*/(lib%s\.\S+)' % (ename, ename)</font>
+<font color="black"> 171. </font>
+<font color="red"> 172.             null = open(os.devnull, 'wb')</font>
+<font color="red"> 173.             try:</font>
+<font color="red"> 174.                 with null:</font>
+<font color="red"> 175.                     proc = subprocess.Popen(('/sbin/ldconfig', '-r'),</font>
+<font color="red"> 176.                                             stdout=subprocess.PIPE,</font>
+<font color="red"> 177.                                             stderr=null)</font>
+<font color="red"> 178.             except OSError:  # E.g. command not found</font>
+<font color="red"> 179.                 data = b''</font>
+<font color="black"> 180.             else:</font>
+<font color="red"> 181.                 [data, _] = proc.communicate()</font>
+<font color="black"> 182. </font>
+<font color="red"> 183.             res = re.findall(expr, data)</font>
+<font color="red"> 184.             if not res:</font>
+<font color="red"> 185.                 return _get_soname(_findLib_gcc(name))</font>
+<font color="red"> 186.             res.sort(key=_num_version)</font>
+<font color="red"> 187.             return res[-1]</font>
+<font color="black"> 188. </font>
+<font color="red"> 189.     elif sys.platform == &quot;sunos5&quot;:</font>
+<font color="black"> 190. </font>
+<font color="red"> 191.         def _findLib_crle(name, is64):</font>
+<font color="red"> 192.             if not os.path.exists('/usr/bin/crle'):</font>
+<font color="red"> 193.                 return None</font>
+<font color="black"> 194. </font>
+<font color="red"> 195.             env = dict(os.environ)</font>
+<font color="red"> 196.             env['LC_ALL'] = 'C'</font>
+<font color="black"> 197. </font>
+<font color="red"> 198.             if is64:</font>
+<font color="red"> 199.                 args = ('/usr/bin/crle', '-64')</font>
+<font color="black"> 200.             else:</font>
+<font color="red"> 201.                 args = ('/usr/bin/crle',)</font>
+<font color="black"> 202. </font>
+<font color="red"> 203.             paths = None</font>
+<font color="red"> 204.             null = open(os.devnull, 'wb')</font>
+<font color="red"> 205.             try:</font>
+<font color="red"> 206.                 with null:</font>
+<font color="red"> 207.                     proc = subprocess.Popen(args,</font>
+<font color="red"> 208.                                             stdout=subprocess.PIPE,</font>
+<font color="red"> 209.                                             stderr=null,</font>
+<font color="red"> 210.                                             env=env)</font>
+<font color="red"> 211.             except OSError:  # E.g. bad executable</font>
+<font color="red"> 212.                 return None</font>
+<font color="red"> 213.             try:</font>
+<font color="red"> 214.                 for line in proc.stdout:</font>
+<font color="red"> 215.                     line = line.strip()</font>
+<font color="red"> 216.                     if line.startswith(b'Default Library Path (ELF):'):</font>
+<font color="red"> 217.                         paths = line.split()[4]</font>
+<font color="black"> 218.             finally:</font>
+<font color="red"> 219.                 proc.stdout.close()</font>
+<font color="red"> 220.                 proc.wait()</font>
+<font color="black"> 221. </font>
+<font color="red"> 222.             if not paths:</font>
+<font color="red"> 223.                 return None</font>
+<font color="black"> 224. </font>
+<font color="red"> 225.             for dir in paths.split(&quot;:&quot;):</font>
+<font color="red"> 226.                 libfile = os.path.join(dir, &quot;lib%s.so&quot; % name)</font>
+<font color="red"> 227.                 if os.path.exists(libfile):</font>
+<font color="red"> 228.                     return libfile</font>
+<font color="black"> 229. </font>
+<font color="red"> 230.             return None</font>
+<font color="black"> 231. </font>
+<font color="red"> 232.         def find_library(name, is64 = False):</font>
+<font color="red"> 233.             return _get_soname(_findLib_crle(name, is64) or _findLib_gcc(name))</font>
+<font color="black"> 234. </font>
+<font color="black"> 235.     else:</font>
+<font color="black"> 236. </font>
+<font color="red"> 237.         def _findSoname_ldconfig(name):</font>
+<font color="red"> 238.             import struct</font>
+<font color="red"> 239.             if struct.calcsize('l') == 4:</font>
+<font color="red"> 240.                 machine = os.uname()[4] + '-32'</font>
+<font color="black"> 241.             else:</font>
+<font color="red"> 242.                 machine = os.uname()[4] + '-64'</font>
+<font color="red"> 243.             mach_map = {</font>
+<font color="red"> 244.                 'x86_64-64': 'libc6,x86-64',</font>
+<font color="red"> 245.                 'ppc64-64': 'libc6,64bit',</font>
+<font color="red"> 246.                 'sparc64-64': 'libc6,64bit',</font>
+<font color="red"> 247.                 's390x-64': 'libc6,64bit',</font>
+<font color="red"> 248.                 'ia64-64': 'libc6,IA-64',</font>
+<font color="black"> 249.                 }</font>
+<font color="red"> 250.             abi_type = mach_map.get(machine, 'libc6')</font>
+<font color="black"> 251. </font>
+<font color="black"> 252.             # XXX assuming GLIBC's ldconfig (with option -p)</font>
+<font color="red"> 253.             expr = r'\s+(lib%s\.[^\s]+)\s+\(%s' % (re.escape(name), abi_type)</font>
+<font color="black"> 254. </font>
+<font color="red"> 255.             env = dict(os.environ)</font>
+<font color="red"> 256.             env['LC_ALL'] = 'C'</font>
+<font color="red"> 257.             env['LANG'] = 'C'</font>
+<font color="red"> 258.             null = open(os.devnull, 'wb')</font>
+<font color="red"> 259.             try:</font>
+<font color="red"> 260.                 with null:</font>
+<font color="red"> 261.                     p = subprocess.Popen(['/sbin/ldconfig', '-p'],</font>
+<font color="red"> 262.                                           stderr=null,</font>
+<font color="red"> 263.                                           stdout=subprocess.PIPE,</font>
+<font color="red"> 264.                                           env=env)</font>
+<font color="red"> 265.             except OSError:  # E.g. command not found</font>
+<font color="red"> 266.                 return None</font>
+<font color="red"> 267.             [data, _] = p.communicate()</font>
+<font color="red"> 268.             res = re.search(expr, data)</font>
+<font color="red"> 269.             if not res:</font>
+<font color="red"> 270.                 return None</font>
+<font color="red"> 271.             return res.group(1)</font>
+<font color="black"> 272. </font>
+<font color="red"> 273.         def find_library(name):</font>
+<font color="red"> 274.             return _findSoname_ldconfig(name) or _get_soname(_findLib_gcc(name))</font>
+<font color="black"> 275. </font>
+<font color="black"> 276. ################################################################</font>
+<font color="black"> 277. # test code</font>
+<font color="black"> 278. </font>
+<font color="green"> 279. def test():</font>
+<font color="red"> 280.     from ctypes import cdll</font>
+<font color="red"> 281.     if os.name == &quot;nt&quot;:</font>
+<font color="red"> 282.         print cdll.msvcrt</font>
+<font color="red"> 283.         print cdll.load(&quot;msvcrt&quot;)</font>
+<font color="red"> 284.         print find_library(&quot;msvcrt&quot;)</font>
+<font color="black"> 285. </font>
+<font color="red"> 286.     if os.name == &quot;posix&quot;:</font>
+<font color="black"> 287.         # find and load_version</font>
+<font color="red"> 288.         print find_library(&quot;m&quot;)</font>
+<font color="red"> 289.         print find_library(&quot;c&quot;)</font>
+<font color="red"> 290.         print find_library(&quot;bz2&quot;)</font>
+<font color="black"> 291. </font>
+<font color="black"> 292.         # getattr</font>
+<font color="black"> 293. ##        print cdll.m</font>
+<font color="black"> 294. ##        print cdll.bz2</font>
+<font color="black"> 295. </font>
+<font color="black"> 296.         # load</font>
+<font color="red"> 297.         if sys.platform == &quot;darwin&quot;:</font>
+<font color="red"> 298.             print cdll.LoadLibrary(&quot;libm.dylib&quot;)</font>
+<font color="red"> 299.             print cdll.LoadLibrary(&quot;libcrypto.dylib&quot;)</font>
+<font color="red"> 300.             print cdll.LoadLibrary(&quot;libSystem.dylib&quot;)</font>
+<font color="red"> 301.             print cdll.LoadLibrary(&quot;System.framework/System&quot;)</font>
+<font color="black"> 302.         else:</font>
+<font color="red"> 303.             print cdll.LoadLibrary(&quot;libm.so&quot;)</font>
+<font color="red"> 304.             print cdll.LoadLibrary(&quot;libcrypt.so&quot;)</font>
+<font color="red"> 305.             print find_library(&quot;crypt&quot;)</font>
+<font color="black"> 306. </font>
+<font color="green"> 307. if __name__ == &quot;__main__&quot;:</font>
+<font color="red"> 308.     test()</font>
+</pre>
+

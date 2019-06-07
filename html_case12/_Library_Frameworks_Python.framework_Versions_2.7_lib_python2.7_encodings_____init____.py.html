@@ -1,0 +1,164 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/encodings/__init__.py</b><br>
+
+
+file stats: <b>71 lines, 26 executed: 36.6% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot; Standard &quot;encodings&quot; Package</font>
+<font color="black">   2. </font>
+<font color="black">   3.     Standard Python encoding modules are stored in this package</font>
+<font color="black">   4.     directory.</font>
+<font color="black">   5. </font>
+<font color="black">   6.     Codec modules must have names corresponding to normalized encoding</font>
+<font color="black">   7.     names as defined in the normalize_encoding() function below, e.g.</font>
+<font color="black">   8.     'utf-8' must be implemented by the module 'utf_8.py'.</font>
+<font color="black">   9. </font>
+<font color="black">  10.     Each codec module must export the following interface:</font>
+<font color="black">  11. </font>
+<font color="black">  12.     * getregentry() -&gt; codecs.CodecInfo object</font>
+<font color="black">  13.     The getregentry() API must a CodecInfo object with encoder, decoder,</font>
+<font color="black">  14.     incrementalencoder, incrementaldecoder, streamwriter and streamreader</font>
+<font color="black">  15.     atttributes which adhere to the Python Codec Interface Standard.</font>
+<font color="black">  16. </font>
+<font color="black">  17.     In addition, a module may optionally also define the following</font>
+<font color="black">  18.     APIs which are then used by the package's codec search function:</font>
+<font color="black">  19. </font>
+<font color="black">  20.     * getaliases() -&gt; sequence of encoding name strings to use as aliases</font>
+<font color="black">  21. </font>
+<font color="black">  22.     Alias names returned by getaliases() must be normalized encoding</font>
+<font color="black">  23.     names as defined by normalize_encoding().</font>
+<font color="black">  24. </font>
+<font color="black">  25. Written by Marc-Andre Lemburg (mal@lemburg.com).</font>
+<font color="black">  26. </font>
+<font color="black">  27. (c) Copyright CNRI, All Rights Reserved. NO WARRANTY.</font>
+<font color="black">  28. </font>
+<font color="red">  29. &quot;&quot;&quot;#&quot;</font>
+<font color="black">  30. </font>
+<font color="red">  31. import codecs</font>
+<font color="red">  32. from encodings import aliases</font>
+<font color="red">  33. import __builtin__</font>
+<font color="black">  34. </font>
+<font color="red">  35. _cache = {}</font>
+<font color="red">  36. _unknown = '--unknown--'</font>
+<font color="red">  37. _import_tail = ['*']</font>
+<font color="red">  38. _norm_encoding_map = ('                                              . '</font>
+<font color="black">  39.                       '0123456789       ABCDEFGHIJKLMNOPQRSTUVWXYZ     '</font>
+<font color="black">  40.                       ' abcdefghijklmnopqrstuvwxyz                     '</font>
+<font color="black">  41.                       '                                                '</font>
+<font color="black">  42.                       '                                                '</font>
+<font color="black">  43.                       '                ')</font>
+<font color="red">  44. _aliases = aliases.aliases</font>
+<font color="black">  45. </font>
+<font color="red">  46. class CodecRegistryError(LookupError, SystemError):</font>
+<font color="red">  47.     pass</font>
+<font color="black">  48. </font>
+<font color="red">  49. def normalize_encoding(encoding):</font>
+<font color="black">  50. </font>
+<font color="black">  51.     &quot;&quot;&quot; Normalize an encoding name.</font>
+<font color="black">  52. </font>
+<font color="black">  53.         Normalization works as follows: all non-alphanumeric</font>
+<font color="black">  54.         characters except the dot used for Python package names are</font>
+<font color="black">  55.         collapsed and replaced with a single underscore, e.g. '  -;#'</font>
+<font color="black">  56.         becomes '_'. Leading and trailing underscores are removed.</font>
+<font color="black">  57. </font>
+<font color="black">  58.         Note that encoding names should be ASCII only; if they do use</font>
+<font color="black">  59.         non-ASCII characters, these must be Latin-1 compatible.</font>
+<font color="black">  60. </font>
+<font color="black">  61.     &quot;&quot;&quot;</font>
+<font color="black">  62.     # Make sure we have an 8-bit string, because .translate() works</font>
+<font color="black">  63.     # differently for Unicode strings.</font>
+<font color="green">  64.     if hasattr(__builtin__, &quot;unicode&quot;) and isinstance(encoding, unicode):</font>
+<font color="black">  65.         # Note that .encode('latin-1') does *not* use the codec</font>
+<font color="black">  66.         # registry, so this call doesn't recurse. (See unicodeobject.c</font>
+<font color="black">  67.         # PyUnicode_AsEncodedString() for details)</font>
+<font color="red">  68.         encoding = encoding.encode('latin-1')</font>
+<font color="green">  69.     return '_'.join(encoding.translate(_norm_encoding_map).split())</font>
+<font color="black">  70. </font>
+<font color="red">  71. def search_function(encoding):</font>
+<font color="black">  72. </font>
+<font color="black">  73.     # Cache lookup</font>
+<font color="green">  74.     entry = _cache.get(encoding, _unknown)</font>
+<font color="green">  75.     if entry is not _unknown:</font>
+<font color="red">  76.         return entry</font>
+<font color="black">  77. </font>
+<font color="black">  78.     # Import the module:</font>
+<font color="black">  79.     #</font>
+<font color="black">  80.     # First try to find an alias for the normalized encoding</font>
+<font color="black">  81.     # name and lookup the module using the aliased name, then try to</font>
+<font color="black">  82.     # lookup the module using the standard import scheme, i.e. first</font>
+<font color="black">  83.     # try in the encodings package, then at top-level.</font>
+<font color="black">  84.     #</font>
+<font color="green">  85.     norm_encoding = normalize_encoding(encoding)</font>
+<font color="green">  86.     aliased_encoding = _aliases.get(norm_encoding) or \</font>
+<font color="green">  87.                        _aliases.get(norm_encoding.replace('.', '_'))</font>
+<font color="green">  88.     if aliased_encoding is not None:</font>
+<font color="red">  89.         modnames = [aliased_encoding,</font>
+<font color="red">  90.                     norm_encoding]</font>
+<font color="black">  91.     else:</font>
+<font color="green">  92.         modnames = [norm_encoding]</font>
+<font color="green">  93.     for modname in modnames:</font>
+<font color="green">  94.         if not modname or '.' in modname:</font>
+<font color="red">  95.             continue</font>
+<font color="green">  96.         try:</font>
+<font color="black">  97.             # Import is absolute to prevent the possibly malicious import of a</font>
+<font color="black">  98.             # module with side-effects that is not in the 'encodings' package.</font>
+<font color="green">  99.             mod = __import__('encodings.' + modname, fromlist=_import_tail,</font>
+<font color="green"> 100.                              level=0)</font>
+<font color="red"> 101.         except ImportError:</font>
+<font color="red"> 102.             pass</font>
+<font color="black"> 103.         else:</font>
+<font color="green"> 104.             break</font>
+<font color="black"> 105.     else:</font>
+<font color="red"> 106.         mod = None</font>
+<font color="black"> 107. </font>
+<font color="green"> 108.     try:</font>
+<font color="green"> 109.         getregentry = mod.getregentry</font>
+<font color="red"> 110.     except AttributeError:</font>
+<font color="black"> 111.         # Not a codec module</font>
+<font color="red"> 112.         mod = None</font>
+<font color="black"> 113. </font>
+<font color="green"> 114.     if mod is None:</font>
+<font color="black"> 115.         # Cache misses</font>
+<font color="red"> 116.         _cache[encoding] = None</font>
+<font color="red"> 117.         return None</font>
+<font color="black"> 118. </font>
+<font color="black"> 119.     # Now ask the module for the registry entry</font>
+<font color="green"> 120.     entry = getregentry()</font>
+<font color="green"> 121.     if not isinstance(entry, codecs.CodecInfo):</font>
+<font color="red"> 122.         if not 4 &lt;= len(entry) &lt;= 7:</font>
+<font color="red"> 123.             raise CodecRegistryError,\</font>
+<font color="red"> 124.                  'module &quot;%s&quot; (%s) failed to register' % \</font>
+<font color="red"> 125.                   (mod.__name__, mod.__file__)</font>
+<font color="red"> 126.         if not hasattr(entry[0], '__call__') or \</font>
+<font color="red"> 127.            not hasattr(entry[1], '__call__') or \</font>
+<font color="red"> 128.            (entry[2] is not None and not hasattr(entry[2], '__call__')) or \</font>
+<font color="red"> 129.            (entry[3] is not None and not hasattr(entry[3], '__call__')) or \</font>
+<font color="red"> 130.            (len(entry) &gt; 4 and entry[4] is not None and not hasattr(entry[4], '__call__')) or \</font>
+<font color="red"> 131.            (len(entry) &gt; 5 and entry[5] is not None and not hasattr(entry[5], '__call__')):</font>
+<font color="red"> 132.             raise CodecRegistryError,\</font>
+<font color="red"> 133.                 'incompatible codecs in module &quot;%s&quot; (%s)' % \</font>
+<font color="red"> 134.                 (mod.__name__, mod.__file__)</font>
+<font color="red"> 135.         if len(entry)&lt;7 or entry[6] is None:</font>
+<font color="red"> 136.             entry += (None,)*(6-len(entry)) + (mod.__name__.split(&quot;.&quot;, 1)[1],)</font>
+<font color="red"> 137.         entry = codecs.CodecInfo(*entry)</font>
+<font color="black"> 138. </font>
+<font color="black"> 139.     # Cache the codec registry entry</font>
+<font color="green"> 140.     _cache[encoding] = entry</font>
+<font color="black"> 141. </font>
+<font color="black"> 142.     # Register its aliases (without overwriting previously registered</font>
+<font color="black"> 143.     # aliases)</font>
+<font color="green"> 144.     try:</font>
+<font color="green"> 145.         codecaliases = mod.getaliases()</font>
+<font color="green"> 146.     except AttributeError:</font>
+<font color="green"> 147.         pass</font>
+<font color="black"> 148.     else:</font>
+<font color="red"> 149.         for alias in codecaliases:</font>
+<font color="red"> 150.             if alias not in _aliases:</font>
+<font color="red"> 151.                 _aliases[alias] = modname</font>
+<font color="black"> 152. </font>
+<font color="black"> 153.     # Return the registry entry</font>
+<font color="green"> 154.     return entry</font>
+<font color="black"> 155. </font>
+<font color="black"> 156. # Register the search_function in the Python codec registry</font>
+<font color="red"> 157. codecs.register(search_function)</font>
+</pre>
+

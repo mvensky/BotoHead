@@ -1,0 +1,251 @@
+source file: <b>/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/Queue.py</b><br>
+
+
+file stats: <b>131 lines, 71 executed: 54.2% covered</b>
+<pre>
+<font color="green">   1. &quot;&quot;&quot;A multi-producer, multi-consumer queue.&quot;&quot;&quot;</font>
+<font color="black">   2. </font>
+<font color="green">   3. from time import time as _time</font>
+<font color="green">   4. try:</font>
+<font color="green">   5.     import threading as _threading</font>
+<font color="red">   6. except ImportError:</font>
+<font color="red">   7.     import dummy_threading as _threading</font>
+<font color="green">   8. from collections import deque</font>
+<font color="green">   9. import heapq</font>
+<font color="black">  10. </font>
+<font color="green">  11. __all__ = ['Empty', 'Full', 'Queue', 'PriorityQueue', 'LifoQueue']</font>
+<font color="black">  12. </font>
+<font color="green">  13. class Empty(Exception):</font>
+<font color="green">  14.     &quot;Exception raised by Queue.get(block=0)/get_nowait().&quot;</font>
+<font color="green">  15.     pass</font>
+<font color="black">  16. </font>
+<font color="green">  17. class Full(Exception):</font>
+<font color="green">  18.     &quot;Exception raised by Queue.put(block=0)/put_nowait().&quot;</font>
+<font color="green">  19.     pass</font>
+<font color="black">  20. </font>
+<font color="green">  21. class Queue:</font>
+<font color="black">  22.     &quot;&quot;&quot;Create a queue object with a given maximum size.</font>
+<font color="black">  23. </font>
+<font color="black">  24.     If maxsize is &lt;= 0, the queue size is infinite.</font>
+<font color="green">  25.     &quot;&quot;&quot;</font>
+<font color="green">  26.     def __init__(self, maxsize=0):</font>
+<font color="green">  27.         self.maxsize = maxsize</font>
+<font color="green">  28.         self._init(maxsize)</font>
+<font color="black">  29.         # mutex must be held whenever the queue is mutating.  All methods</font>
+<font color="black">  30.         # that acquire mutex must release it before returning.  mutex</font>
+<font color="black">  31.         # is shared between the three conditions, so acquiring and</font>
+<font color="black">  32.         # releasing the conditions also acquires and releases mutex.</font>
+<font color="green">  33.         self.mutex = _threading.Lock()</font>
+<font color="black">  34.         # Notify not_empty whenever an item is added to the queue; a</font>
+<font color="black">  35.         # thread waiting to get is notified then.</font>
+<font color="green">  36.         self.not_empty = _threading.Condition(self.mutex)</font>
+<font color="black">  37.         # Notify not_full whenever an item is removed from the queue;</font>
+<font color="black">  38.         # a thread waiting to put is notified then.</font>
+<font color="green">  39.         self.not_full = _threading.Condition(self.mutex)</font>
+<font color="black">  40.         # Notify all_tasks_done whenever the number of unfinished tasks</font>
+<font color="black">  41.         # drops to zero; thread waiting to join() is notified to resume</font>
+<font color="green">  42.         self.all_tasks_done = _threading.Condition(self.mutex)</font>
+<font color="green">  43.         self.unfinished_tasks = 0</font>
+<font color="black">  44. </font>
+<font color="green">  45.     def task_done(self):</font>
+<font color="black">  46.         &quot;&quot;&quot;Indicate that a formerly enqueued task is complete.</font>
+<font color="black">  47. </font>
+<font color="black">  48.         Used by Queue consumer threads.  For each get() used to fetch a task,</font>
+<font color="black">  49.         a subsequent call to task_done() tells the queue that the processing</font>
+<font color="black">  50.         on the task is complete.</font>
+<font color="black">  51. </font>
+<font color="black">  52.         If a join() is currently blocking, it will resume when all items</font>
+<font color="black">  53.         have been processed (meaning that a task_done() call was received</font>
+<font color="black">  54.         for every item that had been put() into the queue).</font>
+<font color="black">  55. </font>
+<font color="black">  56.         Raises a ValueError if called more times than there were items</font>
+<font color="black">  57.         placed in the queue.</font>
+<font color="black">  58.         &quot;&quot;&quot;</font>
+<font color="red">  59.         self.all_tasks_done.acquire()</font>
+<font color="red">  60.         try:</font>
+<font color="red">  61.             unfinished = self.unfinished_tasks - 1</font>
+<font color="red">  62.             if unfinished &lt;= 0:</font>
+<font color="red">  63.                 if unfinished &lt; 0:</font>
+<font color="red">  64.                     raise ValueError('task_done() called too many times')</font>
+<font color="red">  65.                 self.all_tasks_done.notify_all()</font>
+<font color="red">  66.             self.unfinished_tasks = unfinished</font>
+<font color="black">  67.         finally:</font>
+<font color="red">  68.             self.all_tasks_done.release()</font>
+<font color="black">  69. </font>
+<font color="green">  70.     def join(self):</font>
+<font color="black">  71.         &quot;&quot;&quot;Blocks until all items in the Queue have been gotten and processed.</font>
+<font color="black">  72. </font>
+<font color="black">  73.         The count of unfinished tasks goes up whenever an item is added to the</font>
+<font color="black">  74.         queue. The count goes down whenever a consumer thread calls task_done()</font>
+<font color="black">  75.         to indicate the item was retrieved and all work on it is complete.</font>
+<font color="black">  76. </font>
+<font color="black">  77.         When the count of unfinished tasks drops to zero, join() unblocks.</font>
+<font color="black">  78.         &quot;&quot;&quot;</font>
+<font color="red">  79.         self.all_tasks_done.acquire()</font>
+<font color="red">  80.         try:</font>
+<font color="red">  81.             while self.unfinished_tasks:</font>
+<font color="red">  82.                 self.all_tasks_done.wait()</font>
+<font color="black">  83.         finally:</font>
+<font color="red">  84.             self.all_tasks_done.release()</font>
+<font color="black">  85. </font>
+<font color="green">  86.     def qsize(self):</font>
+<font color="black">  87.         &quot;&quot;&quot;Return the approximate size of the queue (not reliable!).&quot;&quot;&quot;</font>
+<font color="red">  88.         self.mutex.acquire()</font>
+<font color="red">  89.         n = self._qsize()</font>
+<font color="red">  90.         self.mutex.release()</font>
+<font color="red">  91.         return n</font>
+<font color="black">  92. </font>
+<font color="green">  93.     def empty(self):</font>
+<font color="black">  94.         &quot;&quot;&quot;Return True if the queue is empty, False otherwise (not reliable!).&quot;&quot;&quot;</font>
+<font color="red">  95.         self.mutex.acquire()</font>
+<font color="red">  96.         n = not self._qsize()</font>
+<font color="red">  97.         self.mutex.release()</font>
+<font color="red">  98.         return n</font>
+<font color="black">  99. </font>
+<font color="green"> 100.     def full(self):</font>
+<font color="black"> 101.         &quot;&quot;&quot;Return True if the queue is full, False otherwise (not reliable!).&quot;&quot;&quot;</font>
+<font color="red"> 102.         self.mutex.acquire()</font>
+<font color="red"> 103.         n = 0 &lt; self.maxsize == self._qsize()</font>
+<font color="red"> 104.         self.mutex.release()</font>
+<font color="red"> 105.         return n</font>
+<font color="black"> 106. </font>
+<font color="green"> 107.     def put(self, item, block=True, timeout=None):</font>
+<font color="black"> 108.         &quot;&quot;&quot;Put an item into the queue.</font>
+<font color="black"> 109. </font>
+<font color="black"> 110.         If optional args 'block' is true and 'timeout' is None (the default),</font>
+<font color="black"> 111.         block if necessary until a free slot is available. If 'timeout' is</font>
+<font color="black"> 112.         a non-negative number, it blocks at most 'timeout' seconds and raises</font>
+<font color="black"> 113.         the Full exception if no free slot was available within that time.</font>
+<font color="black"> 114.         Otherwise ('block' is false), put an item on the queue if a free slot</font>
+<font color="black"> 115.         is immediately available, else raise the Full exception ('timeout'</font>
+<font color="black"> 116.         is ignored in that case).</font>
+<font color="black"> 117.         &quot;&quot;&quot;</font>
+<font color="green"> 118.         self.not_full.acquire()</font>
+<font color="green"> 119.         try:</font>
+<font color="green"> 120.             if self.maxsize &gt; 0:</font>
+<font color="green"> 121.                 if not block:</font>
+<font color="green"> 122.                     if self._qsize() == self.maxsize:</font>
+<font color="red"> 123.                         raise Full</font>
+<font color="green"> 124.                 elif timeout is None:</font>
+<font color="green"> 125.                     while self._qsize() == self.maxsize:</font>
+<font color="red"> 126.                         self.not_full.wait()</font>
+<font color="red"> 127.                 elif timeout &lt; 0:</font>
+<font color="red"> 128.                     raise ValueError(&quot;'timeout' must be a non-negative number&quot;)</font>
+<font color="black"> 129.                 else:</font>
+<font color="red"> 130.                     endtime = _time() + timeout</font>
+<font color="red"> 131.                     while self._qsize() == self.maxsize:</font>
+<font color="red"> 132.                         remaining = endtime - _time()</font>
+<font color="red"> 133.                         if remaining &lt;= 0.0:</font>
+<font color="red"> 134.                             raise Full</font>
+<font color="red"> 135.                         self.not_full.wait(remaining)</font>
+<font color="green"> 136.             self._put(item)</font>
+<font color="green"> 137.             self.unfinished_tasks += 1</font>
+<font color="green"> 138.             self.not_empty.notify()</font>
+<font color="black"> 139.         finally:</font>
+<font color="green"> 140.             self.not_full.release()</font>
+<font color="black"> 141. </font>
+<font color="green"> 142.     def put_nowait(self, item):</font>
+<font color="black"> 143.         &quot;&quot;&quot;Put an item into the queue without blocking.</font>
+<font color="black"> 144. </font>
+<font color="black"> 145.         Only enqueue the item if a free slot is immediately available.</font>
+<font color="black"> 146.         Otherwise raise the Full exception.</font>
+<font color="black"> 147.         &quot;&quot;&quot;</font>
+<font color="red"> 148.         return self.put(item, False)</font>
+<font color="black"> 149. </font>
+<font color="green"> 150.     def get(self, block=True, timeout=None):</font>
+<font color="black"> 151.         &quot;&quot;&quot;Remove and return an item from the queue.</font>
+<font color="black"> 152. </font>
+<font color="black"> 153.         If optional args 'block' is true and 'timeout' is None (the default),</font>
+<font color="black"> 154.         block if necessary until an item is available. If 'timeout' is</font>
+<font color="black"> 155.         a non-negative number, it blocks at most 'timeout' seconds and raises</font>
+<font color="black"> 156.         the Empty exception if no item was available within that time.</font>
+<font color="black"> 157.         Otherwise ('block' is false), return an item if one is immediately</font>
+<font color="black"> 158.         available, else raise the Empty exception ('timeout' is ignored</font>
+<font color="black"> 159.         in that case).</font>
+<font color="black"> 160.         &quot;&quot;&quot;</font>
+<font color="green"> 161.         self.not_empty.acquire()</font>
+<font color="green"> 162.         try:</font>
+<font color="green"> 163.             if not block:</font>
+<font color="green"> 164.                 if not self._qsize():</font>
+<font color="red"> 165.                     raise Empty</font>
+<font color="red"> 166.             elif timeout is None:</font>
+<font color="red"> 167.                 while not self._qsize():</font>
+<font color="red"> 168.                     self.not_empty.wait()</font>
+<font color="red"> 169.             elif timeout &lt; 0:</font>
+<font color="red"> 170.                 raise ValueError(&quot;'timeout' must be a non-negative number&quot;)</font>
+<font color="black"> 171.             else:</font>
+<font color="red"> 172.                 endtime = _time() + timeout</font>
+<font color="red"> 173.                 while not self._qsize():</font>
+<font color="red"> 174.                     remaining = endtime - _time()</font>
+<font color="red"> 175.                     if remaining &lt;= 0.0:</font>
+<font color="red"> 176.                         raise Empty</font>
+<font color="red"> 177.                     self.not_empty.wait(remaining)</font>
+<font color="green"> 178.             item = self._get()</font>
+<font color="green"> 179.             self.not_full.notify()</font>
+<font color="green"> 180.             return item</font>
+<font color="black"> 181.         finally:</font>
+<font color="green"> 182.             self.not_empty.release()</font>
+<font color="black"> 183. </font>
+<font color="green"> 184.     def get_nowait(self):</font>
+<font color="black"> 185.         &quot;&quot;&quot;Remove and return an item from the queue without blocking.</font>
+<font color="black"> 186. </font>
+<font color="black"> 187.         Only get an item if one is immediately available. Otherwise</font>
+<font color="black"> 188.         raise the Empty exception.</font>
+<font color="black"> 189.         &quot;&quot;&quot;</font>
+<font color="red"> 190.         return self.get(False)</font>
+<font color="black"> 191. </font>
+<font color="black"> 192.     # Override these methods to implement other queue organizations</font>
+<font color="black"> 193.     # (e.g. stack or priority queue).</font>
+<font color="black"> 194.     # These will only be called with appropriate locks held</font>
+<font color="black"> 195. </font>
+<font color="black"> 196.     # Initialize the queue representation</font>
+<font color="green"> 197.     def _init(self, maxsize):</font>
+<font color="red"> 198.         self.queue = deque()</font>
+<font color="black"> 199. </font>
+<font color="green"> 200.     def _qsize(self, len=len):</font>
+<font color="red"> 201.         return len(self.queue)</font>
+<font color="black"> 202. </font>
+<font color="black"> 203.     # Put a new item in the queue</font>
+<font color="green"> 204.     def _put(self, item):</font>
+<font color="red"> 205.         self.queue.append(item)</font>
+<font color="black"> 206. </font>
+<font color="black"> 207.     # Get an item from the queue</font>
+<font color="green"> 208.     def _get(self):</font>
+<font color="red"> 209.         return self.queue.popleft()</font>
+<font color="black"> 210. </font>
+<font color="black"> 211. </font>
+<font color="green"> 212. class PriorityQueue(Queue):</font>
+<font color="black"> 213.     '''Variant of Queue that retrieves open entries in priority order (lowest first).</font>
+<font color="black"> 214. </font>
+<font color="black"> 215.     Entries are typically tuples of the form:  (priority number, data).</font>
+<font color="green"> 216.     '''</font>
+<font color="black"> 217. </font>
+<font color="green"> 218.     def _init(self, maxsize):</font>
+<font color="red"> 219.         self.queue = []</font>
+<font color="black"> 220. </font>
+<font color="green"> 221.     def _qsize(self, len=len):</font>
+<font color="red"> 222.         return len(self.queue)</font>
+<font color="black"> 223. </font>
+<font color="green"> 224.     def _put(self, item, heappush=heapq.heappush):</font>
+<font color="red"> 225.         heappush(self.queue, item)</font>
+<font color="black"> 226. </font>
+<font color="green"> 227.     def _get(self, heappop=heapq.heappop):</font>
+<font color="red"> 228.         return heappop(self.queue)</font>
+<font color="black"> 229. </font>
+<font color="black"> 230. </font>
+<font color="green"> 231. class LifoQueue(Queue):</font>
+<font color="green"> 232.     '''Variant of Queue that retrieves most recently added entries first.'''</font>
+<font color="black"> 233. </font>
+<font color="green"> 234.     def _init(self, maxsize):</font>
+<font color="green"> 235.         self.queue = []</font>
+<font color="black"> 236. </font>
+<font color="green"> 237.     def _qsize(self, len=len):</font>
+<font color="green"> 238.         return len(self.queue)</font>
+<font color="black"> 239. </font>
+<font color="green"> 240.     def _put(self, item):</font>
+<font color="green"> 241.         self.queue.append(item)</font>
+<font color="black"> 242. </font>
+<font color="green"> 243.     def _get(self):</font>
+<font color="green"> 244.         return self.queue.pop()</font>
+</pre>
+
